@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router'
 import { ChevronDown, X, Check, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Pencil, Eye, RotateCcw } from 'lucide-react'
 import { formatDate, MONTHS, DAYS } from './utils'
-import type { FormMode, NavigateFn, NavState } from './types'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary: #009574, hover: #007a5e
@@ -442,12 +442,12 @@ export function ConfirmModal({ title, message, confirmLabel = 'Confirmar', onCon
 }
 
 // ─── ModeSwitcher ─────────────────────────────────────────────────────────────
-export function ModeSwitcher({ mode, navigate, registerPage, formPage }: {
+export function ModeSwitcher({ mode, registerUrl, formUrl }: {
   mode: 'register' | 'view' | 'edit'
-  navigate: NavigateFn
-  registerPage: NavState
-  formPage: (mode: 'view' | 'edit') => NavState
+  registerUrl: string
+  formUrl: (mode: 'view' | 'edit') => string
 }) {
+  const navigate = useNavigate()
   const tabs = [
     { key: 'register' as const, label: 'Registrar', icon: <RotateCcw size={12} /> },
     { key: 'view' as const, label: 'Ver', icon: <Eye size={12} /> },
@@ -459,7 +459,7 @@ export function ModeSwitcher({ mode, navigate, registerPage, formPage }: {
         <button
           key={t.key}
           type="button"
-          onClick={() => navigate(t.key === 'register' ? registerPage : formPage(t.key))}
+          onClick={() => navigate(t.key === 'register' ? registerUrl : formUrl(t.key))}
           className={`flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors
             ${mode === t.key ? 'bg-[#009574] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F8F9FA]'}`}
         >

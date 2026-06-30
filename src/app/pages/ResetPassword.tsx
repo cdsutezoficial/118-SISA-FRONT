@@ -1,8 +1,6 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { ArrowLeft, AlertCircle, GraduationCap, Loader2, Mail } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
-
-interface Props { navigate: NavigateFn }
 
 // ─── Left panel — same institutional branding as Login ────────────────────────
 
@@ -53,7 +51,8 @@ function EnvelopeIllustration() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ResetPassword({ navigate }: Props) {
+export default function ResetPassword() {
+  const navigate = useNavigate()
   const [correo, setCorreo] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -104,7 +103,7 @@ export default function ResetPassword({ navigate }: Props) {
         <div>
           <button
             type="button"
-            onClick={() => navigate({ page: 'login' })}
+            onClick={() => navigate('/login')}
             className="flex items-center gap-1.5 text-[13px] font-medium text-[#6B7280] hover:text-[#009574] transition-colors"
           >
             <ArrowLeft size={15} />Regresar al Login
@@ -184,7 +183,7 @@ export default function ResetPassword({ navigate }: Props) {
 
                 <button
                   type="button"
-                  onClick={() => navigate({ page: 'login' })}
+                  onClick={() => navigate('/login')}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[14px] font-semibold border border-[#E5E7EB] bg-white text-[#333333] hover:bg-[#F8F9FA] transition-colors"
                 >
                   <Mail size={15} className="text-[#6B7280]" />

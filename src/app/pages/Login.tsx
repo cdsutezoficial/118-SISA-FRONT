@@ -1,8 +1,6 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { Eye, EyeOff, AlertCircle, Loader2, GraduationCap } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
-
-interface Props { navigate: NavigateFn }
 
 // ─── LlaveMX logo mark ────────────────────────────────────────────────────────
 
@@ -53,7 +51,8 @@ function UniversityIllustration() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function Login({ navigate }: Props) {
+export default function Login() {
+  const navigate = useNavigate()
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -76,9 +75,9 @@ export default function Login({ navigate }: Props) {
         setErrorMsg('Credenciales incorrectas. Verifica tu usuario y contraseña.')
       } else if (password === 'primer') {
         // Primer acceso — mustChangePassword
-        navigate({ page: 'cambiar-password', mode: 'view' })
+        navigate('/usuarios/cambiar-password')
       } else {
-        navigate({ page: 'dashboard' })
+        navigate('/dashboard')
       }
     }, 1200)
   }
@@ -198,7 +197,7 @@ export default function Login({ navigate }: Props) {
               </div>
               {/* Forgot password */}
               <div className="flex justify-end mt-1.5">
-                <button type="button" onClick={() => navigate({ page: 'reset-password' })} className="text-[12px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors">
+                <button type="button" onClick={() => navigate('/reset-password')} className="text-[12px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors">
                   ¿Olvidaste tu contraseña?
                 </button>
               </div>

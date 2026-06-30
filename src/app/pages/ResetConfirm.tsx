@@ -1,8 +1,6 @@
 import { useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router'
 import { Eye, EyeOff, AlertCircle, CheckCircle2, GraduationCap, Loader2, XCircle } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
-
-interface Props { navigate: NavigateFn; tokenExpired?: boolean }
 
 // ─── Left panel ───────────────────────────────────────────────────────────────
 
@@ -86,7 +84,10 @@ function PasswordInput({ id, value, onChange, placeholder, hasError }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ResetConfirm({ navigate, tokenExpired = false }: Props) {
+export default function ResetConfirm() {
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const tokenExpired = params.get('expired') === 'true'
   // Allow toggling expired state for prototype purposes
   const [expired, setExpired] = useState(tokenExpired)
   const [nueva, setNueva] = useState('')
@@ -157,14 +158,14 @@ export default function ResetConfirm({ navigate, tokenExpired = false }: Props) 
               </div>
               <button
                 type="button"
-                onClick={() => navigate({ page: 'reset-password' })}
+                onClick={() => navigate('/reset-password')}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold border border-[#E5E7EB] bg-white text-[#333333] hover:bg-[#F8F9FA] transition-colors"
               >
                 Solicitar un nuevo enlace
               </button>
               <button
                 type="button"
-                onClick={() => navigate({ page: 'login' })}
+                onClick={() => navigate('/login')}
                 className="text-[12px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
               >
                 Regresar al Login
@@ -188,7 +189,7 @@ export default function ResetConfirm({ navigate, tokenExpired = false }: Props) 
               </div>
               <button
                 type="button"
-                onClick={() => navigate({ page: 'login' })}
+                onClick={() => navigate('/login')}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white transition-colors shadow-sm shadow-[#009574]/20"
               >
                 Iniciar Sesión
