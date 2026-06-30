@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronRight, Info, AlertCircle, X, ChevronDown, Search, UserCircle2 } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
+import { useNavigate } from 'react-router'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -201,9 +201,8 @@ function FieldError({ text }: { text: string }) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-interface Props { navigate: NavigateFn }
-
-export default function AsignarRol({ navigate }: Props) {
+export default function AsignarRol() {
+  const navigate = useNavigate()
   const [rol, setRol] = useState('')
   const [division, setDivision] = useState('')
   const [errors, setErrors] = useState<FormErrors>({})
@@ -227,20 +226,20 @@ export default function AsignarRol({ navigate }: Props) {
     const e = validate()
     setSubmitted(true)
     if (Object.keys(e).length > 0) { setErrors(e); return }
-    navigate({ page: 'usuario-detalle', pendingToast: 'Rol asignado correctamente.' })
+    navigate('/usuarios/detalle', { state: { toast: 'Rol asignado correctamente.' } })
   }
 
   return (
     <div className="max-w-[860px] mx-auto px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4 flex-wrap">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Identidad</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'usuarios-list' })} className="hover:text-[#009574] transition-colors">Usuarios</button>
+        <button onClick={() => navigate('/usuarios')} className="hover:text-[#009574] transition-colors">Usuarios</button>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'usuario-detalle' })} className="hover:text-[#009574] transition-colors">Ana García López</button>
+        <button onClick={() => navigate('/usuarios/detalle')} className="hover:text-[#009574] transition-colors">Ana García López</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">Asignar Rol</span>
       </nav>
@@ -347,7 +346,7 @@ export default function AsignarRol({ navigate }: Props) {
       {/* Action zone */}
       <div className="flex items-center justify-end gap-3 mt-6">
         <button
-          onClick={() => navigate({ page: 'usuario-detalle' })}
+          onClick={() => navigate('/usuarios/detalle')}
           className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
         >
           Cancelar

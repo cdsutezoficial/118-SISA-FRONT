@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ChevronRight, Search, Eye, Pencil, Trash2, Plus, ChevronLeft, ChevronRight as ChevRight } from 'lucide-react'
 import { Toast, ActionBtn, ConfirmModal } from '../shared/ui'
-import type { NavigateFn } from '../shared/types'
-
-interface Props { navigate: NavigateFn; pendingToast?: string }
+import { useNavigate } from 'react-router'
+import { usePendingToast } from '../shared/hooks'
 
 const rows = [
   { id: 1, nombre: 'División de Tecnologías de la Información', clave: 'DTI', descripcion: 'Área de sistemas y software', programas: 4 },
@@ -12,14 +11,12 @@ const rows = [
   { id: 4, nombre: 'División de Ingeniería', clave: 'DI', descripcion: 'Área de ingenierías diversas', programas: 5 },
 ]
 
-export default function DivisionesList({ navigate, pendingToast }: Props) {
+export default function DivisionesList() {
+  const navigate = useNavigate()
+  const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (pendingToast) setToast(pendingToast)
-  }, [pendingToast])
 
   const filtered = rows.filter(r =>
     r.nombre.toLowerCase().includes(search.toLowerCase()) ||
@@ -41,7 +38,7 @@ export default function DivisionesList({ navigate, pendingToast }: Props) {
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
@@ -55,7 +52,7 @@ export default function DivisionesList({ navigate, pendingToast }: Props) {
           <p className="text-[14px] text-[#6B7280] mt-1">Gestiona las divisiones académicas registradas en el sistema.</p>
         </div>
         <button
-          onClick={() => navigate({ page: 'division-form', mode: 'register' })}
+          onClick={() => navigate('/divisiones/new')}
           className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
         >
           <Plus size={15} />Registrar División
@@ -97,8 +94,8 @@ export default function DivisionesList({ navigate, pendingToast }: Props) {
                 <td className="px-4 py-3 text-[#333333]">{row.programas}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
-                    <ActionBtn icon={<Eye size={15} />} tooltip="Ver" onClick={() => navigate({ page: 'division-form', mode: 'view' })} />
-                    <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate({ page: 'division-form', mode: 'edit' })} />
+                    <ActionBtn icon={<Eye size={15} />} tooltip="Ver" onClick={() => navigate(`/divisiones/form?mode=view&id=${row.id}`)} />
+                    <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/divisiones/form?mode=edit&id=${row.id}`)} />
                     <ActionBtn icon={<Trash2 size={15} />} tooltip="Eliminar" danger onClick={() => setConfirm(row.id)} />
                   </div>
                 </td>

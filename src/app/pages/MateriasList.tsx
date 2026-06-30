@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ChevronRight, Search, Eye, Pencil, Trash2, Plus, ChevronLeft, ChevronRight as ChevRight } from 'lucide-react'
 import { Toast, ActionBtn, ConfirmModal, SearchSelect } from '../shared/ui'
-import type { NavigateFn } from '../shared/types'
-
-interface Props { navigate: NavigateFn; pendingToast?: string }
+import { useNavigate } from 'react-router'
+import { usePendingToast } from '../shared/hooks'
 
 const clasificaciones = ['Básica', 'Ciencias Básicas', 'Especialidad', 'Lengua Extranjera', 'Matemáticas', 'Transversal']
 
@@ -23,13 +22,13 @@ const rows = [
   { id: 4, nombre: 'Bases de Datos I', clave: 'BD-201', clasificacion: 'Especialidad', creditos: 6, hrsTeo: 3, hrsPrac: 2, lab: true },
 ]
 
-export default function MateriasList({ navigate, pendingToast }: Props) {
+export default function MateriasList() {
+  const navigate = useNavigate()
+  const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
   const [search, setSearch] = useState('')
   const [clasFilter, setClasFilter] = useState('')
   const [confirm, setConfirm] = useState<number | null>(null)
-
-  useEffect(() => { if (pendingToast) setToast(pendingToast) }, [pendingToast])
 
   const filtered = rows.filter(r => {
     const matchClas = !clasFilter || r.clasificacion === clasFilter
@@ -52,7 +51,7 @@ export default function MateriasList({ navigate, pendingToast }: Props) {
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
@@ -64,7 +63,7 @@ export default function MateriasList({ navigate, pendingToast }: Props) {
           <h1 className="text-2xl font-semibold text-[#333333]">Materias</h1>
           <p className="text-[14px] text-[#6B7280] mt-1">Gestiona el catálogo de materias del sistema.</p>
         </div>
-        <button onClick={() => navigate({ page: 'materia-form', mode: 'register' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+        <button onClick={() => navigate('/materias/new')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
           <Plus size={15} />Registrar Materia
         </button>
       </div>
@@ -126,8 +125,8 @@ export default function MateriasList({ navigate, pendingToast }: Props) {
                 <td className="px-4 py-3 text-center text-[#333333]">{row.hrsPrac}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
-                    <ActionBtn icon={<Eye size={15} />} tooltip="Ver" onClick={() => navigate({ page: 'materia-form', mode: 'view' })} />
-                    <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate({ page: 'materia-form', mode: 'edit' })} />
+                    <ActionBtn icon={<Eye size={15} />} tooltip="Ver" onClick={() => navigate(`/materias/form?mode=view&id=${row.id}`)} />
+                    <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/materias/form?mode=edit&id=${row.id}`)} />
                     <ActionBtn icon={<Trash2 size={15} />} tooltip="Eliminar" danger onClick={() => setConfirm(row.id)} />
                   </div>
                 </td>

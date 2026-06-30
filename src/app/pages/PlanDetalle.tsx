@@ -4,9 +4,8 @@ import {
   GraduationCap, ChevronDown, ChevronUp, ArrowLeft, CheckCircle2, ClipboardList,
   MinusCircle, Plus,
 } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
-
-interface Props { navigate: NavigateFn; pendingToast?: string }
+import { useNavigate } from 'react-router'
+import { usePendingToast } from '../shared/hooks'
 
 type TabKey = 'niveles' | 'historial' | 'escalas'
 
@@ -228,7 +227,7 @@ function NivelRow({ nivel, index, defaultOpen }: { nivel: Nivel; index: number; 
           <div className="border-t border-[#E5E7EB] px-5 py-2.5">
             <button
               type="button"
-              onClick={() => navigate({ page: 'asignar-materia' })}
+              onClick={() => navigate('/planes/asignar-materia')}
               className="flex items-center gap-1.5 text-[12px] font-medium text-[#009574] hover:text-[#007a5e] transition-colors"
             >
               <Plus size={13} />Asignar Materia
@@ -240,13 +239,13 @@ function NivelRow({ nivel, index, defaultOpen }: { nivel: Nivel; index: number; 
   )
 }
 
-export default function PlanDetalle({ navigate, pendingToast }: Props) {
+export default function PlanDetalle() {
+  const navigate = useNavigate()
+  const pendingToast = usePendingToast()
   const [activeTab, setActiveTab] = useState<TabKey>('niveles')
   const [toast, setToast] = useState(pendingToast ?? '')
   const tsuNiveles = niveles.filter(n => n.tipo === 'TSU')
   const ingNiveles = niveles.filter(n => n.tipo === 'Ingeniería')
-
-  useEffect(() => { if (pendingToast) setToast(pendingToast) }, [pendingToast])
 
   return (
     <div className="max-w-[1100px] mx-auto px-8 py-8">
@@ -259,11 +258,11 @@ export default function PlanDetalle({ navigate, pendingToast }: Props) {
       )}
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'planes-list' })} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
+        <button onClick={() => navigate('/planes')} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">Detalle del Plan</span>
       </nav>
@@ -422,7 +421,7 @@ export default function PlanDetalle({ navigate, pendingToast }: Props) {
             </p>
           </div>
           <button
-            onClick={() => navigate({ page: 'escalas-list' })}
+            onClick={() => navigate('/escalas')}
             className="flex items-center gap-2 bg-[#009574] hover:bg-[#007a5e] text-white text-[13px] font-semibold px-4 py-2 rounded-md transition-colors"
           >
             <ClipboardList size={14} />Administrar escalas de calificación
@@ -432,10 +431,10 @@ export default function PlanDetalle({ navigate, pendingToast }: Props) {
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-3 mt-8">
-        <button onClick={() => navigate({ page: 'planes-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+        <button onClick={() => navigate('/planes')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
           <ArrowLeft size={14} />Regresar
         </button>
-        <button onClick={() => navigate({ page: 'plan-form', mode: 'edit' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+        <button onClick={() => navigate('/planes/form?mode=edit')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
           <Pencil size={14} />Editar Plan
         </button>
       </div>

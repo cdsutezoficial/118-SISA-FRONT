@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { ChevronRight, Pencil, Save, X, ArrowLeft } from 'lucide-react'
 import { FieldLabel, FieldHelp, inputCls, ModeSwitcher } from '../shared/ui'
-import type { NavigateFn, FormMode } from '../shared/types'
-
-interface Props { navigate: NavigateFn; mode: FormMode }
+import { useNavigate } from 'react-router'
+import { useFormMode } from '../shared/hooks'
 
 const PRELOADED = {
   nombre: 'División de Tecnologías de la Información',
@@ -11,7 +10,9 @@ const PRELOADED = {
   descripcion: 'Área responsable de los programas relacionados con sistemas computacionales, desarrollo de software y gestión de tecnologías de información.',
 }
 
-export default function DivisionesForm({ navigate, mode }: Props) {
+export default function DivisionesForm() {
+  const navigate = useNavigate()
+  const { mode, id } = useFormMode()
   const isView = mode === 'view'
   const isRegister = mode === 'register'
 
@@ -25,11 +26,11 @@ export default function DivisionesForm({ navigate, mode }: Props) {
     <div className="max-w-[1100px] mx-auto px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'divisiones-list' })} className="hover:text-[#009574] transition-colors">Divisiones Académicas</button>
+        <button onClick={() => navigate('/divisiones')} className="hover:text-[#009574] transition-colors">Divisiones Académicas</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">
           {isRegister ? 'Registrar División' : isView ? 'Ver División' : 'Editar División'}
@@ -50,9 +51,8 @@ export default function DivisionesForm({ navigate, mode }: Props) {
         </div>
         <ModeSwitcher
           mode={mode}
-          navigate={navigate}
-          registerPage={{ page: 'division-form', mode: 'register' }}
-          formPage={m => ({ page: 'division-form', mode: m })}
+          registerUrl="/divisiones/new"
+          formUrl={m => `/divisiones/form?mode=${m}&id=${id}`}
         />
       </div>
 
@@ -103,13 +103,13 @@ export default function DivisionesForm({ navigate, mode }: Props) {
         {isView ? (
           <>
             <button
-              onClick={() => navigate({ page: 'divisiones-list' })}
+              onClick={() => navigate('/divisiones')}
               className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
             >
               <ArrowLeft size={14} />Regresar
             </button>
             <button
-              onClick={() => navigate({ page: 'division-form', mode: 'edit' })}
+              onClick={() => navigate(`/divisiones/form?mode=edit&id=${id}`)}
               className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
             >
               <Pencil size={14} />Editar
@@ -118,13 +118,13 @@ export default function DivisionesForm({ navigate, mode }: Props) {
         ) : isRegister ? (
           <>
             <button
-              onClick={() => navigate({ page: 'divisiones-list' })}
+              onClick={() => navigate('/divisiones')}
               className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
             >
               <X size={14} />Cancelar
             </button>
             <button
-              onClick={() => navigate({ page: 'divisiones-list', pendingToast: 'División registrada exitosamente.' })}
+              onClick={() => navigate('/divisiones', { state: { toast: 'División registrada exitosamente.' } })}
               className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
             >
               <Save size={14} />Registrar División
@@ -133,13 +133,13 @@ export default function DivisionesForm({ navigate, mode }: Props) {
         ) : (
           <>
             <button
-              onClick={() => navigate({ page: 'divisiones-list' })}
+              onClick={() => navigate('/divisiones')}
               className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
             >
               <X size={14} />Cancelar
             </button>
             <button
-              onClick={() => navigate({ page: 'divisiones-list', pendingToast: 'División actualizada exitosamente.' })}
+              onClick={() => navigate('/divisiones', { state: { toast: 'División actualizada exitosamente.' } })}
               className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
             >
               <Save size={14} />Guardar Cambios

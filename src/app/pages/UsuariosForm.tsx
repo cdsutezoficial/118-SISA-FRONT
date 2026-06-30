@@ -2,7 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import {
   ChevronRight, Info, AlertCircle, CheckCircle2, X, ChevronDown, Search, Pencil, KeyRound,
 } from 'lucide-react'
-import type { NavigateFn, FormMode } from '../shared/types'
+import { useNavigate } from 'react-router'
+import { useFormMode } from '../shared/hooks'
+import type { FormMode } from '../shared/types'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -191,11 +193,10 @@ function PasswordHint({ curp }: { curp: string }) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-interface Props { navigate: NavigateFn; mode: FormMode }
-
-export default function UsuariosForm({ navigate, mode: initialMode }: Props) {
-  const [mode, setMode] = useState<FormMode>(initialMode)
-  const [form, setForm] = useState<FormState>(initialMode === 'register' ? { ...empty } : { ...preloaded })
+export default function UsuariosForm() {
+  const navigate = useNavigate()
+  const { mode, id } = useFormMode()
+  const [form, setForm] = useState<FormState>(mode === 'register' ? { ...empty } : { ...preloaded })
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitted, setSubmitted] = useState(false)
 
@@ -204,10 +205,8 @@ export default function UsuariosForm({ navigate, mode: initialMode }: Props) {
   const showDivision = SCOPED_ROLES.has(form.rol)
 
   function handleModeChange(m: FormMode) {
-    setMode(m)
-    setErrors({})
-    setSubmitted(false)
-    setForm(m === 'register' ? { ...empty } : { ...preloaded })
+    if (m === 'register') navigate('/usuarios/new')
+    else navigate(`/usuarios/form?mode=${m}${id ? `&id=${id}` : ''}`)
   }
 
   function clearErr(field: keyof FormErrors) {
@@ -232,7 +231,7 @@ export default function UsuariosForm({ navigate, mode: initialMode }: Props) {
     const e = validate()
     setSubmitted(true)
     if (Object.keys(e).length > 0) { setErrors(e); return }
-    navigate({ page: 'usuarios-list', pendingToast: mode === 'register' ? 'Usuario registrado exitosamente.' : 'Usuario actualizado exitosamente.' })
+    navigate('/usuarios', { state: { toast: mode === 'register' ? 'Usuario registrado exitosamente.' : 'Usuario actualizado exitosamente.' } })
   }
 
   const breadcrumbLabel = mode === 'register' ? 'Registrar Usuario' : mode === 'view' ? 'Ver Detalle' : 'Editar Usuario'
@@ -243,11 +242,11 @@ export default function UsuariosForm({ navigate, mode: initialMode }: Props) {
     <div className="max-w-[860px] mx-auto px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Identidad</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'usuarios-list' })} className="hover:text-[#009574] transition-colors">Usuarios</button>
+        <button onClick={() => navigate('/usuarios')} className="hover:text-[#009574] transition-colors">Usuarios</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">{breadcrumbLabel}</span>
       </nav>
@@ -405,7 +404,7 @@ export default function UsuariosForm({ navigate, mode: initialMode }: Props) {
       <div className="flex items-center justify-end gap-3 mt-6">
         {isView ? (
           <>
-            <button onClick={() => navigate({ page: 'usuarios-list' })}
+            <button onClick={() => navigate('/usuarios')}
               className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               Regresar
             </button>
@@ -416,7 +415,7 @@ export default function UsuariosForm({ navigate, mode: initialMode }: Props) {
           </>
         ) : (
           <>
-            <button onClick={() => navigate({ page: 'usuarios-list' })}
+            <button onClick={() => navigate('/usuarios')}
               className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               Cancelar
             </button>

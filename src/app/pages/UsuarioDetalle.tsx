@@ -4,7 +4,8 @@ import {
   Info, CheckCircle2, AlertCircle, Monitor, Smartphone,
   ShieldCheck, X, Plus,
 } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
+import { useNavigate } from 'react-router'
+import { usePendingToast } from '../shared/hooks'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -187,9 +188,9 @@ function ActionBtn({ icon, tooltip, danger, onClick }: { icon: React.ReactNode; 
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-interface Props { navigate: NavigateFn; pendingToast?: string }
-
-export default function UsuarioDetalle({ navigate, pendingToast }: Props) {
+export default function UsuarioDetalle() {
+  const navigate = useNavigate()
+  const pendingToast = usePendingToast()
   const [activeTab, setActiveTab] = useState<TabKey>('info')
   const [llaveMxVinculada, setLlaveMxVinculada] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
@@ -236,11 +237,11 @@ export default function UsuarioDetalle({ navigate, pendingToast }: Props) {
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Identidad</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'usuarios-list' })} className="hover:text-[#009574] transition-colors">Usuarios</button>
+        <button onClick={() => navigate('/usuarios')} className="hover:text-[#009574] transition-colors">Usuarios</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">Detalle</span>
       </nav>
@@ -402,7 +403,7 @@ export default function UsuarioDetalle({ navigate, pendingToast }: Props) {
 
           {/* Asignar Rol button */}
           <div className="border-t border-[#E5E7EB] px-4 py-3">
-            <button type="button" onClick={() => navigate({ page: 'asignar-rol' })} className="flex items-center gap-1.5 text-[12px] font-medium text-[#009574] hover:text-[#007a5e] transition-colors">
+            <button type="button" onClick={() => navigate('/usuarios/asignar-rol')} className="flex items-center gap-1.5 text-[12px] font-medium text-[#009574] hover:text-[#007a5e] transition-colors">
               <Plus size={14} />Asignar Rol
             </button>
           </div>
@@ -461,13 +462,13 @@ export default function UsuarioDetalle({ navigate, pendingToast }: Props) {
       {/* Action zone */}
       <div className="flex items-center justify-end gap-3 mt-8">
         <button
-          onClick={() => navigate({ page: 'usuarios-list' })}
+          onClick={() => navigate('/usuarios')}
           className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
         >
           Regresar
         </button>
         <button
-          onClick={() => navigate({ page: 'usuario-form', mode: 'edit' })}
+          onClick={() => navigate('/usuarios/form?mode=edit')}
           className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
         >
           <Pencil size={14} />Editar

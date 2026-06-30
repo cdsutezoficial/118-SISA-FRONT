@@ -3,7 +3,8 @@ import {
   ChevronRight, Plus, Pencil, Trash2, ChevronLeft,
   ChevronRight as ChevRight, BookOpen, Hash, AlertCircle, Info, CheckCircle2,
 } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
+import { useNavigate } from 'react-router'
+import { usePendingToast } from '../shared/hooks'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -106,9 +107,9 @@ function ActionBtn({ icon, tooltip, danger, onClick }: {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-interface Props { navigate: NavigateFn; pendingToast?: string }
-
-export default function EscalasList({ navigate, pendingToast }: Props) {
+export default function EscalasList() {
+  const navigate = useNavigate()
+  const pendingToast = usePendingToast()
   const [escalas, setEscalas] = useState<Escala[]>(allEscalas)
   const [confirmTarget, setConfirmTarget] = useState<Escala | null>(null)
   const [toast, setToast] = useState(pendingToast ?? '')
@@ -142,13 +143,13 @@ export default function EscalasList({ navigate, pendingToast }: Props) {
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4 flex-wrap">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'planes-list' })} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
+        <button onClick={() => navigate('/planes')} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'plan-detalle' })} className="hover:text-[#009574] transition-colors font-mono text-[12px]">IDGS-2022</button>
+        <button onClick={() => navigate('/planes/detalle')} className="hover:text-[#009574] transition-colors font-mono text-[12px]">IDGS-2022</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">Escalas de Calificación</span>
       </nav>
@@ -161,7 +162,7 @@ export default function EscalasList({ navigate, pendingToast }: Props) {
             Configura los rangos numéricos y su equivalencia en letra por clasificación de materia para este plan de estudios.
           </p>
         </div>
-        <button onClick={() => navigate({ page: 'escala-form', mode: 'register' })} className="flex items-center gap-2 bg-[#009574] hover:bg-[#007a5e] text-white text-[13px] font-semibold px-4 py-2 rounded-md transition-colors whitespace-nowrap mt-1">
+        <button onClick={() => navigate('/escalas/new')} className="flex items-center gap-2 bg-[#009574] hover:bg-[#007a5e] text-white text-[13px] font-semibold px-4 py-2 rounded-md transition-colors whitespace-nowrap mt-1">
           <Plus size={15} />Agregar Escala
         </button>
       </div>
@@ -194,7 +195,7 @@ export default function EscalasList({ navigate, pendingToast }: Props) {
         </div>
         <div className="ml-auto">
           <button
-            onClick={() => navigate({ page: 'plan-detalle' })}
+            onClick={() => navigate('/planes/detalle')}
             className="flex items-center gap-1.5 text-[12px] font-medium text-[#009574] hover:text-[#007a5e] transition-colors"
           >
             <ChevronLeft size={13} />Ver detalle del plan
@@ -257,7 +258,7 @@ export default function EscalasList({ navigate, pendingToast }: Props) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-0.5">
-                        <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate({ page: 'escala-form', mode: 'edit' })} />
+                        <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/escalas/form?mode=edit&id=${escala.id}`)} />
                         <ActionBtn icon={<Trash2 size={15} />} tooltip="Eliminar" danger onClick={() => setConfirmTarget(row)} />
                       </div>
                     </td>

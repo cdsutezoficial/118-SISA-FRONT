@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { ChevronRight, Pencil, Save, X, ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import { FieldLabel, FieldHelp, inputCls, ModeSwitcher, SimpleSelect, SearchSelect, MiniDatePicker, ActionBtn } from '../shared/ui'
-import type { NavigateFn, FormMode } from '../shared/types'
-
-interface Props { navigate: NavigateFn; mode: FormMode }
+import { useNavigate } from 'react-router'
+import { useFormMode } from '../shared/hooks'
 
 interface TarifaRow {
   id: number
@@ -36,7 +35,9 @@ const nivelesByPrograma: Record<string, string[]> = {
 
 let nextId = 10
 
-export default function ConceptosForm({ navigate, mode }: Props) {
+export default function ConceptosForm() {
+  const navigate = useNavigate()
+  const { mode, id } = useFormMode()
   const isView = mode === 'view'
   const isRegister = mode === 'register'
 
@@ -64,11 +65,11 @@ export default function ConceptosForm({ navigate, mode }: Props) {
     <div className="max-w-[1100px] mx-auto px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'conceptos-list' })} className="hover:text-[#009574] transition-colors">Conceptos de Pago</button>
+        <button onClick={() => navigate('/conceptos')} className="hover:text-[#009574] transition-colors">Conceptos de Pago</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">
           {isRegister ? 'Registrar Concepto' : isView ? 'Ver Concepto' : 'Editar Concepto'}
@@ -88,9 +89,8 @@ export default function ConceptosForm({ navigate, mode }: Props) {
         </div>
         <ModeSwitcher
           mode={mode}
-          navigate={navigate}
-          registerPage={{ page: 'concepto-form', mode: 'register' }}
-          formPage={m => ({ page: 'concepto-form', mode: m })}
+          registerUrl="/conceptos/new"
+          formUrl={m => `/conceptos/form?mode=${m}&id=${id}`}
         />
       </div>
 
@@ -186,28 +186,28 @@ export default function ConceptosForm({ navigate, mode }: Props) {
       <div className="flex items-center justify-end gap-3">
         {isView ? (
           <>
-            <button onClick={() => navigate({ page: 'conceptos-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            <button onClick={() => navigate('/conceptos')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               <ArrowLeft size={14} />Regresar
             </button>
-            <button onClick={() => navigate({ page: 'concepto-form', mode: 'edit' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+            <button onClick={() => navigate(`/conceptos/form?mode=edit&id=${id}`)} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
               <Pencil size={14} />Editar
             </button>
           </>
         ) : isRegister ? (
           <>
-            <button onClick={() => navigate({ page: 'conceptos-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            <button onClick={() => navigate('/conceptos')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               <X size={14} />Cancelar
             </button>
-            <button onClick={() => navigate({ page: 'conceptos-list', pendingToast: 'Concepto de pago registrado exitosamente.' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+            <button onClick={() => navigate('/conceptos', { state: { toast: 'Concepto de pago registrado exitosamente.' } })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
               <Save size={14} />Registrar Concepto
             </button>
           </>
         ) : (
           <>
-            <button onClick={() => navigate({ page: 'conceptos-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            <button onClick={() => navigate('/conceptos')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               <X size={14} />Cancelar
             </button>
-            <button onClick={() => navigate({ page: 'conceptos-list', pendingToast: 'Concepto actualizado exitosamente.' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+            <button onClick={() => navigate('/conceptos', { state: { toast: 'Concepto actualizado exitosamente.' } })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
               <Save size={14} />Guardar Cambios
             </button>
           </>
