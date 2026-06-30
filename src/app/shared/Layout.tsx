@@ -141,6 +141,11 @@ function Sidebar({ collapsed, onToggle, currentPage, navigate }: {
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
+/**
+ * @deprecated Shell and its sub-components (Navbar, Sidebar) are superseded by
+ * `src/app/layouts/AppLayout.tsx`. No page currently imports from this file.
+ * Will be removed in the cleanup slice (T23) once all module pages are migrated.
+ */
 export function Shell({ children, currentPage, navigate, collapsed, onToggleSidebar }: {
   children: React.ReactNode
   currentPage: PageId
