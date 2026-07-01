@@ -66,6 +66,144 @@ export interface Candidate {
   pagoInduccion: PaymentRecord
   /** Assigned only on ENROLLED (Screen 12). */
   matricula?: string
+  /**
+   * Full "ficha de admisión" data captured by Screen 4's 4-step wizard, per the
+   * PO's corrected complete field list (2026-07-01) and the domain fields
+   * defined in `00-shared-kernel.md` (`Person`, `Address`, `HealthProfile`,
+   * `DiversityProfile`, `EmploymentInfo`, `HighSchoolBackground`).
+   *
+   * Deliberately kept OFF the top-level `Candidate` fields (not flattened) so
+   * already-shipped screens 1/3/5 — which only read `status`/`folio`/`programa`/
+   * etc. — never need to change and keep typechecking with zero risk. Optional
+   * because only the reworked Screen 4 wizard populates it going forward;
+   * existing `mockCandidates` rows may leave it `undefined`.
+   */
+  fichaCompleta?: FichaAdmisionCompleta
+}
+
+/** Screen 4, Paso 1 — "Datos Generales" section of the ficha. */
+export type Nacionalidad = 'Mexicana' | 'Extranjera'
+
+/** Matches `00-shared-kernel.md`'s `MaritalStatus` enum (all values but `OTRO`, not requested by the PO's field list). */
+export type EstadoCivil = 'Soltero/a' | 'Casado/a' | 'Unión libre' | 'Divorciado/a' | 'Viudo/a'
+
+/** Catálogo de lengua natal — Español + lenguas indígenas más habladas en México. */
+export type LenguaNatal = 'Español' | 'Náhuatl' | 'Maya' | 'Mixteco' | 'Zapoteco' | 'Otra'
+
+/** Catálogo de tipo de bachillerato de procedencia (subsistemas educativos mexicanos más comunes). */
+export type TipoBachillerato = 'General' | 'Tecnológico' | 'Bachillerato Técnico' | 'CONALEP' | 'Otro'
+
+/** Matches `00-shared-kernel.md`'s `ProgramModality` enum (`PRESENCIAL`, `MIXTA`). */
+export type ModalidadPrograma = 'Presencial' | 'Mixta'
+
+export interface DatosGeneralesFicha {
+  // LlaveMX-verified, read-only after verification — mirrors `Person`'s
+  // identity fields; the CURP already encodes birth date/sex/birth state, so
+  // these are identity-verification facts, not self-reported profile data.
+  nombres: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  curp: string
+  fechaNacimiento: string
+  sexo: string
+  /** LlaveMX-provided (read-only) when `nacionalidad === 'Mexicana'`; free-text/editable when `'Extranjera'` (LlaveMX/CURP doesn't cover foreign birth states). */
+  estadoNacimiento: string
+
+  // Manually captured
+  nacionalidad: Nacionalidad | ''
+  /** Required + shown only when `nacionalidad === 'Mexicana'`. */
+  municipioNacimiento: string
+  /** Required + shown only when `nacionalidad === 'Extranjera'`. */
+  paisNacimiento: string
+  /** Required + shown only when `nacionalidad === 'Extranjera'`. */
+  ciudadNacimiento: string
+  estadoCivil: EstadoCivil | ''
+  lenguaNatal: LenguaNatal | ''
+  tieneHijos: boolean
+}
+
+/** Screen 4, Paso 1 — "Domicilio Actual" section. Mirrors `00-shared-kernel.md`'s `Address` VO (Mexicana branch only — this mock frontend doesn't model the foreign-address branch since the wizard's domicilio section doesn't ask nationality again). */
+export interface DomicilioFicha {
+  calle: string
+  numeroExterior: string
+  numeroInterior: string
+  colonia: string
+  estado: string
+  municipio: string
+  localidad: string
+  codigoPostal: string
+}
+
+/** Screen 4, Paso 1 — "Contacto" section (email lives on `Candidate.email`; only the extra phone fields live here). */
+export interface ContactoFicha {
+  telefonoCasa: string
+  celular: string
+}
+
+/** Screen 4, Paso 2 — "Información Complementaria". Mirrors `00-shared-kernel.md`'s `HealthProfile` + `DiversityProfile` VOs, flattened to booleans (no free-text description sub-fields — not requested by the PO's field list). */
+export interface InformacionComplementariaFicha {
+  tieneEnfermedadPreexistente: boolean
+  tieneDiscapacidad: boolean
+  padresHablanLenguaIndigena: boolean
+  hablaLenguaIndigena: boolean
+  seIdentificaNoBinario: boolean
+  perteneceComunidadLgbttiq: boolean
+  esAfrodescendiente: boolean
+}
+
+/** Screen 4, Paso 2 — "Ingresos". Mirrors `00-shared-kernel.md`'s `monthlyFamilyIncome` (on `Person`) + `EmploymentInfo` VO. */
+export interface IngresosFicha {
+  ingresoMensualFamiliar: number
+  trabaja: boolean
+  /** Required + shown only when `trabaja === true`. */
+  tipoTrabajo: string
+  telefonoTrabajo: string
+  ingresoMensual: number | null
+  nombreEmpresa: string
+  puesto: string
+  horaInicio: string
+  horaFin: string
+}
+
+/** Screen 4, Paso 3 — "Selección de Carrera". `programa`/`canal`/`isFirstChoice` stay on the existing top-level `Candidate.programa`/`canal` fields and the wizard's local step state — only the new `modalidad` field is added here. */
+export interface SeleccionCarreraFicha {
+  modalidad: ModalidadPrograma | ''
+}
+
+/** Screen 4, Paso 3 — "Antecedentes Escolares". Mirrors `00-shared-kernel.md`'s `HighSchoolBackground` VO. */
+export interface AntecedentesEscolaresFicha {
+  nombrePreparatoria: string
+  tipoBachillerato: TipoBachillerato | ''
+  estudioBachilleratoEnMexico: boolean
+  /** Required + shown when `estudioBachilleratoEnMexico === true`. */
+  estadoPreparatoria: string
+  /** Required + shown only when `estudioBachilleratoEnMexico === true`. */
+  municipioPreparatoria: string
+  /** Required + shown only when `estudioBachilleratoEnMexico === false`. */
+  paisPreparatoria: string
+  /** Required + shown only when `estudioBachilleratoEnMexico === false`. */
+  ciudadPreparatoria: string
+  promedio: number
+  /** Clave de Centro de Trabajo (catálogo SEP). */
+  cct: string
+  /** Confirmation-only field — must match `cct`; never persisted separately once validated. */
+  cctConfirmacion: string
+}
+
+/**
+ * Full "ficha de admisión" — the complete candidate profile captured across
+ * Screen 4's 4 steps, grouped by conceptual section (see field-by-field
+ * mapping in `specs/admision-screens/spec.md`, "Registro de Candidato Wizard
+ * (Screen 4)").
+ */
+export interface FichaAdmisionCompleta {
+  datosGenerales: DatosGeneralesFicha
+  domicilio: DomicilioFicha
+  contacto: ContactoFicha
+  informacionComplementaria: InformacionComplementariaFicha
+  ingresos: IngresosFicha
+  seleccionCarrera: SeleccionCarreraFicha
+  antecedentesEscolares: AntecedentesEscolaresFicha
 }
 
 /** Minimum passing score for Screen 7's live Aprobado/Reprobado computation. */

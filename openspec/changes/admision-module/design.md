@@ -59,7 +59,7 @@ open-state where it already lives in `AppLayout`.
 **Choice**: `Wizard` takes `steps: WizardStep[]` and `onComplete`; owns `currentStep` internally.
 Each step `{ id, label, render, isValid }`. Next is disabled when `steps[current].isValid === false`.
 Parent owns form data (lifted `useState`), passed into each `render`.
-**Alternatives considered**: hardcode the 3-step flow inside screen 4; headless lib (react-step-wizard).
+**Alternatives considered**: hardcode the step flow inside screen 4 (originally drafted as 3 steps, reworked to 4 per the PO's 2026-07-01 complete field-list correction — irrelevant to this decision either way since the Wizard itself is step-count-agnostic); headless lib (react-step-wizard).
 **Rationale**: Reusable for future flows per proposal; parent-owned data keeps the wizard stateless
 about domain shape. No new dependency.
 

@@ -72,15 +72,52 @@ The list MUST show status badges and filter options for exactly the 6 enum value
 
 ### Requirement: Registro de Candidato Wizard (Screen 4)
 
-The Wizard MUST be mountable in two contexts with identical data shape, fields, and validation: staff-assisted at `/admision/candidatos/registrar` (`AppLayout`, used by Servicios Escolares) and public self-service at `/portal/registro` (`AuthLayout`, no sidebar/navbar, used by the aspirant directly). Step 1 MUST require identity verification before allowing "Siguiente": a "Verificar con LlaveMX" action MUST simulate verification and only then show a verified badge plus the form fields (no manual LlaveMX toggle). Step 2 MUST include a required `isFirstChoice` radio (primera/segunda opción) after program selection. Step 3 MUST require a payment-method selection (Evo Payments online / ventanilla) before "Finalizar Registro" is enabled. On submit, each mount MUST navigate to its own mount's Ficha Confirmación (Screen 13) — staff mount stays under `AppLayout`, público mount stays under `AuthLayout` — carrying the generated folio and payment instructions.
+**REVISED (2026-07-01)**: the PO provided the complete, authoritative field list for the "ficha de admisión" — ~56 field-slots across 7 conceptual sections, replacing the earlier 16-field draft. The Wizard is now **4 steps** and MUST be mountable in two contexts with identical data shape, fields, and validation: staff-assisted at `/admision/candidatos/registrar` (`AppLayout`, used by Servicios Escolares) and public self-service at `/portal/registro` (`AuthLayout`, no sidebar/navbar, used by the aspirant directly).
+
+LlaveMX (per `00-TRANSVERSALES.md` RN-AUTH-005 and real-world CURP structure — the CURP itself encodes birth date, sex, and birth state) auto-fills and locks read-only: Nombre(s), Primer Apellido, Segundo Apellido, CURP, Fecha de Nacimiento, Sexo, and Estado de Nacimiento (locked only while Nacionalidad = Mexicana; editable free text while Extranjera, since LlaveMX/CURP has no foreign-birth-state data). Every other field is manually captured. Field names below mirror `00-shared-kernel.md`'s `Person`/`Address`/`HealthProfile`/`DiversityProfile`/`EmploymentInfo`/`HighSchoolBackground`.
+
+#### Step 1 — Datos Generales, Domicilio Actual y Contacto
+
+Identity verification gate MUST block "Siguiente" until the candidate clicks "Verificar con LlaveMX" (simulated) and a verified badge is shown, replacing any manual LlaveMX toggle. Once verified, the 7 locked fields above populate automatically.
+
+Manual fields — *Datos Generales*: Nacionalidad (Mexicana/Extranjera radio); if Mexicana → Municipio de Nacimiento (select, from the Estado de Nacimiento LlaveMX provided); if Extranjera → País de Nacimiento, Estado de Nacimiento (now editable), Ciudad de Nacimiento; Estado Civil (select); Lengua Natal (select); ¿Tienes hijos? (Sí/No).
+*Domicilio Actual*: Calle, Número Exterior, Número Interior (optional), Colonia, Estado, Municipio (depends on Estado), Localidad, Código Postal (5 digits).
+*Contacto*: Email, Teléfono Casa, Celular.
+
+#### Step 2 — Información Complementaria e Ingresos
+
+*Información Complementaria* (7 Sí/No switches): ¿Enfermedad o diagnóstico preexistente?, ¿Discapacidad?, ¿Tu mamá o papá hablan alguna lengua indígena?, ¿Hablas alguna lengua indígena?, ¿Te identificas como No binario?, ¿Perteneces a la comunidad LGBTTTIQ+?, ¿Eres afrodescendiente?
+*Ingresos*: Ingreso Mensual Familiar (numeric); ¿Trabajas? (Sí/No) — if Sí: Tipo de Trabajo, Teléfono de Trabajo, Ingreso Mensual, Nombre de la Empresa, Puesto, Hora de Inicio, Hora de Fin.
+
+#### Step 3 — Selección de Carrera y Antecedentes Escolares
+
+*Selección de Carrera*: Modalidad (Presencial/Mixta), Carrera (the existing "Programa Educativo Solicitado" search-select, relabeled/repositioned here), Medio de Difusión por el que se enteró (the existing "Canal" field, moved here), the required `isFirstChoice` radio (primera/segunda opción, moved here from the prior Step 2).
+*Antecedentes Escolares*: Nombre de la Preparatoria de Procedencia, Tipo de Bachillerato (select), ¿Estudiaste el bachillerato en México? (Sí/No) — if Sí: Estado + Municipio de la Preparatoria; if No: País, Estado, Ciudad de la Preparatoria; Promedio (0–10); Clave de Centro de Trabajo (CCT); Confirmación de CCT (MUST match CCT — inline "Las claves no coinciden" error on mismatch, mirroring the password-confirmation pattern in `ResetConfirm.tsx`).
+
+#### Step 4 — Confirmación (unchanged)
+
+MUST require a payment-method selection (Evo Payments online / ventanilla) before "Finalizar Registro" is enabled. On submit, each mount MUST navigate to its own mount's Ficha Confirmación (Screen 13) — staff mount stays under `AppLayout`, público mount stays under `AuthLayout` — carrying the generated folio and payment instructions.
 
 #### Scenario: Next blocked until identity verified
 - GIVEN Step 1 is shown and identity is not yet verified
 - WHEN the candidate has not clicked "Verificar con LlaveMX"
 - THEN "Siguiente" MUST remain disabled
 
+#### Scenario: Estado de Nacimiento locks and unlocks with Nacionalidad
+- GIVEN identity is verified and Nacionalidad is set to "Mexicana"
+- WHEN the candidate views Step 1
+- THEN "Estado de Nacimiento" MUST show as a locked, LlaveMX-provided value
+- GIVEN Nacionalidad is instead set to "Extranjera"
+- WHEN the candidate views Step 1
+- THEN "Estado de Nacimiento" MUST render as an editable free-text field alongside País and Ciudad de Nacimiento
+
+#### Scenario: CCT confirmation mismatch blocks advancing
+- GIVEN Step 3 is shown with a CCT value entered
+- WHEN "Confirmación de CCT" does not match "CCT"
+- THEN an inline "Las claves no coinciden" error MUST display and "Siguiente"/"Finalizar Registro" MUST stay disabled until they match
+
 #### Scenario: Finalize requires payment method
-- GIVEN Step 3 is shown with no payment method selected
+- GIVEN Step 4 is shown with no payment method selected
 - WHEN the user attempts to click "Finalizar Registro"
 - THEN the button MUST stay disabled until a method is chosen
 
