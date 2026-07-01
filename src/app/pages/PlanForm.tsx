@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import {
-  ChevronRight, Info, AlertCircle, CheckCircle2,
+  ChevronRight, Info, AlertCircle,
   Plus, Trash2, Sparkles, X, ChevronDown, Search, Pencil,
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
@@ -203,17 +203,6 @@ function inputCls(disabled: boolean, hasError: boolean) {
   return 'w-full px-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] hover:border-[#009574]/50 transition'
 }
 
-// ─── Toast ─────────────────────────────────────────────────────────────────────
-
-function Toast({ message }: { message: string }) {
-  return (
-    <div className="fixed top-5 right-5 z-[100] flex items-center gap-3 bg-white border border-emerald-200 shadow-lg rounded-lg px-4 py-3">
-      <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
-      <span className="text-[13px] font-medium text-[#333333]">{message}</span>
-    </div>
-  )
-}
-
 // ─── Mode switcher ─────────────────────────────────────────────────────────────
 
 function ModeSwitcher({ mode, onChange }: { mode: FormMode; onChange: (m: FormMode) => void }) {
@@ -301,7 +290,6 @@ export default function PlanForm() {
   const [niveles, setNiveles] = useState<NivelRow[]>(mode === 'register' ? [newNivel()] : preloadedNiveles.map(n => ({ ...n })))
   const [errors, setErrors] = useState<PlanErrors>({})
   const [submitted, setSubmitted] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
 
   const isView = mode === 'view'
   const isDisabled = isView
@@ -353,8 +341,6 @@ export default function PlanForm() {
 
   return (
     <div className="max-w-[960px] mx-auto px-8 py-8">
-      {toast && <Toast message={toast} />}
-
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
         <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>

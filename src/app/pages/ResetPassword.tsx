@@ -54,14 +54,12 @@ function EnvelopeIllustration() {
 export default function ResetPassword() {
   const navigate = useNavigate()
   const [correo, setCorreo] = useState('')
-  const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setSubmitted(true)
     if (!correo.trim()) { setError('Ingresa tu correo institucional.'); return }
     if (!correo.includes('@')) { setError('Ingresa un correo válido.'); return }
     setError('')
@@ -194,7 +192,7 @@ export default function ResetPassword() {
                   ¿No recibiste el correo? Revisa tu carpeta de spam o{' '}
                   <button
                     type="button"
-                    onClick={() => { setSent(false); setSubmitted(false) }}
+                    onClick={() => setSent(false)}
                     className="text-[#009574] hover:underline font-medium"
                   >
                     intenta de nuevo
