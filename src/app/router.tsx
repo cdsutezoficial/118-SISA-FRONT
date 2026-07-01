@@ -15,6 +15,7 @@ import AdmisionDashboard from './pages/admision/AdmisionDashboard'
 import CanalesDifusion from './pages/admision/CanalesDifusion'
 import CandidatosList from './pages/admision/CandidatosList'
 import CandidatoDetalle from './pages/admision/CandidatoDetalle'
+import CandidatoRegistro from './pages/admision/CandidatoRegistro'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -76,8 +77,7 @@ const router = createBrowserRouter([
       {
         path: 'portal',
         children: [
-          // TODO(admision-module 2.5): <CandidatoRegistro origin="public" />
-          { path: 'registro', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Registro (próximamente)</div> },
+          { path: 'registro', element: <CandidatoRegistro origin="public" /> },
           // TODO(admision-module 2.6): <FichaConfirmacion origin="public" />
           { path: 'registro/ficha', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Ficha de Confirmación (próximamente)</div> },
           // TODO(admision-module 2.16): <PortalInduccion />
@@ -103,6 +103,7 @@ const router = createBrowserRouter([
           { path: 'canales', element: <CanalesDifusion /> },
           { path: 'candidatos', element: <CandidatosList /> },
           { path: 'candidatos/detalle', element: <CandidatoDetalle /> },
+          { path: 'candidatos/registrar', element: <CandidatoRegistro origin="staff" /> },
         ],
       },
 
