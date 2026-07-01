@@ -10,6 +10,9 @@ import ResetConfirm from './pages/ResetConfirm'
 // Authenticated pages
 import Dashboard from './pages/Dashboard'
 
+// Admisión
+import AdmisionDashboard from './pages/admision/AdmisionDashboard'
+
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
 import DivisionesForm from './pages/DivisionesForm'
@@ -89,12 +92,11 @@ const router = createBrowserRouter([
     children: [
       { path: 'dashboard', element: <Dashboard /> },
 
-      // Admisión — stub only: Screen 1 Dashboard lands in a later work unit.
+      // Admisión
       {
         path: 'admision',
         children: [
-          // TODO(admision-module 2.1): replace with <AdmisionDashboard />
-          { index: true, element: <div className="p-6 text-sm text-[#6B7280]">Admisión — Dashboard (próximamente)</div> },
+          { index: true, element: <AdmisionDashboard /> },
         ],
       },
 
