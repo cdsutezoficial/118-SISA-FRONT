@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { ChevronRight, Pencil, Save, X, ArrowLeft } from 'lucide-react'
 import { FieldLabel, FieldHelp, inputCls, ModeSwitcher, DatePicker, SimpleSelect } from '../shared/ui'
-import type { NavigateFn, FormMode } from '../shared/types'
-
-interface Props { navigate: NavigateFn; mode: FormMode }
+import { useNavigate } from 'react-router'
+import { useFormMode } from '../shared/hooks'
 
 const PRELOADED = {
   nombre: 'Enero – Abril 2026',
@@ -14,7 +13,9 @@ const PRELOADED = {
 
 const tipos = ['Cuatrimestral', 'Semestral', 'Anual', 'Intensivo']
 
-export default function PeriodosForm({ navigate, mode }: Props) {
+export default function PeriodosForm() {
+  const navigate = useNavigate()
+  const { mode, id } = useFormMode()
   const isView = mode === 'view'
   const isRegister = mode === 'register'
 
@@ -29,11 +30,11 @@ export default function PeriodosForm({ navigate, mode }: Props) {
     <div className="max-w-[1100px] mx-auto px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'periodos-list' })} className="hover:text-[#009574] transition-colors">Periodos Académicos</button>
+        <button onClick={() => navigate('/periodos')} className="hover:text-[#009574] transition-colors">Periodos Académicos</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">
           {isRegister ? 'Registrar Periodo' : isView ? 'Ver Periodo' : 'Editar Periodo'}
@@ -53,9 +54,8 @@ export default function PeriodosForm({ navigate, mode }: Props) {
         </div>
         <ModeSwitcher
           mode={mode}
-          navigate={navigate}
-          registerPage={{ page: 'periodo-form', mode: 'register' }}
-          formPage={m => ({ page: 'periodo-form', mode: m })}
+          registerUrl="/periodos/new"
+          formUrl={m => `/periodos/form?mode=${m}&id=${id}`}
         />
       </div>
 
@@ -84,28 +84,28 @@ export default function PeriodosForm({ navigate, mode }: Props) {
       <div className="flex items-center justify-end gap-3">
         {isView ? (
           <>
-            <button onClick={() => navigate({ page: 'periodos-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            <button onClick={() => navigate('/periodos')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               <ArrowLeft size={14} />Regresar
             </button>
-            <button onClick={() => navigate({ page: 'periodo-form', mode: 'edit' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+            <button onClick={() => navigate(`/periodos/form?mode=edit&id=${id}`)} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
               <Pencil size={14} />Editar
             </button>
           </>
         ) : isRegister ? (
           <>
-            <button onClick={() => navigate({ page: 'periodos-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            <button onClick={() => navigate('/periodos')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               <X size={14} />Cancelar
             </button>
-            <button onClick={() => navigate({ page: 'periodos-list', pendingToast: 'Periodo registrado exitosamente.' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+            <button onClick={() => navigate('/periodos', { state: { toast: 'Periodo registrado exitosamente.' } })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
               <Save size={14} />Registrar Periodo
             </button>
           </>
         ) : (
           <>
-            <button onClick={() => navigate({ page: 'periodos-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            <button onClick={() => navigate('/periodos')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               <X size={14} />Cancelar
             </button>
-            <button onClick={() => navigate({ page: 'periodos-list', pendingToast: 'Periodo actualizado exitosamente.' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+            <button onClick={() => navigate('/periodos', { state: { toast: 'Periodo actualizado exitosamente.' } })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
               <Save size={14} />Guardar Cambios
             </button>
           </>

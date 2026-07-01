@@ -4,7 +4,8 @@ import {
   Plus, ChevronLeft, ChevronRight as ChevRight, X, ChevronDown,
   Clock, CheckCircle2, Info,
 } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
+import { useNavigate } from 'react-router'
+import { usePendingToast } from '../shared/hooks'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -295,9 +296,9 @@ function RolesCell({ roles }: { roles: string[] }) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-interface Props { navigate: NavigateFn; pendingToast?: string }
-
-export default function UsuariosList({ navigate, pendingToast }: Props) {
+export default function UsuariosList() {
+  const navigate = useNavigate()
+  const pendingToast = usePendingToast()
   const [search, setSearch] = useState('')
   const [rolFilter, setRolFilter] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('')
@@ -307,8 +308,6 @@ export default function UsuariosList({ navigate, pendingToast }: Props) {
   const [usuarios, setUsuarios] = useState<Usuario[]>(allUsuarios)
   const [toast, setToast] = useState(pendingToast ?? '')
   const perPage = 10
-
-  useEffect(() => { if (pendingToast) setToast(pendingToast) }, [pendingToast])
 
   const filtered = usuarios.filter(u => {
     const matchRol   = !rolFilter    || u.roles.includes(rolFilter)
@@ -361,7 +360,7 @@ export default function UsuariosList({ navigate, pendingToast }: Props) {
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Identidad</span>
         <ChevronRight size={13} />
@@ -374,7 +373,7 @@ export default function UsuariosList({ navigate, pendingToast }: Props) {
           <h1 className="text-2xl font-semibold text-[#333333]">Usuarios</h1>
           <p className="text-[14px] text-[#6B7280] mt-1">Consulta y administra las cuentas de usuario del sistema.</p>
         </div>
-        <button onClick={() => navigate({ page: 'usuario-form', mode: 'register' })} className="flex items-center gap-2 bg-[#009574] hover:bg-[#007a5e] text-white text-[13px] font-semibold px-4 py-2 rounded-md transition-colors whitespace-nowrap mt-1">
+        <button onClick={() => navigate('/usuarios/new')} className="flex items-center gap-2 bg-[#009574] hover:bg-[#007a5e] text-white text-[13px] font-semibold px-4 py-2 rounded-md transition-colors whitespace-nowrap mt-1">
           <Plus size={15} />Registrar Usuario
         </button>
       </div>
@@ -474,8 +473,8 @@ export default function UsuariosList({ navigate, pendingToast }: Props) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-0.5">
-                        <ActionBtn icon={<Eye size={15} />} tooltip="Ver detalle" onClick={() => navigate({ page: 'usuario-detalle' })} />
-                        <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate({ page: 'usuario-form', mode: 'edit' })} />
+                        <ActionBtn icon={<Eye size={15} />} tooltip="Ver detalle" onClick={() => navigate(`/usuarios/detalle?id=${row.id}`)} />
+                        <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/usuarios/form?mode=edit&id=${row.id}`)} />
                         <ActionBtn icon={<ToggleLeft size={15} />} tooltip="Cambiar estado" danger />
                         <ActionBtn icon={<KeyRound size={15} />} tooltip="Restablecer contraseña" danger onClick={() => setResetTarget(row)} />
                         {row.estado === 'Bloqueada' && (

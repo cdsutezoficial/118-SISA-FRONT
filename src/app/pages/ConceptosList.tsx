@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ChevronRight, Search, Eye, Pencil, Trash2, Plus, X, ChevronLeft, ChevronRight as ChevRight } from 'lucide-react'
 import { Toast, ActionBtn, ConfirmModal } from '../shared/ui'
-import type { NavigateFn } from '../shared/types'
-
-interface Props { navigate: NavigateFn; pendingToast?: string }
+import { useNavigate } from 'react-router'
+import { usePendingToast } from '../shared/hooks'
 
 const tipoBadge: Record<string, string> = {
   Recurrente: 'bg-blue-50 text-blue-700 border border-blue-200',
@@ -23,13 +22,13 @@ const tarifasDemo = [
   { programa: 'TSU-TI', nivel: '1er – 3er Cuatrimestre', monto: '$2,800.00', vigencia: '01/01/2026' },
 ]
 
-export default function ConceptosList({ navigate, pendingToast }: Props) {
+export default function ConceptosList() {
+  const navigate = useNavigate()
+  const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState<number | null>(null)
   const [slideOver, setSlideOver] = useState<number | null>(null)
-
-  useEffect(() => { if (pendingToast) setToast(pendingToast) }, [pendingToast])
 
   const filtered = rows.filter(r =>
     r.nombre.toLowerCase().includes(search.toLowerCase())
@@ -90,7 +89,7 @@ export default function ConceptosList({ navigate, pendingToast }: Props) {
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
@@ -102,7 +101,7 @@ export default function ConceptosList({ navigate, pendingToast }: Props) {
           <h1 className="text-2xl font-semibold text-[#333333]">Conceptos de Pago</h1>
           <p className="text-[14px] text-[#6B7280] mt-1">Gestiona los conceptos de pago y sus tarifas por programa y nivel.</p>
         </div>
-        <button onClick={() => navigate({ page: 'concepto-form', mode: 'register' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+        <button onClick={() => navigate('/conceptos/new')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
           <Plus size={15} />Registrar Concepto
         </button>
       </div>
@@ -144,8 +143,8 @@ export default function ConceptosList({ navigate, pendingToast }: Props) {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
-                    <ActionBtn icon={<Eye size={15} />} tooltip="Ver" onClick={() => navigate({ page: 'concepto-form', mode: 'view' })} />
-                    <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate({ page: 'concepto-form', mode: 'edit' })} />
+                    <ActionBtn icon={<Eye size={15} />} tooltip="Ver" onClick={() => navigate(`/conceptos/form?mode=view&id=${row.id}`)} />
+                    <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/conceptos/form?mode=edit&id=${row.id}`)} />
                     <ActionBtn icon={<Trash2 size={15} />} tooltip="Eliminar" danger onClick={() => setConfirm(row.id)} />
                   </div>
                 </td>

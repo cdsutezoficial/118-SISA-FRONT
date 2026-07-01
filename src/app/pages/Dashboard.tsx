@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Building2, GraduationCap, BookOpen, BookMarked, CalendarRange, Users, CreditCard, ClipboardList, ChevronRight, TrendingUp, CheckCircle2 } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
-
-interface Props { navigate: NavigateFn; pendingToast?: string }
+import { useState } from 'react'
+import { Building2, GraduationCap, BookOpen, BookMarked, CalendarRange, Users, CreditCard, ClipboardList, ChevronRight, TrendingUp, CheckCircle2, Activity } from 'lucide-react'
+import { useNavigate } from 'react-router'
+import { usePendingToast } from '../shared/hooks'
 
 const kpiCards = [
   { label: 'Divisiones Académicas', value: '4', delta: '+1 este ciclo', color: 'bg-blue-50 text-blue-600', icon: <Building2 size={20} /> },
@@ -12,14 +11,14 @@ const kpiCards = [
 ]
 
 const quickAccess = [
-  { label: 'Divisiones', icon: <Building2 size={20} />, page: 'divisiones-list' as const },
-  { label: 'Programas', icon: <GraduationCap size={20} />, page: 'programas-list' as const },
-  { label: 'Planes de Estudio', icon: <BookOpen size={20} />, page: 'planes-list' as const },
-  { label: 'Materias', icon: <BookMarked size={20} />, page: 'materias-list' as const },
-  { label: 'Periodos', icon: <CalendarRange size={20} />, page: 'periodos-list' as const },
-  { label: 'Grupos', icon: <Users size={20} />, page: 'grupos-list' as const },
-  { label: 'Conceptos de Pago', icon: <CreditCard size={20} />, page: 'conceptos-list' as const },
-  { label: 'Escalas de Cal.', icon: <ClipboardList size={20} />, page: 'escalas-list' as const },
+  { label: 'Divisiones', icon: <Building2 size={20} />, url: '/divisiones' },
+  { label: 'Programas', icon: <GraduationCap size={20} />, url: '/programas' },
+  { label: 'Planes de Estudio', icon: <BookOpen size={20} />, url: '/planes' },
+  { label: 'Materias', icon: <BookMarked size={20} />, url: '/materias' },
+  { label: 'Periodos', icon: <CalendarRange size={20} />, url: '/periodos' },
+  { label: 'Grupos', icon: <Users size={20} />, url: '/grupos' },
+  { label: 'Conceptos de Pago', icon: <CreditCard size={20} />, url: '/conceptos' },
+  { label: 'Escalas de Cal.', icon: <ClipboardList size={20} />, url: '/escalas' },
 ]
 
 const recentActivity = [
@@ -38,9 +37,10 @@ const tipoBadge: Record<string, string> = {
   Programa: 'bg-teal-50 text-teal-700 border border-teal-200',
 }
 
-export default function Dashboard({ navigate, pendingToast }: Props) {
+export default function Dashboard() {
+  const navigate = useNavigate()
+  const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
-  useEffect(() => { if (pendingToast) setToast(pendingToast) }, [pendingToast])
   return (
     <div className="max-w-[1100px] mx-auto px-8 py-8">
       {toast && (
@@ -85,7 +85,7 @@ export default function Dashboard({ navigate, pendingToast }: Props) {
           {quickAccess.map(item => (
             <button
               key={item.label}
-              onClick={() => navigate({ page: item.page })}
+              onClick={() => navigate(item.url)}
               className="flex flex-col items-center gap-2 p-4 border border-[#E5E7EB] rounded-lg hover:border-[#009574] hover:bg-[#e6f5f1] transition-colors group"
             >
               <div className="text-[#6B7280] group-hover:text-[#009574] transition-colors">{item.icon}</div>

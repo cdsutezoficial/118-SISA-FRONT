@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import {
   ChevronRight, Info, AlertCircle, CheckCircle2, X, ChevronDown, Search, BookOpen, Layers,
 } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
+import { useNavigate } from 'react-router'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -221,9 +221,8 @@ function inputCls(hasError = false) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-interface Props { navigate: NavigateFn }
-
-export default function AsignarMateria({ navigate }: Props) {
+export default function AsignarMateria() {
+  const navigate = useNavigate()
   const [form, setForm] = useState<FormState>({ ...empty })
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitted, setSubmitted] = useState(false)
@@ -255,7 +254,7 @@ export default function AsignarMateria({ navigate }: Props) {
     const e = validate()
     setSubmitted(true)
     if (Object.keys(e).length > 0) { setErrors(e); return }
-    navigate({ page: 'plan-detalle', pendingToast: 'Materia asignada al nivel correctamente.' })
+    navigate('/planes/detalle', { state: { toast: 'Materia asignada al nivel correctamente.' } })
   }
 
   const selectedMateria = materiaOptions.find(m => m.value === form.materia)
@@ -264,13 +263,13 @@ export default function AsignarMateria({ navigate }: Props) {
     <div className="max-w-[860px] mx-auto px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4 flex-wrap">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'planes-list' })} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
+        <button onClick={() => navigate('/planes')} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'plan-detalle' })} className="hover:text-[#009574] transition-colors font-mono text-[12px]">IDGS-2022</button>
+        <button onClick={() => navigate('/planes/detalle')} className="hover:text-[#009574] transition-colors font-mono text-[12px]">IDGS-2022</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">Asignar Materia</span>
       </nav>
@@ -433,7 +432,7 @@ export default function AsignarMateria({ navigate }: Props) {
       {/* Action zone */}
       <div className="flex items-center justify-end gap-3 mt-6">
         <button
-          onClick={() => navigate({ page: 'plan-detalle' })}
+          onClick={() => navigate('/planes/detalle')}
           className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
         >
           Cancelar

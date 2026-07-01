@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { ChevronRight, Pencil, Save, X, ArrowLeft } from 'lucide-react'
 import { FieldLabel, FieldHelp, inputCls, ModeSwitcher, SimpleSelect, Switch } from '../shared/ui'
-import type { NavigateFn, FormMode } from '../shared/types'
-
-interface Props { navigate: NavigateFn; mode: FormMode }
+import { useNavigate } from 'react-router'
+import { useFormMode } from '../shared/hooks'
 
 const PRELOADED = {
   nombre: 'Fundamentos de Programación',
@@ -18,7 +17,9 @@ const PRELOADED = {
 
 const clasificaciones = ['Básica', 'Ciencias Básicas', 'Especialidad', 'Lengua Extranjera', 'Matemáticas', 'Transversal']
 
-export default function MateriasForm({ navigate, mode }: Props) {
+export default function MateriasForm() {
+  const navigate = useNavigate()
+  const { mode, id } = useFormMode()
   const isView = mode === 'view'
   const isRegister = mode === 'register'
 
@@ -37,11 +38,11 @@ export default function MateriasForm({ navigate, mode }: Props) {
     <div className="max-w-[1100px] mx-auto px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'materias-list' })} className="hover:text-[#009574] transition-colors">Materias</button>
+        <button onClick={() => navigate('/materias')} className="hover:text-[#009574] transition-colors">Materias</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">
           {isRegister ? 'Registrar Materia' : isView ? 'Ver Materia' : 'Editar Materia'}
@@ -61,9 +62,8 @@ export default function MateriasForm({ navigate, mode }: Props) {
         </div>
         <ModeSwitcher
           mode={mode}
-          navigate={navigate}
-          registerPage={{ page: 'materia-form', mode: 'register' }}
-          formPage={m => ({ page: 'materia-form', mode: m })}
+          registerUrl="/materias/new"
+          formUrl={m => `/materias/form?mode=${m}&id=${id}`}
         />
       </div>
 
@@ -111,28 +111,28 @@ export default function MateriasForm({ navigate, mode }: Props) {
       <div className="flex items-center justify-end gap-3">
         {isView ? (
           <>
-            <button onClick={() => navigate({ page: 'materias-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            <button onClick={() => navigate('/materias')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               <ArrowLeft size={14} />Regresar
             </button>
-            <button onClick={() => navigate({ page: 'materia-form', mode: 'edit' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+            <button onClick={() => navigate(`/materias/form?mode=edit&id=${id}`)} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
               <Pencil size={14} />Editar
             </button>
           </>
         ) : isRegister ? (
           <>
-            <button onClick={() => navigate({ page: 'materias-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            <button onClick={() => navigate('/materias')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               <X size={14} />Cancelar
             </button>
-            <button onClick={() => navigate({ page: 'materias-list', pendingToast: 'Materia registrada exitosamente.' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+            <button onClick={() => navigate('/materias', { state: { toast: 'Materia registrada exitosamente.' } })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
               <Save size={14} />Registrar Materia
             </button>
           </>
         ) : (
           <>
-            <button onClick={() => navigate({ page: 'materias-list' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            <button onClick={() => navigate('/materias')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               <X size={14} />Cancelar
             </button>
-            <button onClick={() => navigate({ page: 'materias-list', pendingToast: 'Materia actualizada exitosamente.' })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+            <button onClick={() => navigate('/materias', { state: { toast: 'Materia actualizada exitosamente.' } })} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
               <Save size={14} />Guardar Cambios
             </button>
           </>

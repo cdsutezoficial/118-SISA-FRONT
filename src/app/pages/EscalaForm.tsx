@@ -3,7 +3,9 @@ import {
   ChevronRight, Info, AlertCircle, CheckCircle2,
   Plus, Trash2, Pencil, X, ChevronDown, Search,
 } from 'lucide-react'
-import type { NavigateFn, FormMode } from '../shared/types'
+import { useNavigate } from 'react-router'
+import { useFormMode } from '../shared/hooks'
+import type { FormMode } from '../shared/types'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -313,12 +315,11 @@ function RangoRowComp({ row, index, onChange, onRemove, disabled }: {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-interface Props { navigate: NavigateFn; mode: FormMode }
-
-export default function EscalaForm({ navigate, mode: initialMode }: Props) {
-  const [mode, setMode] = useState<FormMode>(initialMode)
-  const [form, setForm] = useState<EscalaFormState>(initialMode === 'register' ? { ...emptyForm } : { ...preloadedForm })
-  const [rangos, setRangos] = useState<RangoRow[]>(initialMode === 'register' ? [newRango()] : preloadedRangos.map(r => ({ ...r })))
+export default function EscalaForm() {
+  const navigate = useNavigate()
+  const { mode, id } = useFormMode()
+  const [form, setForm] = useState<EscalaFormState>(mode === 'register' ? { ...emptyForm } : { ...preloadedForm })
+  const [rangos, setRangos] = useState<RangoRow[]>(mode === 'register' ? [newRango()] : preloadedRangos.map(r => ({ ...r })))
   const [errors, setErrors] = useState<EscalaErrors>({})
   const [submitted, setSubmitted] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -327,11 +328,8 @@ export default function EscalaForm({ navigate, mode: initialMode }: Props) {
   const isDisabled = isView
 
   function handleModeChange(m: FormMode) {
-    setMode(m)
-    setErrors({})
-    setSubmitted(false)
-    if (m === 'register') { setForm({ ...emptyForm }); setRangos([newRango()]) }
-    else { setForm({ ...preloadedForm }); setRangos(preloadedRangos.map(r => ({ ...r }))) }
+    if (m === 'register') navigate('/escalas/new')
+    else navigate(`/escalas/form?mode=${m}${id ? `&id=${id}` : ''}`)
   }
 
   function clearErr(field: keyof EscalaErrors) {
@@ -352,7 +350,7 @@ export default function EscalaForm({ navigate, mode: initialMode }: Props) {
     setSubmitted(true)
     if (Object.keys(e).length > 0) { setErrors(e); return }
     setErrors({})
-    navigate({ page: 'escalas-list', pendingToast: mode === 'register' ? 'Escala de calificación registrada exitosamente.' : 'Escala actualizada exitosamente.' })
+    navigate('/escalas', { state: { toast: mode === 'register' ? 'Escala de calificación registrada exitosamente.' : 'Escala actualizada exitosamente.' } })
   }
 
   const breadcrumbLabel = mode === 'register' ? 'Registrar Escala' : mode === 'view' ? 'Ver Detalle' : 'Editar Escala'
@@ -374,15 +372,15 @@ export default function EscalaForm({ navigate, mode: initialMode }: Props) {
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4 flex-wrap">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'planes-list' })} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
+        <button onClick={() => navigate('/planes')} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'plan-detalle' })} className="hover:text-[#009574] transition-colors font-mono text-[12px]">IDGS-2022</button>
+        <button onClick={() => navigate('/planes/detalle')} className="hover:text-[#009574] transition-colors font-mono text-[12px]">IDGS-2022</button>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'escalas-list' })} className="hover:text-[#009574] transition-colors">Escalas de Calificación</button>
+        <button onClick={() => navigate('/escalas')} className="hover:text-[#009574] transition-colors">Escalas de Calificación</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">{breadcrumbLabel}</span>
       </nav>
@@ -515,7 +513,7 @@ export default function EscalaForm({ navigate, mode: initialMode }: Props) {
       <div className="flex items-center justify-end gap-3 mt-6">
         {isView ? (
           <>
-            <button onClick={() => navigate({ page: 'escalas-list' })}
+            <button onClick={() => navigate('/escalas')}
               className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               Regresar
             </button>
@@ -526,7 +524,7 @@ export default function EscalaForm({ navigate, mode: initialMode }: Props) {
           </>
         ) : (
           <>
-            <button onClick={() => navigate({ page: 'escalas-list' })}
+            <button onClick={() => navigate('/escalas')}
               className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
               Cancelar
             </button>

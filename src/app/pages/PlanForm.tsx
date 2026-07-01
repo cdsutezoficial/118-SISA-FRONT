@@ -3,7 +3,9 @@ import {
   ChevronRight, Info, AlertCircle, CheckCircle2,
   Plus, Trash2, Sparkles, X, ChevronDown, Search, Pencil,
 } from 'lucide-react'
-import type { NavigateFn, FormMode } from '../shared/types'
+import { useNavigate } from 'react-router'
+import { useFormMode } from '../shared/hooks'
+import type { FormMode } from '../shared/types'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -292,12 +294,11 @@ function NivelRowComp({ row, index, onChange, onRemove, disabled }: {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-interface Props { navigate: NavigateFn; mode: FormMode }
-
-export default function PlanForm({ navigate, mode: initialMode }: Props) {
-  const [mode, setMode] = useState<FormMode>(initialMode)
-  const [form, setForm] = useState<PlanForm>(initialMode === 'register' ? { ...emptyForm } : { ...preloadedForm })
-  const [niveles, setNiveles] = useState<NivelRow[]>(initialMode === 'register' ? [newNivel()] : preloadedNiveles.map(n => ({ ...n })))
+export default function PlanForm() {
+  const navigate = useNavigate()
+  const { mode, id } = useFormMode()
+  const [form, setForm] = useState<PlanForm>(mode === 'register' ? { ...emptyForm } : { ...preloadedForm })
+  const [niveles, setNiveles] = useState<NivelRow[]>(mode === 'register' ? [newNivel()] : preloadedNiveles.map(n => ({ ...n })))
   const [errors, setErrors] = useState<PlanErrors>({})
   const [submitted, setSubmitted] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -310,11 +311,8 @@ export default function PlanForm({ navigate, mode: initialMode }: Props) {
   const showSuggestion = suggestedClave && form.clave !== suggestedClave && !isDisabled && mode === 'register'
 
   function handleModeChange(m: FormMode) {
-    setMode(m)
-    setErrors({})
-    setSubmitted(false)
-    if (m === 'register') { setForm({ ...emptyForm }); setNiveles([newNivel()]) }
-    else { setForm({ ...preloadedForm }); setNiveles(preloadedNiveles.map(n => ({ ...n }))) }
+    if (m === 'register') navigate('/planes/new')
+    else navigate(`/planes/form?mode=${m}${id ? `&id=${id}` : ''}`)
   }
 
   function clearErr(field: keyof PlanErrors) {
@@ -339,9 +337,9 @@ export default function PlanForm({ navigate, mode: initialMode }: Props) {
     if (Object.keys(e).length > 0) { setErrors(e); return }
     setErrors({})
     if (mode === 'register') {
-      navigate({ page: 'plan-detalle', pendingToast: 'Plan registrado. Ahora asigna materias a cada nivel.' })
+      navigate('/planes/detalle', { state: { toast: 'Plan registrado. Ahora asigna materias a cada nivel.' } })
     } else {
-      navigate({ page: 'planes-list', pendingToast: 'Plan de estudios actualizado exitosamente.' })
+      navigate('/planes', { state: { toast: 'Plan de estudios actualizado exitosamente.' } })
     }
   }
 
@@ -359,11 +357,11 @@ export default function PlanForm({ navigate, mode: initialMode }: Props) {
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
-        <button onClick={() => navigate({ page: 'planes-list' })} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
+        <button onClick={() => navigate('/planes')} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">{breadcrumbLabel}</span>
       </nav>
@@ -529,7 +527,7 @@ export default function PlanForm({ navigate, mode: initialMode }: Props) {
         <div className="flex items-center justify-end gap-3">
           {isView ? (
             <>
-              <button onClick={() => navigate({ page: 'planes-list' })}
+              <button onClick={() => navigate('/planes')}
                 className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
                 Regresar
               </button>
@@ -540,7 +538,7 @@ export default function PlanForm({ navigate, mode: initialMode }: Props) {
             </>
           ) : (
             <>
-              <button onClick={() => navigate({ page: 'planes-list' })}
+              <button onClick={() => navigate('/planes')}
                 className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
                 Cancelar
               </button>

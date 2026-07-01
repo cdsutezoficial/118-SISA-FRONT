@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router'
 import {
   LayoutDashboard, Building2, GraduationCap, BookOpen, BookMarked,
-  CalendarRange, Users, CreditCard, ClipboardList,
+  CalendarRange, Users, CreditCard, ClipboardList, IdCard,
   ChevronLeft, ChevronRight, HelpCircle, LogOut, UserCog, ChevronDown,
 } from 'lucide-react'
 
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { icon: <Users size={18} />,           label: 'Grupos',                   base: 'grupos', path: '/grupos' },
   { icon: <CreditCard size={18} />,      label: 'Conceptos de Pago',        base: 'conceptos', path: '/conceptos' },
   { icon: <ClipboardList size={18} />,   label: 'Escalas de Calificación',  base: 'escalas', path: '/escalas' },
+  { icon: <IdCard size={18} />,          label: 'Usuarios',                 base: 'usuarios', path: '/usuarios' },
 ]
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────

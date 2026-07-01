@@ -51,12 +51,6 @@ import UsuarioDetalle from './pages/UsuarioDetalle'
 import AsignarRol from './pages/AsignarRol'
 import CambiarPassword from './pages/CambiarPassword'
 
-// NOTE: Page components still carry their old prop signatures in this PR.
-// TypeScript will report "missing required props" errors on each element below.
-// That is EXPECTED — props are removed module-by-module in PR 2+.
-// Vite/esbuild does not type-check at build time, so the dev server and build
-// will succeed. IDE type errors here are transient and will go away in PR 2+.
-
 const router = createBrowserRouter([
   // Root redirect — goes to /login (no auth guard yet)
   { path: '/', element: <Navigate to="/login" replace /> },

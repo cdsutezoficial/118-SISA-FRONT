@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { ChevronRight, Eye, EyeOff, AlertCircle, CheckCircle2, ShieldCheck, AlertTriangle } from 'lucide-react'
-import type { NavigateFn } from '../shared/types'
-
-interface Props { navigate: NavigateFn; firstAccess?: boolean }
+import { ChevronRight, Eye, EyeOff, AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react'
+import { useNavigate } from 'react-router'
 
 // ─── Password strength ─────────────────────────────────────────────────────────
 
@@ -71,7 +69,8 @@ function PasswordInput({ id, value, onChange, placeholder, hasError, disabled }:
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-export default function CambiarPassword({ navigate, firstAccess = false }: Props) {
+export default function CambiarPassword() {
+  const navigate = useNavigate()
   const [actual, setActual] = useState('')
   const [nueva, setNueva] = useState('')
   const [confirmar, setConfirmar] = useState('')
@@ -93,12 +92,8 @@ export default function CambiarPassword({ navigate, firstAccess = false }: Props
     setLoading(true)
     setTimeout(() => {
       setLoading(false)
-      if (firstAccess) {
-        navigate({ page: 'dashboard', pendingToast: 'Contraseña actualizada. Bienvenido al sistema.' })
-      } else {
-        setDone(true)
-        setTimeout(() => navigate({ page: 'dashboard' }), 2500)
-      }
+      setDone(true)
+      setTimeout(() => navigate('/dashboard'), 2500)
     }, 1000)
   }
 
@@ -106,7 +101,7 @@ export default function CambiarPassword({ navigate, firstAccess = false }: Props
     <div className="max-w-[1100px] mx-auto px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate({ page: 'dashboard' })} className="hover:text-[#009574] transition-colors">Inicio</button>
+        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Mi Cuenta</span>
         <ChevronRight size={13} />
@@ -136,14 +131,6 @@ export default function CambiarPassword({ navigate, firstAccess = false }: Props
           </div>
         ) : (
           <form onSubmit={handleSubmit} noValidate>
-            {firstAccess && (
-              <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-4 text-[13px] text-amber-800">
-                <AlertTriangle size={16} className="flex-shrink-0 mt-0.5 text-amber-600" />
-                <span>
-                  <strong>Es tu primer acceso al sistema.</strong> Debes cambiar tu contraseña antes de continuar.
-                </span>
-              </div>
-            )}
             <div className="bg-white border border-[#E5E7EB] rounded-lg p-8 space-y-6">
 
               {/* Contraseña actual */}
@@ -212,12 +199,10 @@ export default function CambiarPassword({ navigate, firstAccess = false }: Props
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 mt-6">
-              {!firstAccess && (
-                <button type="button" onClick={() => navigate({ page: 'dashboard' })}
-                  className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
-                  Cancelar
-                </button>
-              )}
+              <button type="button" onClick={() => navigate('/dashboard')}
+                className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+                Cancelar
+              </button>
               <button type="submit" disabled={loading}
                 className={`flex items-center gap-2 px-5 py-2 text-[13px] font-semibold rounded-md transition-all ${
                   loading
