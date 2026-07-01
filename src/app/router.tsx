@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard'
 // Admisión
 import AdmisionDashboard from './pages/admision/AdmisionDashboard'
 import CanalesDifusion from './pages/admision/CanalesDifusion'
+import CandidatosList from './pages/admision/CandidatosList'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -99,6 +100,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <AdmisionDashboard /> },
           { path: 'canales', element: <CanalesDifusion /> },
+          { path: 'candidatos', element: <CandidatosList /> },
         ],
       },
 

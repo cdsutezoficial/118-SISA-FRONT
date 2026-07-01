@@ -44,7 +44,7 @@ Chain strategy resolved: **feature-branch-chain**. Tracker branch `admision-modu
 
 - [x] 2.1 Screen 1 Dashboard — `pages/admision/AdmisionDashboard.tsx`, route `/admision` (index)
 - [x] 2.2 Screen 2 Canales Difusión — `pages/admision/CanalesDifusion.tsx`, route `/admision/canales`
-- [ ] 2.3 Screen 3 Candidatos Listado — `pages/admision/CandidatosList.tsx`, route `/admision/candidatos`; 6 status badges, conditional row actions
+- [x] 2.3 Screen 3 Candidatos Listado — `pages/admision/CandidatosList.tsx`, route `/admision/candidatos`; 6 status badges, conditional row actions
 - [ ] 2.4 Screen 5 Candidato Detalle — `pages/admision/CandidatoDetalle.tsx`, route `/admision/candidatos/detalle`; Pagos tab (Ficha + Inducción), no Admitir/Rechazar (depends on 2.3)
 - [ ] 2.5 Screen 4 Registro Wizard (dual-mount) — `pages/admision/CandidatoRegistro.tsx` w/ `origin` prop; routes `/admision/candidatos/registrar` (staff) + `/portal/registro` (public); LlaveMX gate, isFirstChoice, payment-method gate (uses Wizard, 1.5)
 - [ ] 2.6 Screen 13 Ficha Confirmación (dual-mount) — `pages/admision/FichaConfirmacion.tsx` w/ `origin` prop; routes `/admision/candidatos/ficha` + `/portal/registro/ficha`; simulated overlay, staff-only back-link (depends on 2.5)
