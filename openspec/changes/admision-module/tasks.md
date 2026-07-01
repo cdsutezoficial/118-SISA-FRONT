@@ -34,10 +34,10 @@ Chain strategy resolved: **feature-branch-chain**. Tracker branch `admision-modu
 - [x] 1.2 Modify `src/main.tsx`: wrap `RouterProvider` in `RoleProvider`
 - [x] 1.3 Modify `src/app/layouts/AppLayout.tsx`: add `roles: Role[]` per `NAV_ITEMS` entry, filter sidebar by `useRole().role`, add Admisión entry
 - [x] 1.4 Modify `src/app/layouts/AppLayout.tsx`: Navbar dropdown maps `availableRoles`, calls `setRole`, replaces hardcoded buttons
-- [ ] 1.5 Create `src/app/shared/Wizard.tsx`: `WizardStep[]`, validation-gated Next, back preserves state
-- [ ] 1.6 Create `src/app/shared/FileUpload.tsx`: accept/required props, simulated progress, preview/remove, no network
-- [ ] 1.7 Create `src/app/shared/admision/types.ts`: `CandidateStatus`, `Candidate`, `STATUS_META`, `STATUS_ACTIONS`
-- [ ] 1.8 Create `src/app/shared/admision/mockData.ts`: `mockCandidates` seed across all statuses
+- [x] 1.5 Create `src/app/shared/Wizard.tsx`: `WizardStep[]`, validation-gated Next, back preserves state
+- [x] 1.6 Create `src/app/shared/FileUpload.tsx`: accept/required props, simulated progress, preview/remove, no network
+- [x] 1.7 Create `src/app/shared/admision/types.ts`: `CandidateStatus`, `Candidate`, `STATUS_META`, `STATUS_ACTIONS`
+- [x] 1.8 Create `src/app/shared/admision/mockData.ts`: `mockCandidates` seed across all statuses
 - [x] 1.9 Modify `src/app/router.tsx`: add `admision` parent (under `AppLayout`, index = Dashboard) and `portal` parent (under `AuthLayout`, 4 route slots) skeletons
 
 ## Phase 2: Screens — one self-contained unit per screen, dependency order
