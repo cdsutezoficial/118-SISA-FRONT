@@ -63,6 +63,23 @@ const router = createBrowserRouter([
       { path: 'reset-password', element: <ResetPassword /> },
       // ?expired=true is an optional query param, not a separate route
       { path: 'reset-confirm', element: <ResetConfirm /> },
+
+      // Portal — public candidate-facing routes (anonymous + CANDIDATO tiers).
+      // Stubs only: screens 4/13/16/17 land in later Admisión work units and
+      // will dual-mount screens 4 & 13 here from `pages/admision/*`.
+      {
+        path: 'portal',
+        children: [
+          // TODO(admision-module 2.5): <CandidatoRegistro origin="public" />
+          { path: 'registro', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Registro (próximamente)</div> },
+          // TODO(admision-module 2.6): <FichaConfirmacion origin="public" />
+          { path: 'registro/ficha', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Ficha de Confirmación (próximamente)</div> },
+          // TODO(admision-module 2.16): <PortalInduccion />
+          { path: 'induccion', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Acceso a Inducción (próximamente)</div> },
+          // TODO(admision-module 2.17): <PortalInduccionPago />
+          { path: 'induccion/pago', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Pago de Inducción (próximamente)</div> },
+        ],
+      },
     ],
   },
 
@@ -71,6 +88,15 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { path: 'dashboard', element: <Dashboard /> },
+
+      // Admisión — stub only: Screen 1 Dashboard lands in a later work unit.
+      {
+        path: 'admision',
+        children: [
+          // TODO(admision-module 2.1): replace with <AdmisionDashboard />
+          { index: true, element: <div className="p-6 text-sm text-[#6B7280]">Admisión — Dashboard (próximamente)</div> },
+        ],
+      },
 
       // Divisiones
       { path: 'divisiones',      element: <DivisionesList /> },
