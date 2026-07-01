@@ -146,9 +146,13 @@ export interface InformacionComplementariaFicha {
   tieneDiscapacidad: boolean
   padresHablanLenguaIndigena: boolean
   hablaLenguaIndigena: boolean
+  /** Autoidentificación — dato distinto de hablar la lengua o de que los padres la hablen (RN-ADM-014). */
+  seIdentificaIndigena: boolean
   seIdentificaNoBinario: boolean
   perteneceComunidadLgbttiq: boolean
   esAfrodescendiente: boolean
+  /** Solo se captura si esAfrodescendiente = true (RN-ADM-015). Autoidentificación, distinta de la ascendencia. */
+  seIdentificaAfrodescendiente?: boolean
 }
 
 /** Screen 4, Paso 2 — "Ingresos". Mirrors `00-shared-kernel.md`'s `monthlyFamilyIncome` (on `Person`) + `EmploymentInfo` VO. */

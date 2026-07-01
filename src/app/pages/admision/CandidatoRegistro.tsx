@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ChevronRight, ShieldCheck, CheckCircle2, GraduationCap, Loader2, Lock } from 'lucide-react'
 import { Wizard, type WizardStep } from '../../shared/Wizard'
-import { FieldLabel, FieldError, SearchSelect, SimpleSelect, Switch, inputCls } from '../../shared/ui'
+import { FieldLabel, FieldHelp, FieldError, SearchSelect, SimpleSelect, Switch, inputCls } from '../../shared/ui'
 import { formatDate } from '../../shared/utils'
 import { mockCandidates } from '../../shared/admision/mockData'
 import type {
@@ -155,9 +155,11 @@ interface Paso2State {
   tieneDiscapacidad: boolean
   padresHablanLenguaIndigena: boolean
   hablaLenguaIndigena: boolean
+  seIdentificaIndigena: boolean
   seIdentificaNoBinario: boolean
   perteneceComunidadLgbttiq: boolean
   esAfrodescendiente: boolean
+  seIdentificaAfrodescendiente: boolean
 
   // Ingresos
   ingresoMensualFamiliar: string
@@ -201,7 +203,8 @@ const emptyPaso1: Paso1State = {
 
 const emptyPaso2: Paso2State = {
   tieneEnfermedadPreexistente: false, tieneDiscapacidad: false, padresHablanLenguaIndigena: false,
-  hablaLenguaIndigena: false, seIdentificaNoBinario: false, perteneceComunidadLgbttiq: false, esAfrodescendiente: false,
+  hablaLenguaIndigena: false, seIdentificaIndigena: false, seIdentificaNoBinario: false, perteneceComunidadLgbttiq: false,
+  esAfrodescendiente: false, seIdentificaAfrodescendiente: false,
   ingresoMensualFamiliar: '', trabaja: false, tipoTrabajo: '', telefonoTrabajo: '', ingresoMensual: '',
   nombreEmpresa: '', puesto: '', horaInicio: '', horaFin: '',
 }
@@ -285,10 +288,13 @@ function LockedField({ label, value, required = true }: { label: string; value: 
 }
 
 /** Required Sí/No question row — used by "Información Complementaria" and the conditional-branch switches. */
-function SwitchField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function SwitchField({ label, checked, onChange, help }: { label: string; checked: boolean; onChange: (v: boolean) => void; help?: string }) {
   return (
     <div className="flex items-center justify-between gap-4 py-2.5 border-b border-[#E5E7EB] last:border-0">
-      <FieldLabel required>{label}</FieldLabel>
+      <div>
+        <FieldLabel required>{label}</FieldLabel>
+        {help && <FieldHelp>{help}</FieldHelp>}
+      </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className="text-[12px] text-[#6B7280] w-6 text-right">{checked ? 'Sí' : 'No'}</span>
         <Switch checked={checked} onChange={onChange} />
@@ -466,9 +472,11 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         tieneDiscapacidad: paso2.tieneDiscapacidad,
         padresHablanLenguaIndigena: paso2.padresHablanLenguaIndigena,
         hablaLenguaIndigena: paso2.hablaLenguaIndigena,
+        seIdentificaIndigena: paso2.seIdentificaIndigena,
         seIdentificaNoBinario: paso2.seIdentificaNoBinario,
         perteneceComunidadLgbttiq: paso2.perteneceComunidadLgbttiq,
         esAfrodescendiente: paso2.esAfrodescendiente,
+        seIdentificaAfrodescendiente: paso2.esAfrodescendiente ? paso2.seIdentificaAfrodescendiente : undefined,
       },
       ingresos: {
         ingresoMensualFamiliar: Number(paso2.ingresoMensualFamiliar) || 0,
@@ -734,9 +742,18 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         <SwitchField label="¿Tienes alguna discapacidad?" checked={paso2.tieneDiscapacidad} onChange={v => setPaso2({ ...paso2, tieneDiscapacidad: v })} />
         <SwitchField label="¿Tu mamá o papá hablan alguna lengua indígena?" checked={paso2.padresHablanLenguaIndigena} onChange={v => setPaso2({ ...paso2, padresHablanLenguaIndigena: v })} />
         <SwitchField label="¿Hablas alguna lengua indígena?" checked={paso2.hablaLenguaIndigena} onChange={v => setPaso2({ ...paso2, hablaLenguaIndigena: v })} />
+        <SwitchField label="¿Te identificas como indígena?" checked={paso2.seIdentificaIndigena} onChange={v => setPaso2({ ...paso2, seIdentificaIndigena: v })} />
         <SwitchField label="¿Te identificas como No binario?" checked={paso2.seIdentificaNoBinario} onChange={v => setPaso2({ ...paso2, seIdentificaNoBinario: v })} />
         <SwitchField label="¿Perteneces a la comunidad LGBTTTIQ+?" checked={paso2.perteneceComunidadLgbttiq} onChange={v => setPaso2({ ...paso2, perteneceComunidadLgbttiq: v })} />
         <SwitchField label="¿Eres afrodescendiente?" checked={paso2.esAfrodescendiente} onChange={v => setPaso2({ ...paso2, esAfrodescendiente: v })} />
+        {paso2.esAfrodescendiente && (
+          <SwitchField
+            label="¿Te identificas como afrodescendiente?"
+            checked={paso2.seIdentificaAfrodescendiente}
+            onChange={v => setPaso2({ ...paso2, seIdentificaAfrodescendiente: v })}
+            help="La ascendencia y la autoidentificación son datos distintos"
+          />
+        )}
       </div>
 
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Ingresos</p>
