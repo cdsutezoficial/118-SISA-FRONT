@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { ChevronRight, ShieldCheck, CheckCircle2, GraduationCap, Loader2, Lock } from 'lucide-react'
 import { Wizard, type WizardStep } from '../../shared/Wizard'
@@ -309,6 +309,18 @@ function ReadField({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
       <p className="text-[13px] text-[#333333] font-medium">{value || '—'}</p>
+    </div>
+  )
+}
+
+const boolLabel = (v: boolean) => (v ? 'Sí' : 'No')
+
+/** Section wrapper for the full ficha review in Paso 4. */
+function SummarySection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="mb-6 pb-6 border-b border-[#E5E7EB] last:border-0 last:mb-0 last:pb-0">
+      <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">{title}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">{children}</div>
     </div>
   )
 }
@@ -917,20 +929,114 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     </div>
   )
 
-  // ── Paso 4 content: Confirmación (unchanged from prior build) ──
+  // ── Paso 4 content: Confirmación — revisión completa de la ficha antes de pagar ──
   const paso4Render = (
     <div>
-      <div className="bg-white border-2 border-[#009574] rounded-lg p-6 mb-6">
-        <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Resumen de Registro</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+        <p className="text-[13px] text-[#6B7280] mb-6">
+          Revisa con cuidado la información capturada. Una vez que confirmes, no podrás modificarla desde aquí.
+        </p>
+
+        <SummarySection title="Datos Generales">
           <ReadField label="Nombre Completo" value={nombreCompleto} />
           <ReadField label="CURP" value={paso1.curp} />
+          <ReadField label="Fecha de Nacimiento" value={paso1.fechaNacimiento} />
+          <ReadField label="Sexo" value={paso1.sexo} />
+          <ReadField label="Nacionalidad" value={paso1.nacionalidad === 'Extranjera' ? 'Extranjera' : 'Mexicana'} />
+          {paso1.nacionalidad === 'Extranjera' ? (
+            <>
+              <ReadField label="País de Nacimiento" value={paso1.paisNacimiento} />
+              <ReadField label="Estado de Nacimiento" value={paso1.estadoNacimiento} />
+              <ReadField label="Ciudad de Nacimiento" value={paso1.ciudadNacimiento} />
+            </>
+          ) : (
+            <>
+              <ReadField label="Estado de Nacimiento" value={paso1.estadoNacimiento} />
+              <ReadField label="Municipio de Nacimiento" value={paso1.municipioNacimiento} />
+            </>
+          )}
+          <ReadField label="Estado Civil" value={paso1.estadoCivil} />
+          <ReadField label="Lengua Natal" value={paso1.lenguaNatal} />
+          <ReadField label="¿Tiene Hijos?" value={boolLabel(paso1.tieneHijos)} />
+        </SummarySection>
+
+        <SummarySection title="Domicilio Actual">
+          <ReadField label="Calle" value={paso1.calle} />
+          <ReadField label="Número Exterior" value={paso1.numeroExterior} />
+          <ReadField label="Número Interior" value={paso1.numeroInterior} />
+          <ReadField label="Colonia" value={paso1.colonia} />
+          <ReadField label="Estado" value={paso1.estadoDomicilio} />
+          <ReadField label="Municipio" value={paso1.municipioDomicilio} />
+          <ReadField label="Localidad" value={paso1.localidad} />
+          <ReadField label="Código Postal" value={paso1.codigoPostal} />
+        </SummarySection>
+
+        <SummarySection title="Contacto">
           <ReadField label="Correo Electrónico" value={paso1.email} />
+          <ReadField label="Teléfono Casa" value={paso1.telefonoCasa} />
           <ReadField label="Celular" value={paso1.celular} />
-          <ReadField label="Programa Solicitado" value={paso3.programa} />
-          <ReadField label="Folio Generado" value={folio} />
-        </div>
-        <div className="pt-4 border-t border-[#E5E7EB]">
+        </SummarySection>
+
+        <SummarySection title="Información Complementaria">
+          <ReadField label="¿Enfermedad o Diagnóstico Preexistente?" value={boolLabel(paso2.tieneEnfermedadPreexistente)} />
+          <ReadField label="¿Discapacidad?" value={boolLabel(paso2.tieneDiscapacidad)} />
+          <ReadField label="¿Padres Hablan Lengua Indígena?" value={boolLabel(paso2.padresHablanLenguaIndigena)} />
+          <ReadField label="¿Habla Lengua Indígena?" value={boolLabel(paso2.hablaLenguaIndigena)} />
+          <ReadField label="¿Se Identifica Indígena?" value={boolLabel(paso2.seIdentificaIndigena)} />
+          <ReadField label="¿Se Identifica No Binario?" value={boolLabel(paso2.seIdentificaNoBinario)} />
+          <ReadField label="¿Pertenece a la Comunidad LGBTTTIQ+?" value={boolLabel(paso2.perteneceComunidadLgbttiq)} />
+          <ReadField label="¿Es Afrodescendiente?" value={boolLabel(paso2.esAfrodescendiente)} />
+          {paso2.esAfrodescendiente && (
+            <ReadField label="¿Se Identifica Afrodescendiente?" value={boolLabel(paso2.seIdentificaAfrodescendiente)} />
+          )}
+        </SummarySection>
+
+        <SummarySection title="Ingresos">
+          <ReadField label="Ingreso Mensual Familiar" value={paso2.ingresoMensualFamiliar ? `$${paso2.ingresoMensualFamiliar}` : ''} />
+          <ReadField label="¿Trabaja?" value={boolLabel(paso2.trabaja)} />
+          {paso2.trabaja && (
+            <>
+              <ReadField label="Tipo de Trabajo" value={paso2.tipoTrabajo} />
+              <ReadField label="Teléfono de Trabajo" value={paso2.telefonoTrabajo} />
+              <ReadField label="Ingreso Mensual Propio" value={paso2.ingresoMensual ? `$${paso2.ingresoMensual}` : ''} />
+              <ReadField label="Nombre de la Empresa" value={paso2.nombreEmpresa} />
+              <ReadField label="Puesto" value={paso2.puesto} />
+              <ReadField label="Hora de Inicio" value={paso2.horaInicio} />
+              <ReadField label="Hora de Fin" value={paso2.horaFin} />
+            </>
+          )}
+        </SummarySection>
+
+        <SummarySection title="Selección de Carrera">
+          <ReadField label="Modalidad" value={paso3.modalidad} />
+          <ReadField label="Carrera" value={paso3.programa} />
+          <ReadField label="Medio de Difusión" value={paso3.canal} />
+          <ReadField label="¿Primera Opción?" value={paso3.isFirstChoice === null ? '' : paso3.isFirstChoice ? 'Sí, es mi primera opción' : 'No, es mi segunda opción'} />
+        </SummarySection>
+
+        <SummarySection title="Antecedentes Escolares">
+          <ReadField label="Preparatoria de Procedencia" value={paso3.nombrePreparatoria} />
+          <ReadField label="Tipo de Bachillerato" value={paso3.tipoBachillerato} />
+          <ReadField label="¿Bachillerato en México?" value={boolLabel(paso3.estudioEnMexico)} />
+          {paso3.estudioEnMexico ? (
+            <>
+              <ReadField label="Estado de la Preparatoria" value={paso3.estadoPreparatoria} />
+              <ReadField label="Municipio de la Preparatoria" value={paso3.municipioPreparatoria} />
+            </>
+          ) : (
+            <>
+              <ReadField label="País de la Preparatoria" value={paso3.paisPreparatoria} />
+              <ReadField label="Estado de la Preparatoria" value={paso3.estadoPreparatoria} />
+              <ReadField label="Ciudad de la Preparatoria" value={paso3.ciudadPreparatoria} />
+            </>
+          )}
+          <ReadField label="Promedio" value={paso3.promedio} />
+          <ReadField label="Clave de Centro de Trabajo (CCT)" value={paso3.cct} />
+        </SummarySection>
+
+        <div className="pt-2">
+          <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio Generado</p>
+          <p className="text-[15px] font-bold text-[#333333] mb-4">{folio}</p>
           <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Monto de la Ficha</p>
           <p className="text-[24px] font-bold text-[#009574]">${FICHA_MONTO.toFixed(2)}</p>
         </div>
