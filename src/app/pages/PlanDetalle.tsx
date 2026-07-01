@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   ChevronRight, Pencil, History, Layers, BookMarked, Hash,
   GraduationCap, ChevronDown, ChevronUp, ArrowLeft, CheckCircle2, ClipboardList,
@@ -153,6 +153,7 @@ function QuitarBtn() {
 }
 
 function NivelRow({ nivel, index, defaultOpen }: { nivel: Nivel; index: number; defaultOpen?: boolean }) {
+  const navigate = useNavigate()
   const [open, setOpen] = useState(defaultOpen ?? false)
   const creditosNivel = nivel.materias.reduce((a, m) => a + m.creditos, 0)
   return (

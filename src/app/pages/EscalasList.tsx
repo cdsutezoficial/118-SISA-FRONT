@@ -258,7 +258,7 @@ export default function EscalasList() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-0.5">
-                        <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/escalas/form?mode=edit&id=${escala.id}`)} />
+                        <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/escalas/form?mode=edit&id=${row.id}`)} />
                         <ActionBtn icon={<Trash2 size={15} />} tooltip="Eliminar" danger onClick={() => setConfirmTarget(row)} />
                       </div>
                     </td>
