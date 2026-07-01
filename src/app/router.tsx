@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard'
 
 // Admisión
 import AdmisionDashboard from './pages/admision/AdmisionDashboard'
+import CanalesDifusion from './pages/admision/CanalesDifusion'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -97,6 +98,7 @@ const router = createBrowserRouter([
         path: 'admision',
         children: [
           { index: true, element: <AdmisionDashboard /> },
+          { path: 'canales', element: <CanalesDifusion /> },
         ],
       },
 
