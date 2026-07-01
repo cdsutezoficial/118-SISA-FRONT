@@ -42,7 +42,7 @@ Chain strategy resolved: **feature-branch-chain**. Tracker branch `admision-modu
 
 ## Phase 2: Screens — one self-contained unit per screen, dependency order
 
-- [ ] 2.1 Screen 1 Dashboard — `pages/admision/AdmisionDashboard.tsx`, route `/admision` (index)
+- [x] 2.1 Screen 1 Dashboard — `pages/admision/AdmisionDashboard.tsx`, route `/admision` (index)
 - [ ] 2.2 Screen 2 Canales Difusión — `pages/admision/CanalesDifusion.tsx`, route `/admision/canales`
 - [ ] 2.3 Screen 3 Candidatos Listado — `pages/admision/CandidatosList.tsx`, route `/admision/candidatos`; 6 status badges, conditional row actions
 - [ ] 2.4 Screen 5 Candidato Detalle — `pages/admision/CandidatoDetalle.tsx`, route `/admision/candidatos/detalle`; Pagos tab (Ficha + Inducción), no Admitir/Rechazar (depends on 2.3)
