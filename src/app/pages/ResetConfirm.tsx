@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { Eye, EyeOff, AlertCircle, CheckCircle2, GraduationCap, Loader2, XCircle } from 'lucide-react'
+import { Eye, EyeOff, AlertCircle, CheckCircle2, GraduationCap, XCircle } from 'lucide-react'
 
 // ─── Left panel ───────────────────────────────────────────────────────────────
 
