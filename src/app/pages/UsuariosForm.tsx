@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import {
-  ChevronRight, Info, AlertCircle, CheckCircle2, X, ChevronDown, Search, Pencil, KeyRound,
+  ChevronRight, Info, AlertCircle, X, ChevronDown, Search, Pencil, KeyRound,
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '../shared/hooks'

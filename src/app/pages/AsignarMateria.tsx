@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import {
-  ChevronRight, Info, AlertCircle, CheckCircle2, X, ChevronDown, Search, BookOpen, Layers,
+  ChevronRight, Info, AlertCircle, X, ChevronDown, Search, BookOpen, Layers,
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
