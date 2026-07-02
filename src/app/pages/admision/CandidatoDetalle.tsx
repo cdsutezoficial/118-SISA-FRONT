@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
 } from 'lucide-react'
 import { Toast, SearchSelect } from '../../shared/ui'
+import { usePendingToast } from '../../shared/hooks'
 import { mockCandidates } from '../../shared/admision/mockData'
 import {
   STATUS_META,
@@ -107,8 +108,9 @@ export default function CandidatoDetalle() {
   const found = mockCandidates.find(c => c.id === idParam)
   const [candidate, setCandidate] = useState<Candidate>(found ?? mockCandidates[0])
 
+  const pendingToast = usePendingToast()
   const [activeTab, setActiveTab] = useState<TabKey>('info')
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(pendingToast ?? '')
   const [showCambiarPrograma, setShowCambiarPrograma] = useState(false)
 
   const programas = Array.from(new Set(mockCandidates.map(c => c.programa)))
