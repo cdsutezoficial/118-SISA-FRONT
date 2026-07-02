@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router'
 import AuthLayout from './layouts/AuthLayout'
 import AppLayout from './layouts/AppLayout'
+import { RequireRole } from './shared/RequireRole'
 
 // Auth pages
 import Login from './pages/Login'
@@ -9,6 +10,27 @@ import ResetConfirm from './pages/ResetConfirm'
 
 // Authenticated pages
 import Dashboard from './pages/Dashboard'
+
+// Admisión
+import AdmisionDashboard from './pages/admision/AdmisionDashboard'
+import CanalesDifusion from './pages/admision/CanalesDifusion'
+import CandidatosList from './pages/admision/CandidatosList'
+import CandidatoDetalle from './pages/admision/CandidatoDetalle'
+import CandidatoRegistro from './pages/admision/CandidatoRegistro'
+import FichaConfirmacion from './pages/admision/FichaConfirmacion'
+import ConfirmarPagoFicha from './pages/admision/ConfirmarPagoFicha'
+import ConfirmarPagoInduccion from './pages/admision/ConfirmarPagoInduccion'
+import RegistroInduccion from './pages/admision/RegistroInduccion'
+import RegistroExamen from './pages/admision/RegistroExamen'
+import SeleccionCandidatos from './pages/admision/SeleccionCandidatos'
+import GenerarMatriculas from './pages/admision/GenerarMatriculas'
+import PublicarResultados from './pages/admision/PublicarResultados'
+import AplicarDescuento from './pages/admision/AplicarDescuento'
+import HabilitarInduccion from './pages/admision/HabilitarInduccion'
+
+// Portal (público — Screens 16/17)
+import PortalInduccion from './pages/portal/PortalInduccion'
+import PortalInduccionPago from './pages/portal/PortalInduccionPago'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -63,6 +85,19 @@ const router = createBrowserRouter([
       { path: 'reset-password', element: <ResetPassword /> },
       // ?expired=true is an optional query param, not a separate route
       { path: 'reset-confirm', element: <ResetConfirm /> },
+
+      // Portal — public candidate-facing routes (anonymous + CANDIDATO tiers).
+      // Screens 4 & 13 are dual-mounted here from `pages/admision/*`; screens
+      // 16/17 live in `pages/portal/*` (candidate-only, not dual-mounted).
+      {
+        path: 'portal',
+        children: [
+          { path: 'registro', element: <CandidatoRegistro origin="public" /> },
+          { path: 'registro/ficha', element: <FichaConfirmacion origin="public" /> },
+          { path: 'induccion', element: <PortalInduccion /> },
+          { path: 'induccion/pago', element: <PortalInduccionPago /> },
+        ],
+      },
     ],
   },
 
@@ -71,6 +106,81 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { path: 'dashboard', element: <Dashboard /> },
+
+      // Admisión
+      //
+      // Role guard: every screen below is wrapped in `RequireRole` per the
+      // "Rol activo en sidebar" annotations in `03-admision.md`. The index
+      // route (`/admision`, the Dashboard) is the ONE deliberate exception —
+      // it is NEVER wrapped. It's the guard's own redirect target, so
+      // guarding it too (e.g. to SERVICIOS_ESCOLARES only) would send any
+      // other role/tier (FINANZAS, DIRECTOR_DIVISION, ADMINISTRADOR,
+      // GESTOR_ACADEMICO, or an anonymous/CANDIDATO session hitting a
+      // mismatched URL) into an infinite redirect loop back onto itself.
+      // The Dashboard's content is role-agnostic aggregate KPIs with no
+      // sensitive per-role data, so leaving it unguarded is safe.
+      {
+        path: 'admision',
+        children: [
+          { index: true, element: <AdmisionDashboard /> },
+          {
+            path: 'canales',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CanalesDifusion /></RequireRole>,
+          },
+          {
+            path: 'candidatos',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatosList /></RequireRole>,
+          },
+          {
+            path: 'candidatos/detalle',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatoDetalle /></RequireRole>,
+          },
+          {
+            path: 'candidatos/registrar',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatoRegistro origin="staff" /></RequireRole>,
+          },
+          {
+            path: 'candidatos/ficha',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><FichaConfirmacion origin="staff" /></RequireRole>,
+          },
+          {
+            path: 'candidatos/pago-ficha',
+            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoFicha /></RequireRole>,
+          },
+          {
+            path: 'candidatos/pago-induccion',
+            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoInduccion /></RequireRole>,
+          },
+          {
+            path: 'candidatos/induccion',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RegistroInduccion /></RequireRole>,
+          },
+          {
+            path: 'candidatos/examen',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RegistroExamen /></RequireRole>,
+          },
+          {
+            path: 'seleccion',
+            element: <RequireRole allowedRoles={['DIRECTOR_DIVISION']}><SeleccionCandidatos /></RequireRole>,
+          },
+          {
+            path: 'matriculas',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><GenerarMatriculas /></RequireRole>,
+          },
+          {
+            path: 'publicar',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><PublicarResultados /></RequireRole>,
+          },
+          {
+            path: 'descuentos',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><AplicarDescuento /></RequireRole>,
+          },
+          {
+            path: 'habilitacion',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><HabilitarInduccion /></RequireRole>,
+          },
+        ],
+      },
 
       // Divisiones
       { path: 'divisiones',      element: <DivisionesList /> },
