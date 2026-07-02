@@ -182,6 +182,54 @@ const router = createBrowserRouter([
         ],
       },
 
+      // Inscripciones
+      //
+      // Foundation A stub — real screens land in later `inscripciones/screen-0N-*`
+      // work units, mirroring how Admisión's `foundation-a` only stubbed its
+      // Dashboard route. Here every screen (including the Dashboard) is stubbed
+      // upfront so the module's route/nav structure is reserved from the start.
+      //
+      // Role guard: mirrors Admisión's rule — the index route (`/inscripciones`,
+      // the Dashboard) is the ONE deliberate exception, NEVER wrapped in
+      // `RequireRole`, because it's the guard's own redirect target (see
+      // `RequireRole.tsx`). Its content is role-agnostic aggregate KPIs with no
+      // sensitive per-role data, so leaving it unguarded is safe. Per-screen
+      // roles below come from `figma/prompts/04-inscripciones.md`'s "Rol activo
+      // en sidebar" annotations (Gestor Académico for Screens 2-5, Administrador
+      // for Screen 6, Servicios Escolares for Screen 7) — NOT Servicios
+      // Escolares for every screen.
+      {
+        path: 'inscripciones',
+        children: [
+          // TODO(inscripciones-module screen-01): replace with <InscripcionesDashboard />
+          { index: true, element: <div className="p-6 text-sm text-[#6B7280]">Inscripciones — Dashboard (próximamente)</div> },
+          {
+            path: 'estudiantes',
+            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><div className="p-6 text-sm text-[#6B7280]">Estudiantes — Listado (próximamente)</div></RequireRole>,
+          },
+          {
+            path: 'estudiantes/detalle',
+            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><div className="p-6 text-sm text-[#6B7280]">Estudiante — Detalle (próximamente)</div></RequireRole>,
+          },
+          {
+            path: 'nuevo-ingreso',
+            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><div className="p-6 text-sm text-[#6B7280]">Inscripción — Nuevo Ingreso (próximamente)</div></RequireRole>,
+          },
+          {
+            path: 'reinscripcion',
+            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><div className="p-6 text-sm text-[#6B7280]">Reinscripción (próximamente)</div></RequireRole>,
+          },
+          {
+            path: 'documentos',
+            element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectTo="/inscripciones"><div className="p-6 text-sm text-[#6B7280]">Documentos Institucionales (próximamente)</div></RequireRole>,
+          },
+          {
+            path: 'expediente',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><div className="p-6 text-sm text-[#6B7280]">Expediente — Documentos Recibidos (próximamente)</div></RequireRole>,
+          },
+        ],
+      },
+
       // Divisiones
       { path: 'divisiones',      element: <DivisionesList /> },
       { path: 'divisiones/new',  element: <DivisionesForm /> },

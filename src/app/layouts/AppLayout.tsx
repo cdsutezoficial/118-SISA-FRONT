@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router'
 import {
   LayoutDashboard, Building2, GraduationCap, BookOpen, BookMarked,
   CalendarRange, Users, CreditCard, ClipboardList, IdCard, UserPlus,
-  ChevronLeft, ChevronRight, HelpCircle, LogOut, UserCog, ChevronDown,
+  ClipboardCheck, ChevronLeft, ChevronRight, HelpCircle, LogOut, UserCog, ChevronDown,
 } from 'lucide-react'
 import { useRole } from '../shared/RoleContext'
 import type { Role } from '../shared/RoleContext'
@@ -41,6 +41,14 @@ const NAV_ITEMS = [
   {
     icon: <UserPlus size={18} />, label: 'Admisión', base: 'admision', path: '/admision',
     roles: ['SERVICIOS_ESCOLARES', 'FINANZAS', 'DIRECTOR_DIVISION'] as Role[],
+  },
+  {
+    // Roles mirror the per-screen guards in `router.tsx`'s `inscripciones`
+    // block: Gestor Académico (Screens 2-5), Administrador (Screen 6), and
+    // Servicios Escolares (Screen 7) each need the Dashboard as their entry
+    // point into the module.
+    icon: <ClipboardCheck size={18} />, label: 'Inscripciones', base: 'inscripciones', path: '/inscripciones',
+    roles: ['GESTOR_ACADEMICO', 'ADMINISTRADOR', 'SERVICIOS_ESCOLARES'] as Role[],
   },
 ]
 
