@@ -28,6 +28,13 @@ import type { Candidate } from '../../shared/admision/types'
  * the seed data. This screen validates "exactly 3 characters" (any
  * alphanumeric) instead, matching real CURP shape and keeping the "local
  * mock matching" scenario actually functional.
+ *
+ * CORRECTION (2026-07-02, orchestrator review): folio+CURP login now also
+ * requires `induccionHabilitada === true`. Without this gate, any candidate
+ * with a matching folio+CURP could reach the payment screen regardless of
+ * Screen 15's habilitación step — defeating the purpose of that screen. The
+ * LlaveMX path already only ever mocks a habilitado candidate, so it needed
+ * no change.
  */
 
 // Mirrors `Login.tsx`'s page-local `LlaveMXIcon` — kept local (not shared/exported)
@@ -91,6 +98,10 @@ export default function PortalInduccion() {
 
     if (!match) {
       setError('No encontramos un candidato con ese folio y CURP. Verifica tus datos.')
+      return
+    }
+    if (!match.induccionHabilitada) {
+      setError('Tu ficha aún no ha sido habilitada para el pago del Curso de Inducción. Contacta a Servicios Escolares.')
       return
     }
 

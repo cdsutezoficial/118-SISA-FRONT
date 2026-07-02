@@ -247,17 +247,22 @@ The list MUST only include candidates with ficha paid (`PAID` or later), MUST su
 
 ### Requirement: Portal Candidato — Acceso (Screen 16)
 
-The public, chrome-less screen MUST offer two access paths: simulated LlaveMX (button triggers a simulated flow, no real OAuth) and folio + last-3-CURP-digits (client-side format validation only: folio pattern, exactly 3 digits). On success it MUST navigate to Screen 17; on failure it MUST show an inline error without navigating, and the screen MUST NOT call any real authentication backend.
+The public, chrome-less screen MUST offer two access paths: simulated LlaveMX (button triggers a simulated flow, no real OAuth) and folio + last-3-CURP-characters (client-side format validation only: folio pattern, exactly 3 characters — real CURP homoclaves mix letters and digits, so this is not digits-only). Folio+CURP access additionally requires `induccionHabilitada === true` on the matched candidate (Screen 15's habilitación gate) — a folio+CURP match alone is not sufficient. On success it MUST navigate to Screen 17; on failure it MUST show an inline error without navigating, and the screen MUST NOT call any real authentication backend.
 
-#### Scenario: Invalid CURP digits format
-- GIVEN the candidate enters 2 digits in the CURP field
+#### Scenario: Invalid CURP suffix format
+- GIVEN the candidate enters 2 characters in the CURP field
 - WHEN they submit "Acceder"
 - THEN an inline validation error MUST display and no navigation MUST occur
 
 #### Scenario: Valid mock credentials proceed
-- GIVEN a folio and 3-digit CURP suffix are entered
+- GIVEN a folio and 3-character CURP suffix matching a candidate with `induccionHabilitada === true`
 - WHEN the candidate submits "Acceder"
 - THEN the app navigates to Screen 17 using local mock matching (no backend call)
+
+#### Scenario: Matching candidate not yet habilitado is rejected
+- GIVEN a folio and CURP suffix that match a candidate with `induccionHabilitada === false`
+- WHEN the candidate submits "Acceder"
+- THEN an inline error MUST display and no navigation MUST occur
 
 ### Requirement: Portal Candidato — Pago Inducción (Screen 17)
 
