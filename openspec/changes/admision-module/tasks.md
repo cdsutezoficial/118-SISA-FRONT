@@ -56,7 +56,7 @@ Chain strategy resolved: **feature-branch-chain**. Tracker branch `admision-modu
 - [x] 2.12 Screen 12 Generar Matrículas — `pages/admision/GenerarMatriculas.tsx`, route `/admision/matriculas`; per-program generate, sets ENROLLED + matrícula (depends on 2.11)
 - [x] 2.13 Screen 9 Publicar Resultados — `pages/admision/PublicarResultados.tsx`, route `/admision/publicar`; blocked until all ACCEPTED are ENROLLED (depends on 2.12, corrected ordering)
 - [x] 2.14 Screen 14 Aplicar Descuento — `pages/admision/AplicarDescuento.tsx`, route `/admision/descuentos`; 100% auto-confirms payment/enables induction (depends on 2.7, 2.8)
-- [ ] 2.15 Screen 15 Habilitar Inducción — `pages/admision/HabilitarInduccion.tsx`, route `/admision/habilitacion`; batch-enable, excludes Exento (depends on 2.7, 2.14)
+- [x] 2.15 Screen 15 Habilitar Inducción — `pages/admision/HabilitarInduccion.tsx`, route `/admision/habilitacion`; batch-enable, excludes Exento (depends on 2.7, 2.14)
 - [ ] 2.16 Screen 16 Portal Acceso — `pages/portal/PortalInduccion.tsx`, route `/portal/induccion`; simulated LlaveMX + folio/CURP, sets role `CANDIDATO`
 - [ ] 2.17 Screen 17 Portal Pago Inducción — `pages/portal/PortalInduccionPago.tsx`, route `/portal/induccion/pago`; already-paid alt state, simulated overlay (depends on 2.16)
 
