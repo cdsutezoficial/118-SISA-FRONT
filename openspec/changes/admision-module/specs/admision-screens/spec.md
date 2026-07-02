@@ -34,12 +34,17 @@ PO confirmed (verbatim): "el candidato debe acceder a un formulario público don
 
 ### Requirement: Candidate Status State Machine
 
-The system MUST model candidate status as a single enum: `REGISTERED → PAID → EXAM_TAKEN → ACCEPTED|REJECTED → ENROLLED`. Exam and induction results MUST be stored as independent fields and MUST NOT alter candidate status (induction is a selection input, not a status). Only ficha-payment confirmation, Director selection, and matrícula generation MUST transition status. Publishing results MUST NOT transition status.
+The system MUST model candidate status as a single enum: `REGISTERED → PAID → EXAM_TAKEN → ACCEPTED|REJECTED → ENROLLED`. Exam and induction results MUST be stored as independent fields and MUST NOT alter candidate status (induction is a selection input, not a status). Only ficha-payment confirmation (Screen 6, or an equivalent 100% ficha discount on Screen 14), Director selection, and matrícula generation MUST transition status. Publishing results MUST NOT transition status.
 
 #### Scenario: Ficha payment confirmed
 - GIVEN a candidate in `REGISTERED`
 - WHEN Screen 6 confirms ficha payment
 - THEN status becomes `PAID`
+
+#### Scenario: 100% ficha discount is an equivalent payment confirmation
+- GIVEN a candidate in `REGISTERED`
+- WHEN Servicios Escolares applies a "Sin costo (100%)" discount to their Ficha de Admisión on Screen 14
+- THEN `pagoFicha.status` becomes `EXENTO` AND `Candidate.status` becomes `PAID`, exactly as if Screen 6 had confirmed the payment
 
 #### Scenario: Director admits a candidate
 - GIVEN a candidate in `PAID` or `EXAM_TAKEN` with exam and/or induction results recorded
