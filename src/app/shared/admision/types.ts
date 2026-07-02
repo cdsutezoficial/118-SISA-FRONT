@@ -143,9 +143,17 @@ export interface ContactoFicha {
 /** Screen 4, Paso 2 — "Información Complementaria". Mirrors `00-shared-kernel.md`'s `HealthProfile` + `DiversityProfile` VOs, flattened to booleans (no free-text description sub-fields — not requested by the PO's field list). */
 export interface InformacionComplementariaFicha {
   tieneEnfermedadPreexistente: boolean
+  /** Solo se captura si tieneEnfermedadPreexistente = true. Mirrors HealthProfile.conditionDescription. */
+  descripcionEnfermedad?: string
   tieneDiscapacidad: boolean
+  /** Solo se captura si tieneDiscapacidad = true. Mirrors HealthProfile.disabilityDescription. */
+  descripcionDiscapacidad?: string
   padresHablanLenguaIndigena: boolean
+  /** Solo se captura si padresHablanLenguaIndigena = true. Mirrors DiversityProfile.parentsIndigenousLanguage. */
+  lenguaIndigenaPadres?: string
   hablaLenguaIndigena: boolean
+  /** Solo se captura si hablaLenguaIndigena = true. Mirrors DiversityProfile.indigenousLanguage. */
+  lenguaIndigenaPropia?: string
   /** Autoidentificación — dato distinto de hablar la lengua o de que los padres la hablen (RN-ADM-014). */
   seIdentificaIndigena: boolean
   seIdentificaNoBinario: boolean

@@ -152,9 +152,13 @@ interface Paso1State {
 interface Paso2State {
   // Información Complementaria
   tieneEnfermedadPreexistente: boolean
+  descripcionEnfermedad: string
   tieneDiscapacidad: boolean
+  descripcionDiscapacidad: string
   padresHablanLenguaIndigena: boolean
+  lenguaIndigenaPadres: string
   hablaLenguaIndigena: boolean
+  lenguaIndigenaPropia: string
   seIdentificaIndigena: boolean
   seIdentificaNoBinario: boolean
   perteneceComunidadLgbttiq: boolean
@@ -202,8 +206,11 @@ const emptyPaso1: Paso1State = {
 }
 
 const emptyPaso2: Paso2State = {
-  tieneEnfermedadPreexistente: false, tieneDiscapacidad: false, padresHablanLenguaIndigena: false,
-  hablaLenguaIndigena: false, seIdentificaIndigena: false, seIdentificaNoBinario: false, perteneceComunidadLgbttiq: false,
+  tieneEnfermedadPreexistente: false, descripcionEnfermedad: '',
+  tieneDiscapacidad: false, descripcionDiscapacidad: '',
+  padresHablanLenguaIndigena: false, lenguaIndigenaPadres: '',
+  hablaLenguaIndigena: false, lenguaIndigenaPropia: '',
+  seIdentificaIndigena: false, seIdentificaNoBinario: false, perteneceComunidadLgbttiq: false,
   esAfrodescendiente: false, seIdentificaAfrodescendiente: false,
   ingresoMensualFamiliar: '', trabaja: false, tipoTrabajo: '', telefonoTrabajo: '', ingresoMensual: '',
   nombreEmpresa: '', puesto: '', horaInicio: '', horaFin: '',
@@ -315,6 +322,16 @@ function ReadField({ label, value }: { label: string; value: string }) {
 
 const boolLabel = (v: boolean) => (v ? 'Sí' : 'No')
 
+/** Conditional follow-up text input shown right below a SwitchField when its answer is "Sí". */
+function ConditionalDetailField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div className="pb-2.5 -mt-1 border-b border-[#E5E7EB] last:border-0">
+      <FieldLabel required>{label}</FieldLabel>
+      <input className={inputCls(false, false)} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+    </div>
+  )
+}
+
 /** Section wrapper for the full ficha review in Paso 4. */
 function SummarySection({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -417,7 +434,11 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       paso2.horaInicio !== '' &&
       paso2.horaFin !== ''
     )
-  const paso2Valid = ingresoFamiliarValid && trabajoValid
+  const enfermedadValid = !paso2.tieneEnfermedadPreexistente || paso2.descripcionEnfermedad.trim() !== ''
+  const discapacidadValid = !paso2.tieneDiscapacidad || paso2.descripcionDiscapacidad.trim() !== ''
+  const lenguaPadresValid = !paso2.padresHablanLenguaIndigena || paso2.lenguaIndigenaPadres.trim() !== ''
+  const lenguaPropiaValid = !paso2.hablaLenguaIndigena || paso2.lenguaIndigenaPropia.trim() !== ''
+  const paso2Valid = ingresoFamiliarValid && trabajoValid && enfermedadValid && discapacidadValid && lenguaPadresValid && lenguaPropiaValid
 
   // ── Paso 3 validation (Selección de Carrera + Antecedentes Escolares) ──
   const promedioNum = Number(paso3.promedio)
@@ -481,9 +502,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       },
       informacionComplementaria: {
         tieneEnfermedadPreexistente: paso2.tieneEnfermedadPreexistente,
+        descripcionEnfermedad: paso2.tieneEnfermedadPreexistente ? paso2.descripcionEnfermedad : undefined,
         tieneDiscapacidad: paso2.tieneDiscapacidad,
+        descripcionDiscapacidad: paso2.tieneDiscapacidad ? paso2.descripcionDiscapacidad : undefined,
         padresHablanLenguaIndigena: paso2.padresHablanLenguaIndigena,
+        lenguaIndigenaPadres: paso2.padresHablanLenguaIndigena ? paso2.lenguaIndigenaPadres : undefined,
         hablaLenguaIndigena: paso2.hablaLenguaIndigena,
+        lenguaIndigenaPropia: paso2.hablaLenguaIndigena ? paso2.lenguaIndigenaPropia : undefined,
         seIdentificaIndigena: paso2.seIdentificaIndigena,
         seIdentificaNoBinario: paso2.seIdentificaNoBinario,
         perteneceComunidadLgbttiq: paso2.perteneceComunidadLgbttiq,
@@ -751,9 +776,21 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-2">Información Complementaria</p>
       <div className="mb-8">
         <SwitchField label="¿Tienes alguna enfermedad o diagnóstico preexistente?" checked={paso2.tieneEnfermedadPreexistente} onChange={v => setPaso2({ ...paso2, tieneEnfermedadPreexistente: v })} />
+        {paso2.tieneEnfermedadPreexistente && (
+          <ConditionalDetailField label="Nombre de la enfermedad o diagnóstico" value={paso2.descripcionEnfermedad} onChange={v => setPaso2({ ...paso2, descripcionEnfermedad: v })} />
+        )}
         <SwitchField label="¿Tienes alguna discapacidad?" checked={paso2.tieneDiscapacidad} onChange={v => setPaso2({ ...paso2, tieneDiscapacidad: v })} />
+        {paso2.tieneDiscapacidad && (
+          <ConditionalDetailField label="¿Cuál discapacidad?" value={paso2.descripcionDiscapacidad} onChange={v => setPaso2({ ...paso2, descripcionDiscapacidad: v })} />
+        )}
         <SwitchField label="¿Tu mamá o papá hablan alguna lengua indígena?" checked={paso2.padresHablanLenguaIndigena} onChange={v => setPaso2({ ...paso2, padresHablanLenguaIndigena: v })} />
+        {paso2.padresHablanLenguaIndigena && (
+          <ConditionalDetailField label="¿Cuál lengua?" value={paso2.lenguaIndigenaPadres} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPadres: v })} />
+        )}
         <SwitchField label="¿Hablas alguna lengua indígena?" checked={paso2.hablaLenguaIndigena} onChange={v => setPaso2({ ...paso2, hablaLenguaIndigena: v })} />
+        {paso2.hablaLenguaIndigena && (
+          <ConditionalDetailField label="¿Cuál lengua?" value={paso2.lenguaIndigenaPropia} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPropia: v })} />
+        )}
         <SwitchField label="¿Te identificas como indígena?" checked={paso2.seIdentificaIndigena} onChange={v => setPaso2({ ...paso2, seIdentificaIndigena: v })} />
         <SwitchField label="¿Te identificas como No binario?" checked={paso2.seIdentificaNoBinario} onChange={v => setPaso2({ ...paso2, seIdentificaNoBinario: v })} />
         <SwitchField label="¿Perteneces a la comunidad LGBTTTIQ+?" checked={paso2.perteneceComunidadLgbttiq} onChange={v => setPaso2({ ...paso2, perteneceComunidadLgbttiq: v })} />
@@ -979,9 +1016,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
 
         <SummarySection title="Información Complementaria">
           <ReadField label="¿Enfermedad o Diagnóstico Preexistente?" value={boolLabel(paso2.tieneEnfermedadPreexistente)} />
+          {paso2.tieneEnfermedadPreexistente && <ReadField label="Enfermedad o Diagnóstico" value={paso2.descripcionEnfermedad} />}
           <ReadField label="¿Discapacidad?" value={boolLabel(paso2.tieneDiscapacidad)} />
+          {paso2.tieneDiscapacidad && <ReadField label="Discapacidad" value={paso2.descripcionDiscapacidad} />}
           <ReadField label="¿Padres Hablan Lengua Indígena?" value={boolLabel(paso2.padresHablanLenguaIndigena)} />
+          {paso2.padresHablanLenguaIndigena && <ReadField label="Lengua de los Padres" value={paso2.lenguaIndigenaPadres} />}
           <ReadField label="¿Habla Lengua Indígena?" value={boolLabel(paso2.hablaLenguaIndigena)} />
+          {paso2.hablaLenguaIndigena && <ReadField label="Lengua que Habla" value={paso2.lenguaIndigenaPropia} />}
           <ReadField label="¿Se Identifica Indígena?" value={boolLabel(paso2.seIdentificaIndigena)} />
           <ReadField label="¿Se Identifica No Binario?" value={boolLabel(paso2.seIdentificaNoBinario)} />
           <ReadField label="¿Pertenece a la Comunidad LGBTTTIQ+?" value={boolLabel(paso2.perteneceComunidadLgbttiq)} />
