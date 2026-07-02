@@ -23,6 +23,7 @@ import RegistroInduccion from './pages/admision/RegistroInduccion'
 import RegistroExamen from './pages/admision/RegistroExamen'
 import SeleccionCandidatos from './pages/admision/SeleccionCandidatos'
 import GenerarMatriculas from './pages/admision/GenerarMatriculas'
+import PublicarResultados from './pages/admision/PublicarResultados'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -117,6 +118,7 @@ const router = createBrowserRouter([
           { path: 'candidatos/examen', element: <RegistroExamen /> },
           { path: 'seleccion', element: <SeleccionCandidatos /> },
           { path: 'matriculas', element: <GenerarMatriculas /> },
+          { path: 'publicar', element: <PublicarResultados /> },
         ],
       },
 
