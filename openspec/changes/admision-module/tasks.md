@@ -53,7 +53,7 @@ Chain strategy resolved: **feature-branch-chain**. Tracker branch `admision-modu
 - [x] 2.9 Screen 8 Registro Inducción — `pages/admision/RegistroInduccion.tsx`, route `/admision/candidatos/induccion`; locked until induction paid, banner links to 2.8 (depends on 2.8)
 - [x] 2.10 Screen 7 Registro Examen — `pages/admision/RegistroExamen.tsx`, route `/admision/candidatos/examen`; live Aprobado/Reprobado vs 60
 - [x] 2.11 Screen 11 Selección Candidatos — `pages/admision/SeleccionCandidatos.tsx`, route `/admision/seleccion`; Director-only, Admitir/Rechazar locks row
-- [ ] 2.12 Screen 12 Generar Matrículas — `pages/admision/GenerarMatriculas.tsx`, route `/admision/matriculas`; per-program generate, sets ENROLLED + matrícula (depends on 2.11)
+- [x] 2.12 Screen 12 Generar Matrículas — `pages/admision/GenerarMatriculas.tsx`, route `/admision/matriculas`; per-program generate, sets ENROLLED + matrícula (depends on 2.11)
 - [ ] 2.13 Screen 9 Publicar Resultados — `pages/admision/PublicarResultados.tsx`, route `/admision/publicar`; blocked until all ACCEPTED are ENROLLED (depends on 2.12, corrected ordering)
 - [ ] 2.14 Screen 14 Aplicar Descuento — `pages/admision/AplicarDescuento.tsx`, route `/admision/descuentos`; 100% auto-confirms payment/enables induction (depends on 2.7, 2.8)
 - [ ] 2.15 Screen 15 Habilitar Inducción — `pages/admision/HabilitarInduccion.tsx`, route `/admision/habilitacion`; batch-enable, excludes Exento (depends on 2.7, 2.14)
