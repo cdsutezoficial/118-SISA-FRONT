@@ -50,7 +50,7 @@ Chain strategy resolved: **feature-branch-chain**. Tracker branch `admision-modu
 - [x] 2.6 Screen 13 Ficha Confirmación (dual-mount) — `pages/admision/FichaConfirmacion.tsx` w/ `origin` prop; routes `/admision/candidatos/ficha` + `/portal/registro/ficha`; simulated overlay, staff-only back-link (depends on 2.5)
 - [x] 2.7 Screen 6 Confirmar Pago Ficha — `pages/admision/ConfirmarPagoFicha.tsx`, route `/admision/candidatos/pago-ficha`; FileUpload, sets PAID
 - [x] 2.8 Screen 10 Confirmar Pago Inducción — `pages/admision/ConfirmarPagoInduccion.tsx`, route `/admision/candidatos/pago-induccion`; FileUpload, unlocks Screen 8
-- [ ] 2.9 Screen 8 Registro Inducción — `pages/admision/RegistroInduccion.tsx`, route `/admision/candidatos/induccion`; locked until induction paid, banner links to 2.8 (depends on 2.8)
+- [x] 2.9 Screen 8 Registro Inducción — `pages/admision/RegistroInduccion.tsx`, route `/admision/candidatos/induccion`; locked until induction paid, banner links to 2.8 (depends on 2.8)
 - [ ] 2.10 Screen 7 Registro Examen — `pages/admision/RegistroExamen.tsx`, route `/admision/candidatos/examen`; live Aprobado/Reprobado vs 60
 - [ ] 2.11 Screen 11 Selección Candidatos — `pages/admision/SeleccionCandidatos.tsx`, route `/admision/seleccion`; Director-only, Admitir/Rechazar locks row
 - [ ] 2.12 Screen 12 Generar Matrículas — `pages/admision/GenerarMatriculas.tsx`, route `/admision/matriculas`; per-program generate, sets ENROLLED + matrícula (depends on 2.11)
