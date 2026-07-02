@@ -20,6 +20,7 @@ import FichaConfirmacion from './pages/admision/FichaConfirmacion'
 import ConfirmarPagoFicha from './pages/admision/ConfirmarPagoFicha'
 import ConfirmarPagoInduccion from './pages/admision/ConfirmarPagoInduccion'
 import RegistroInduccion from './pages/admision/RegistroInduccion'
+import RegistroExamen from './pages/admision/RegistroExamen'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -111,6 +112,7 @@ const router = createBrowserRouter([
           { path: 'candidatos/pago-ficha', element: <ConfirmarPagoFicha /> },
           { path: 'candidatos/pago-induccion', element: <ConfirmarPagoInduccion /> },
           { path: 'candidatos/induccion', element: <RegistroInduccion /> },
+          { path: 'candidatos/examen', element: <RegistroExamen /> },
         ],
       },
 
