@@ -17,6 +17,7 @@ import CandidatosList from './pages/admision/CandidatosList'
 import CandidatoDetalle from './pages/admision/CandidatoDetalle'
 import CandidatoRegistro from './pages/admision/CandidatoRegistro'
 import FichaConfirmacion from './pages/admision/FichaConfirmacion'
+import ConfirmarPagoFicha from './pages/admision/ConfirmarPagoFicha'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -105,6 +106,7 @@ const router = createBrowserRouter([
           { path: 'candidatos/detalle', element: <CandidatoDetalle /> },
           { path: 'candidatos/registrar', element: <CandidatoRegistro origin="staff" /> },
           { path: 'candidatos/ficha', element: <FichaConfirmacion origin="staff" /> },
+          { path: 'candidatos/pago-ficha', element: <ConfirmarPagoFicha /> },
         ],
       },
 
