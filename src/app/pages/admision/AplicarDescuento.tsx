@@ -25,18 +25,18 @@ import { STATUS_META, type Candidate } from '../../shared/admision/types'
  * toast; it does NOT mutate `mockCandidates`, so other screens (e.g.
  * `CandidatosList.tsx`) will still show the original payment/status data.
  *
- * JUDGMENT CALL — Candidate.status is NOT transitioned here: the spec's
- * "Candidate Status State Machine" requirement enumerates only ficha-payment
- * confirmation (Screen 6), Director selection (Screen 11), and matrícula
- * generation (Screen 12) as status-transitioning actions. A 100% ficha
- * discount auto-confirms the `PaymentRecord` (status -> 'EXENTO') exactly
- * like Screen 6 does for the underlying payment concept, but does not itself
- * re-implement Screen 6's `status -> 'PAID'` transition, since Screen 14 is
- * not listed among the state-machine's transitioning actions and duplicating
- * that transition here would be undocumented scope creep for a single-screen
- * mock task. A 100% "Curso de Inducción" discount also auto-enables the
- * candidate for induction (`induccionHabilitada: true`), per the spec's
- * explicit "100% induction discount auto-enables" scenario.
+ * CORRECTION (2026-07-02, PO review): a 100% Ficha de Admisión discount IS a
+ * ficha-payment confirmation in every practical sense — the UX prompt itself
+ * says "El sistema confirmará automáticamente este pago" — so it MUST trigger
+ * the same `status -> 'PAID'` transition Screen 6 performs, not just mark the
+ * `PaymentRecord` as `EXENTO`. Screen 15 (Habilitar Inducción) filters
+ * candidates by "ficha pagada" — leaving status at `REGISTERED` after a 100%
+ * ficha discount would incorrectly exclude these candidates. This is now
+ * folded into the state machine as an equivalent path to Screen 6, not a new
+ * transitioning action. A 100% "Curso de Inducción" discount also auto-enables
+ * the candidate for induction (`induccionHabilitada: true`), per the spec's
+ * explicit "100% induction discount auto-enables" scenario — induction
+ * payment never transitions `Candidate.status` either way.
  */
 
 type Concepto = 'Ficha de Admisión' | 'Curso de Inducción'
@@ -147,9 +147,14 @@ export default function AplicarDescuento() {
         ? { ...original, status: 'EXENTO' as const, montoOriginal: original.monto, monto: 0 }
         : { ...original, montoOriginal: original.monto, monto: Number((original.monto * (1 - Number(porcentaje) / 100)).toFixed(2)) }
 
+    const fichaExentaConfirmaPago =
+      concepto === 'Ficha de Admisión' && tipo === 'Sin costo (100%)' && resultCandidate.status === 'REGISTERED'
+
     setResultCandidate({
       ...resultCandidate,
       [target]: updatedRecord,
+      // A 100% ficha discount auto-confirms the payment — same transition as Screen 6.
+      ...(fichaExentaConfirmaPago ? { status: 'PAID' as const } : {}),
       // 100% induction discount also auto-enables the candidate for induction.
       ...(concepto === 'Curso de Inducción' && tipo === 'Sin costo (100%)' ? { induccionHabilitada: true } : {}),
     })
