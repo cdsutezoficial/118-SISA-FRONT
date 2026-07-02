@@ -1,0 +1,6 @@
+services:
+  sisa-front:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-10118}:80"
