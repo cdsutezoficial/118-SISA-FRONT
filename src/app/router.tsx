@@ -27,6 +27,10 @@ import PublicarResultados from './pages/admision/PublicarResultados'
 import AplicarDescuento from './pages/admision/AplicarDescuento'
 import HabilitarInduccion from './pages/admision/HabilitarInduccion'
 
+// Portal (público — Screens 16/17)
+import PortalInduccion from './pages/portal/PortalInduccion'
+import PortalInduccionPago from './pages/portal/PortalInduccionPago'
+
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
 import DivisionesForm from './pages/DivisionesForm'
@@ -82,17 +86,15 @@ const router = createBrowserRouter([
       { path: 'reset-confirm', element: <ResetConfirm /> },
 
       // Portal — public candidate-facing routes (anonymous + CANDIDATO tiers).
-      // Stubs remain only for screens 16/17 (later Admisión work units);
-      // screens 4 & 13 are dual-mounted here from `pages/admision/*`.
+      // Screens 4 & 13 are dual-mounted here from `pages/admision/*`; screens
+      // 16/17 live in `pages/portal/*` (candidate-only, not dual-mounted).
       {
         path: 'portal',
         children: [
           { path: 'registro', element: <CandidatoRegistro origin="public" /> },
           { path: 'registro/ficha', element: <FichaConfirmacion origin="public" /> },
-          // TODO(admision-module 2.16): <PortalInduccion />
-          { path: 'induccion', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Acceso a Inducción (próximamente)</div> },
-          // TODO(admision-module 2.17): <PortalInduccionPago />
-          { path: 'induccion/pago', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Pago de Inducción (próximamente)</div> },
+          { path: 'induccion', element: <PortalInduccion /> },
+          { path: 'induccion/pago', element: <PortalInduccionPago /> },
         ],
       },
     ],
