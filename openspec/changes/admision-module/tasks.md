@@ -62,8 +62,8 @@ Chain strategy resolved: **feature-branch-chain**. Tracker branch `admision-modu
 
 ## Phase 3: Verification (manual — no test runner configured in 118-SISA-FRONT)
 
-- [ ] 3.1 Manual walkthrough per role (Serv. Escolares, Finanzas, Director, Administrador) confirms `NAV_ITEMS` filtering
-- [ ] 3.2 Verify dual-mount parity: screens 4 & 13 identical fields/validation staff vs public, correct post-submit target per mount
-- [ ] 3.3 Verify status state machine: PAID/ACCEPTED/REJECTED/ENROLLED only via screens 6/11/12; exam/induction never alter status
-- [ ] 3.4 Verify `/portal/*` renders chrome-less for anonymous (`role===null`) and `CANDIDATO`
-- [ ] 3.5 Confirm rollback: removing `pages/admision/`, `pages/portal/`, new `shared/` files, and router/AppLayout/main.tsx blocks restores prior state
+- [ ] 3.1 Manual walkthrough per role (Serv. Escolares, Finanzas, Director, Administrador) confirms `NAV_ITEMS` filtering — NOT DONE: sdd-verify only statically confirmed `NAV_ITEMS` role arrays and the sidebar filter predicate (`AppLayout.tsx`); no live browser walkthrough performed. Also surfaced a CRITICAL gap: no route-level role guard exists (see verify report) — direct navigation to a role-mismatched route (e.g. Servicios Escolares to `/admision/seleccion`) still renders the page.
+- [x] 3.2 Verify dual-mount parity: screens 4 & 13 identical fields/validation staff vs public, correct post-submit target per mount — verified via static code inspection (`router.tsx`, `CandidatoRegistro.tsx`, `FichaConfirmacion.tsx`): both mounts render the same `steps`/`content`, only chrome and post-submit target differ by `origin`.
+- [x] 3.3 Verify status state machine: PAID/ACCEPTED/REJECTED/ENROLLED only via screens 6/11/12/14; exam/induction never alter status — verified via repo-wide grep of all `status` mutations across `src/app/pages/admision` and `src/app/pages/portal`; only `AplicarDescuento.tsx` (Screen 14, 100% ficha discount → PAID), `SeleccionCandidatos.tsx` (Screen 11 → ACCEPTED/REJECTED), `GenerarMatriculas.tsx` (Screen 12 → ENROLLED), and `CandidatoRegistro.tsx` (Screen 4, initial REGISTERED on creation) mutate status; Screens 7/8/9 do not.
+- [x] 3.4 Verify `/portal/*` renders chrome-less for anonymous (`role===null`) and `CANDIDATO` — verified via `router.tsx`: all 4 portal routes (`registro`, `registro/ficha`, `induccion`, `induccion/pago`) are registered under `AuthLayout`, none under `AppLayout`.
+- [ ] 3.5 Confirm rollback: removing `pages/admision/`, `pages/portal/`, new `shared/` files, and router/AppLayout/main.tsx blocks restores prior state — NOT DONE: sdd-verify did not execute a rollback rehearsal.
