@@ -2,6 +2,35 @@ import { createContext, useContext, useState } from 'react'
 import type { ReactNode } from 'react'
 
 /**
+ * Persists the mock role across full page reloads (sessionStorage — scoped to
+ * the browser tab, cleared on close, closest mock equivalent to a real auth
+ * session). Without this, typing a URL directly in the address bar triggers a
+ * full reload, `RoleProvider`'s `useState` remounts at its hardcoded default,
+ * and `RequireRole` correctly-but-confusingly blocks a role the user had
+ * already switched to moments earlier via the Navbar dropdown.
+ */
+const ROLE_STORAGE_KEY = 'sisa.mockRole'
+
+function readStoredRole(): Role | null {
+  try {
+    const raw = sessionStorage.getItem(ROLE_STORAGE_KEY)
+    if (raw === 'null') return null
+    if (raw && (ALL_ROLES as string[]).includes(raw)) return raw as Role
+  } catch {
+    // sessionStorage unavailable (e.g. private browsing) — fall through to default.
+  }
+  return 'SERVICIOS_ESCOLARES'
+}
+
+function writeStoredRole(role: Role | null) {
+  try {
+    sessionStorage.setItem(ROLE_STORAGE_KEY, role === null ? 'null' : role)
+  } catch {
+    // sessionStorage unavailable — role just won't survive a reload, no crash.
+  }
+}
+
+/**
  * Mock role system for the Admisión module prototype.
  *
  * Three identity tiers:
@@ -51,10 +80,18 @@ const AVAILABLE_ROLES: Role[] = [
   'DIRECTOR_DIVISION',
 ]
 
+/** Every valid `Role` value, including `CANDIDATO` — used only to validate a stored value before trusting it. */
+const ALL_ROLES: Role[] = [...AVAILABLE_ROLES, 'CANDIDATO']
+
 const RoleContext = createContext<RoleContextValue | undefined>(undefined)
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<Role | null>('SERVICIOS_ESCOLARES')
+  const [role, setRoleState] = useState<Role | null>(readStoredRole)
+
+  function setRole(next: Role | null) {
+    writeStoredRole(next)
+    setRoleState(next)
+  }
 
   const value: RoleContextValue = {
     role,

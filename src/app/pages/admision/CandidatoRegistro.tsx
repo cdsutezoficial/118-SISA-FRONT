@@ -565,7 +565,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
 
     const state = { candidate, metodoPago }
 
-    // Forward pointer — Screen 13 (Ficha Confirmación) is task 2.6, not yet built.
+    // Navigate to Screen 13 (Ficha Confirmación), dual-mounted per origin.
     if (origin === 'staff') {
       navigate('/admision/candidatos/ficha', { state })
     } else {

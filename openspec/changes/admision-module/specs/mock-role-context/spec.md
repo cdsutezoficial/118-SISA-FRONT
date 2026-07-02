@@ -31,12 +31,21 @@ The system MUST provide a `RoleProvider` (React Context) exposing: the current a
 
 ### Requirement: Role-Gated Route Access
 
-Routes restricted to a role MUST NOT render their target page when the active mock role does not match; the system MUST redirect (or show a "not accessible for this role" state) instead of rendering protected content.
+Routes restricted to a role MUST NOT render their target page when the active mock role does not match; the system MUST redirect (or show a "not accessible for this role" state) instead of rendering protected content. This MUST be enforced at the route boundary (not only via sidebar link visibility), so direct URL navigation to a mismatched-role route cannot render protected content.
+
+Implemented via `src/app/shared/RequireRole.tsx`, a component that wraps a route's `element`, reads `useRole()`, and redirects (`<Navigate replace>`) to `/admision` with `state: { toast: 'No tienes permiso para acceder a esa pantalla.' }` when the active role (including the anonymous `null` tier) is not in the route's `allowedRoles`. `AdmisionDashboard.tsx` reads that state via `usePendingToast()` and renders it with the shared `Toast` component.
+
+Every `/admision/*` screen is wrapped in `RequireRole` with the role(s) from its "Rol activo en sidebar" annotation in `03-admision.md`, EXCEPT the index route (`/admision`, the Dashboard) — see "Deliberate exception" below.
 
 #### Scenario: Mismatched role blocked from route
 - GIVEN the active role is "Servicios Escolares"
 - WHEN the user navigates directly to `/admision/seleccion` (Director-only)
-- THEN the page MUST NOT render the Director's candidate list; the user MUST be redirected or shown a restricted-access state
+- THEN the page MUST NOT render the Director's candidate list; the user MUST be redirected to `/admision` with a "No tienes permiso para acceder a esa pantalla." toast
+
+#### Deliberate exception: Dashboard route is never role-gated
+- The Dashboard (`/admision` index route) is intentionally NOT wrapped in `RequireRole`, deviating from a stricter "Servicios Escolares only" reading of `03-admision.md`'s sidebar annotation for this screen.
+- Reason: `/admision` is `RequireRole`'s own redirect target. Gating it to any role subset would cause an infinite redirect loop for every role/tier excluded from that subset (e.g. Finanzas or Director de División bouncing off a blocked screen back onto a Dashboard that also rejects them, or an anonymous/`CANDIDATO` session that reached an `/admision/*` URL directly).
+- This is safe because `AdmisionDashboard.tsx` renders role-agnostic aggregate KPIs only — no per-role sensitive data. Its "Acciones Rápidas" links to sensitive screens (e.g. "Registrar Candidato") remain protected because the DESTINATION route is guarded, not the Dashboard link itself.
 
 ### Requirement: Navbar Role Switcher
 
