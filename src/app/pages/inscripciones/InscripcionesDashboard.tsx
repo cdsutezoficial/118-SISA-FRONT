@@ -16,10 +16,13 @@ const nuevoIngresoStudents = mockStudents.filter(s => s.generacionIngreso === AC
 const nuevoIngresoInscritos = nuevoIngresoStudents.filter(s => s.status === 'ACTIVE').length
 const nuevoIngresoTotal = nuevoIngresoStudents.length
 
+/** A continuing student "reinscribió" this period iff they have an `Enrollment` row for `ACTIVE_PERIOD`. */
+function hasActiveEnrollmentThisPeriod(student: Student): boolean {
+  return mockEnrollments.some(e => e.studentId === student.id && e.periodo === ACTIVE_PERIOD)
+}
+
 const continuingStudents = mockStudents.filter(s => s.generacionIngreso !== ACTIVE_PERIOD && s.status === 'ACTIVE')
-const reinscripcionesCompletadas = continuingStudents.filter(s =>
-  mockEnrollments.some(e => e.studentId === s.id && e.periodo === ACTIVE_PERIOD)
-).length
+const reinscripcionesCompletadas = continuingStudents.filter(hasActiveEnrollmentThisPeriod).length
 const reinscripcionesTotal = continuingStudents.length
 
 const pendientesInscripcion = mockStudents.filter(s => s.status === 'PENDING').length
@@ -77,7 +80,7 @@ function buildProgramaAvance(students: Student[]): ProgramaAvance[] {
   for (const s of students) {
     const row = map.get(s.programa) ?? { programa: s.programa, nivel: s.nivelActual, nuevoIngreso: 0, reinscripciones: 0, total: 0 }
     if (s.generacionIngreso === ACTIVE_PERIOD) row.nuevoIngreso += 1
-    else if (s.status === 'ACTIVE') row.reinscripciones += 1
+    else if (hasActiveEnrollmentThisPeriod(s)) row.reinscripciones += 1
     row.total += 1
     map.set(s.programa, row)
   }
