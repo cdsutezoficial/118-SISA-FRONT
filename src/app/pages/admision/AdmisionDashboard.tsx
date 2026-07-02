@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import {
   ChevronRight,
@@ -9,6 +10,8 @@ import {
   Megaphone,
   IdCard,
 } from 'lucide-react'
+import { Toast } from '../../shared/ui'
+import { usePendingToast } from '../../shared/hooks'
 import { mockCandidates } from '../../shared/admision/mockData'
 import type { Candidate } from '../../shared/admision/types'
 
@@ -101,9 +104,12 @@ const kpiCards: { label: string; value: number; sub: string; color: string; icon
 
 export default function AdmisionDashboard() {
   const navigate = useNavigate()
+  const pendingToast = usePendingToast()
+  const [toast, setToast] = useState(pendingToast ?? '')
 
   return (
     <div className="max-w-[1100px] mx-auto px-8 py-8">
+      {toast && <Toast message={toast} onClose={() => setToast('')} />}
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
         <span className="text-[#333333] font-medium">Inicio</span>

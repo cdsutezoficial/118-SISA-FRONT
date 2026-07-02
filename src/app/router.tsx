@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router'
 import AuthLayout from './layouts/AuthLayout'
 import AppLayout from './layouts/AppLayout'
+import { RequireRole } from './shared/RequireRole'
 
 // Auth pages
 import Login from './pages/Login'
@@ -107,24 +108,77 @@ const router = createBrowserRouter([
       { path: 'dashboard', element: <Dashboard /> },
 
       // Admisión
+      //
+      // Role guard: every screen below is wrapped in `RequireRole` per the
+      // "Rol activo en sidebar" annotations in `03-admision.md`. The index
+      // route (`/admision`, the Dashboard) is the ONE deliberate exception —
+      // it is NEVER wrapped. It's the guard's own redirect target, so
+      // guarding it too (e.g. to SERVICIOS_ESCOLARES only) would send any
+      // other role/tier (FINANZAS, DIRECTOR_DIVISION, ADMINISTRADOR,
+      // GESTOR_ACADEMICO, or an anonymous/CANDIDATO session hitting a
+      // mismatched URL) into an infinite redirect loop back onto itself.
+      // The Dashboard's content is role-agnostic aggregate KPIs with no
+      // sensitive per-role data, so leaving it unguarded is safe.
       {
         path: 'admision',
         children: [
           { index: true, element: <AdmisionDashboard /> },
-          { path: 'canales', element: <CanalesDifusion /> },
-          { path: 'candidatos', element: <CandidatosList /> },
-          { path: 'candidatos/detalle', element: <CandidatoDetalle /> },
-          { path: 'candidatos/registrar', element: <CandidatoRegistro origin="staff" /> },
-          { path: 'candidatos/ficha', element: <FichaConfirmacion origin="staff" /> },
-          { path: 'candidatos/pago-ficha', element: <ConfirmarPagoFicha /> },
-          { path: 'candidatos/pago-induccion', element: <ConfirmarPagoInduccion /> },
-          { path: 'candidatos/induccion', element: <RegistroInduccion /> },
-          { path: 'candidatos/examen', element: <RegistroExamen /> },
-          { path: 'seleccion', element: <SeleccionCandidatos /> },
-          { path: 'matriculas', element: <GenerarMatriculas /> },
-          { path: 'publicar', element: <PublicarResultados /> },
-          { path: 'descuentos', element: <AplicarDescuento /> },
-          { path: 'habilitacion', element: <HabilitarInduccion /> },
+          {
+            path: 'canales',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CanalesDifusion /></RequireRole>,
+          },
+          {
+            path: 'candidatos',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatosList /></RequireRole>,
+          },
+          {
+            path: 'candidatos/detalle',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatoDetalle /></RequireRole>,
+          },
+          {
+            path: 'candidatos/registrar',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatoRegistro origin="staff" /></RequireRole>,
+          },
+          {
+            path: 'candidatos/ficha',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><FichaConfirmacion origin="staff" /></RequireRole>,
+          },
+          {
+            path: 'candidatos/pago-ficha',
+            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoFicha /></RequireRole>,
+          },
+          {
+            path: 'candidatos/pago-induccion',
+            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoInduccion /></RequireRole>,
+          },
+          {
+            path: 'candidatos/induccion',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RegistroInduccion /></RequireRole>,
+          },
+          {
+            path: 'candidatos/examen',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RegistroExamen /></RequireRole>,
+          },
+          {
+            path: 'seleccion',
+            element: <RequireRole allowedRoles={['DIRECTOR_DIVISION']}><SeleccionCandidatos /></RequireRole>,
+          },
+          {
+            path: 'matriculas',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><GenerarMatriculas /></RequireRole>,
+          },
+          {
+            path: 'publicar',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><PublicarResultados /></RequireRole>,
+          },
+          {
+            path: 'descuentos',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><AplicarDescuento /></RequireRole>,
+          },
+          {
+            path: 'habilitacion',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><HabilitarInduccion /></RequireRole>,
+          },
         ],
       },
 
