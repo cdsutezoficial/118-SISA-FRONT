@@ -64,9 +64,10 @@ const kpiCards: { label: string; value: string; sub: string; color: string; icon
 interface ProgramaAvance {
   programa: string
   nivel: string
-  nuevoIngreso: number
-  reinscripciones: number
-  total: number
+  nuevoIngresoCompletado: number
+  nuevoIngresoTotal: number
+  reinscripcionesCompletadas: number
+  reinscripcionesTotal: number
 }
 
 /**
@@ -74,17 +75,37 @@ interface ProgramaAvance {
  * a program row in this small mock dataset rarely spans more than one or two
  * cuatrimestres at once, so this is a reasonable stand-in for what a real
  * "most common nivel" aggregation would compute.
+ *
+ * Each column tracks "completado / total" (same semantics as the KPI cards
+ * above), and the row's Total is always the sum of the two `*Total` fields —
+ * computed at render time, never accumulated independently — so it can never
+ * drift from `nuevoIngreso* + reinscripciones*` the way a separately-tracked
+ * counter could.
  */
 function buildProgramaAvance(students: Student[]): ProgramaAvance[] {
   const map = new Map<string, ProgramaAvance>()
   for (const s of students) {
-    const row = map.get(s.programa) ?? { programa: s.programa, nivel: s.nivelActual, nuevoIngreso: 0, reinscripciones: 0, total: 0 }
-    if (s.generacionIngreso === ACTIVE_PERIOD) row.nuevoIngreso += 1
-    else if (hasActiveEnrollmentThisPeriod(s)) row.reinscripciones += 1
-    row.total += 1
+    const row = map.get(s.programa) ?? {
+      programa: s.programa,
+      nivel: s.nivelActual,
+      nuevoIngresoCompletado: 0,
+      nuevoIngresoTotal: 0,
+      reinscripcionesCompletadas: 0,
+      reinscripcionesTotal: 0,
+    }
+    if (s.generacionIngreso === ACTIVE_PERIOD) {
+      row.nuevoIngresoTotal += 1
+      if (s.status === 'ACTIVE') row.nuevoIngresoCompletado += 1
+    } else if (s.status === 'ACTIVE') {
+      row.reinscripcionesTotal += 1
+      if (hasActiveEnrollmentThisPeriod(s)) row.reinscripcionesCompletadas += 1
+    }
     map.set(s.programa, row)
   }
-  return Array.from(map.values()).sort((a, b) => b.total - a.total)
+  return Array.from(map.values()).sort(
+    (a, b) =>
+      b.nuevoIngresoTotal + b.reinscripcionesTotal - (a.nuevoIngresoTotal + a.reinscripcionesTotal),
+  )
 }
 
 const programaAvance = buildProgramaAvance(mockStudents)
@@ -151,9 +172,15 @@ export default function InscripcionesDashboard() {
               <tr key={row.programa} className="border-b border-[#E5E7EB] last:border-0">
                 <td className="px-6 py-3 text-[#333333] font-medium">{row.programa}</td>
                 <td className="px-4 py-3 text-[#333333]">{row.nivel}</td>
-                <td className="px-4 py-3 text-right text-[#333333]">{row.nuevoIngreso}</td>
-                <td className="px-4 py-3 text-right text-[#333333]">{row.reinscripciones}</td>
-                <td className="px-6 py-3 text-right text-[#333333] font-medium">{row.total}</td>
+                <td className="px-4 py-3 text-right text-[#333333]">
+                  {row.nuevoIngresoCompletado} / {row.nuevoIngresoTotal}
+                </td>
+                <td className="px-4 py-3 text-right text-[#333333]">
+                  {row.reinscripcionesCompletadas} / {row.reinscripcionesTotal}
+                </td>
+                <td className="px-6 py-3 text-right text-[#333333] font-medium">
+                  {row.nuevoIngresoTotal + row.reinscripcionesTotal}
+                </td>
               </tr>
             ))}
           </tbody>
