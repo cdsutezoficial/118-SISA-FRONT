@@ -16,6 +16,7 @@ import CanalesDifusion from './pages/admision/CanalesDifusion'
 import CandidatosList from './pages/admision/CandidatosList'
 import CandidatoDetalle from './pages/admision/CandidatoDetalle'
 import CandidatoRegistro from './pages/admision/CandidatoRegistro'
+import FichaConfirmacion from './pages/admision/FichaConfirmacion'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -72,14 +73,13 @@ const router = createBrowserRouter([
       { path: 'reset-confirm', element: <ResetConfirm /> },
 
       // Portal — public candidate-facing routes (anonymous + CANDIDATO tiers).
-      // Stubs only: screens 4/13/16/17 land in later Admisión work units and
-      // will dual-mount screens 4 & 13 here from `pages/admision/*`.
+      // Stubs remain only for screens 16/17 (later Admisión work units);
+      // screens 4 & 13 are dual-mounted here from `pages/admision/*`.
       {
         path: 'portal',
         children: [
           { path: 'registro', element: <CandidatoRegistro origin="public" /> },
-          // TODO(admision-module 2.6): <FichaConfirmacion origin="public" />
-          { path: 'registro/ficha', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Ficha de Confirmación (próximamente)</div> },
+          { path: 'registro/ficha', element: <FichaConfirmacion origin="public" /> },
           // TODO(admision-module 2.16): <PortalInduccion />
           { path: 'induccion', element: <div className="p-6 text-sm text-[#6B7280]">Portal — Acceso a Inducción (próximamente)</div> },
           // TODO(admision-module 2.17): <PortalInduccionPago />
@@ -104,6 +104,7 @@ const router = createBrowserRouter([
           { path: 'candidatos', element: <CandidatosList /> },
           { path: 'candidatos/detalle', element: <CandidatoDetalle /> },
           { path: 'candidatos/registrar', element: <CandidatoRegistro origin="staff" /> },
+          { path: 'candidatos/ficha', element: <FichaConfirmacion origin="staff" /> },
         ],
       },
 
