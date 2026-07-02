@@ -42,6 +42,7 @@ export interface ExamResult {
 /** Screen 8 — captured independently of status. */
 export interface InductionResult {
   fecha: string
+  calificacion: number
   resultado: string
 }
 
@@ -223,6 +224,13 @@ export const EXAM_PASSING_SCORE = 60
 
 export function getExamResultLabel(calificacion: number): 'Aprobado' | 'Reprobado' {
   return calificacion >= EXAM_PASSING_SCORE ? 'Aprobado' : 'Reprobado'
+}
+
+/** Minimum passing score for Screen 8's live Aprobado/Reprobado computation (per `03-admision.md` Pantalla 8: distinct minimum from the exam's 60). */
+export const INDUCTION_PASSING_SCORE = 70
+
+export function getInductionResultLabel(calificacion: number): 'Aprobado' | 'Reprobado' {
+  return calificacion >= INDUCTION_PASSING_SCORE ? 'Aprobado' : 'Reprobado'
 }
 
 export interface StatusMeta {

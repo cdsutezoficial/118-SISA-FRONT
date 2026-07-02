@@ -321,7 +321,10 @@ export default function CandidatoDetalle() {
             <ReadField label="Fecha" value={candidate.induccionResultado?.fecha ?? '—'} />
           </div>
           {candidate.induccionResultado ? (
-            <ReadField label="Resultado" value={candidate.induccionResultado.resultado} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <ReadField label="Calificación" value={`${candidate.induccionResultado.calificacion}/100`} />
+              <ReadField label="Resultado" value={candidate.induccionResultado.resultado} />
+            </div>
           ) : (
             <p className="text-[13px] text-[#6B7280]">El candidato aún no tiene un resultado de inducción registrado.</p>
           )}
