@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ChevronRight, Search, Info } from 'lucide-react'
-import { SearchSelect, SimpleSelect, Toast } from '../../shared/ui'
+import { SearchSelect, SimpleSelect, Switch, Toast } from '../../shared/ui'
 import { mockCandidates } from '../../shared/admision/mockData'
 import type { Candidate, CandidateStatus } from '../../shared/admision/types'
 
@@ -13,14 +13,22 @@ import type { Candidate, CandidateStatus } from '../../shared/admision/types'
  *
  * One of only 3 actions in the whole Admisión module allowed to change
  * `Candidate.status` (the others: Screen 6 → PAID, Screen 12 → ENROLLED).
- * Admitir → ACCEPTED, Rechazar → REJECTED. Decisions are allowed even when
- * exam/induction results are still missing (per spec — "decisions allowed
- * even with missing exam/induction results").
+ *
+ * CORRECTION (2026-07-01, PO decision): decisions are captured via a Switch
+ * per candidate instead of separate Admitir/Rechazar buttons. OFF = Rechazado
+ * (the default for every candidate, regardless of prior state) and ON =
+ * Admitido. The switch is fully reversible in both directions for as long as
+ * "Selección Abierta" is shown — this changes only how the decision is
+ * captured/edited, not the underlying business process (`selectionStatus`
+ * still lives on `ProgramAdmissionConfig`; Servicios Escolares still closes
+ * it via Publicar Resultados on Screen 9 — see `docs/design/dominio/03-admision.md`).
+ * There is no "Sin decisión" state anymore: every candidate is always either
+ * Admitido or Rechazado. Decisions are allowed even when exam/induction
+ * results are still missing (per spec).
  *
  * Only candidates that have reached a decision-eligible stage are listed:
- * PAID/EXAM_TAKEN (no decision yet) and ACCEPTED/REJECTED (decision already
- * taken, row locked). REGISTERED (hasn't paid the ficha yet) and ENROLLED
- * (already past this screen, matrícula generated) are excluded.
+ * PAID/EXAM_TAKEN/ACCEPTED/REJECTED. REGISTERED (hasn't paid the ficha yet)
+ * and ENROLLED (already past this screen, matrícula generated) are excluded.
  *
  * MOCK-SCOPE LIMITATION (Programa Educativo filter): the UX prompt scopes
  * this filter to "solo los de tu división" (the signed-in Director's own
@@ -52,25 +60,19 @@ import type { Candidate, CandidateStatus } from '../../shared/admision/types'
  * so the change is not visible on other screens or after a reload.
  */
 
-type Decision = 'SIN_DECISION' | 'ADMITIDO' | 'RECHAZADO'
+type Decision = 'ADMITIDO' | 'RECHAZADO'
 
-const DECISION_META: Record<Decision, { label: string; badgeClass: string }> = {
-  SIN_DECISION: { label: 'Sin decisión', badgeClass: 'bg-gray-100 text-gray-600 border border-gray-200' },
-  ADMITIDO: { label: 'Admitido', badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-  RECHAZADO: { label: 'Rechazado', badgeClass: 'bg-red-50 text-red-700 border border-red-200' },
-}
-
-const DECISION_ORDER: Decision[] = ['SIN_DECISION', 'ADMITIDO', 'RECHAZADO']
-const decisionOptions = DECISION_ORDER.map(d => DECISION_META[d].label)
-const decisionLabelToDecision = new Map<string, Decision>(DECISION_ORDER.map(d => [DECISION_META[d].label, d]))
+const DECISION_ORDER: Decision[] = ['ADMITIDO', 'RECHAZADO']
+const DECISION_LABEL: Record<Decision, string> = { ADMITIDO: 'Admitido', RECHAZADO: 'Rechazado' }
+const decisionOptions = DECISION_ORDER.map(d => DECISION_LABEL[d])
+const decisionLabelToDecision = new Map<string, Decision>(DECISION_ORDER.map(d => [DECISION_LABEL[d], d]))
 
 /** Statuses eligible to appear on this screen — see file-level comment. */
 const ELIGIBLE_STATUSES: CandidateStatus[] = ['PAID', 'EXAM_TAKEN', 'ACCEPTED', 'REJECTED']
 
+/** OFF/Rechazado is the default for anything that isn't already ACCEPTED (PAID, EXAM_TAKEN, REJECTED alike). */
 function getDecision(status: CandidateStatus): Decision {
-  if (status === 'ACCEPTED') return 'ADMITIDO'
-  if (status === 'REJECTED') return 'RECHAZADO'
-  return 'SIN_DECISION'
+  return status === 'ACCEPTED' ? 'ADMITIDO' : 'RECHAZADO'
 }
 
 /** See file-level "MOCK-SCOPE LIMITATION (isFirstChoice)" comment. */
@@ -98,15 +100,13 @@ export default function SeleccionCandidatos() {
     return matchPrograma && matchDecision && matchSearch
   })
 
-  function handleDecision(id: string, decision: 'ACCEPTED' | 'REJECTED') {
+  /** Fully reversible while "Selección Abierta" — no lock, either direction always allowed. */
+  function handleToggle(id: string, admitido: boolean) {
     const target = candidates.find(c => c.id === id)
-    if (!target || target.status === 'ACCEPTED' || target.status === 'REJECTED') return
-    setCandidates(prev => prev.map(c => (c.id === id ? { ...c, status: decision } : c)))
-    setToast(
-      decision === 'ACCEPTED'
-        ? `${target.nombre} fue admitido.`
-        : `${target.nombre} fue rechazado.`,
-    )
+    if (!target) return
+    const nextStatus: CandidateStatus = admitido ? 'ACCEPTED' : 'REJECTED'
+    setCandidates(prev => prev.map(c => (c.id === id ? { ...c, status: nextStatus } : c)))
+    setToast(admitido ? `${target.nombre} fue admitido.` : `${target.nombre} fue rechazado.`)
   }
 
   return (
@@ -187,14 +187,13 @@ export default function SeleccionCandidatos() {
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Opción</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Examen</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Inducción</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Decisión</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-48">Acciones</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-40">Decisión</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-16 text-center">
+                <td colSpan={6} className="px-4 py-16 text-center">
                   <div className="flex flex-col items-center gap-3 text-[#6B7280]">
                     <Search size={36} className="text-[#E5E7EB]" />
                     <p className="text-[13px] font-medium">No se encontraron candidatos</p>
@@ -205,7 +204,7 @@ export default function SeleccionCandidatos() {
             ) : (
               filtered.map(row => {
                 const decision = getDecision(row.status)
-                const decided = decision !== 'SIN_DECISION'
+                const admitido = decision === 'ADMITIDO'
                 const firstChoice = isFirstChoiceMock(row)
                 return (
                   <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
@@ -225,26 +224,11 @@ export default function SeleccionCandidatos() {
                     <td className="px-4 py-3 text-[#333333]">{row.examen?.calificacion ?? '—'}</td>
                     <td className="px-4 py-3 text-[#333333]">{row.induccionResultado?.calificacion ?? '—'}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${DECISION_META[decision].badgeClass}`}>
-                        {DECISION_META[decision].label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleDecision(row.id, 'ACCEPTED')}
-                          disabled={decided}
-                          className="px-3 py-1.5 text-[12px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
-                        >
-                          Admitir
-                        </button>
-                        <button
-                          onClick={() => handleDecision(row.id, 'REJECTED')}
-                          disabled={decided}
-                          className="px-3 py-1.5 text-[12px] font-semibold bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-600"
-                        >
-                          Rechazar
-                        </button>
+                      <div className="flex items-center gap-2.5">
+                        <Switch checked={admitido} onChange={v => handleToggle(row.id, v)} />
+                        <span className={`text-[12px] font-semibold ${admitido ? 'text-emerald-700' : 'text-[#6B7280]'}`}>
+                          {DECISION_LABEL[decision]}
+                        </span>
                       </div>
                     </td>
                   </tr>

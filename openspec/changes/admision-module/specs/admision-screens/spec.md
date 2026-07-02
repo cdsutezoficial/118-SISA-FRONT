@@ -187,12 +187,17 @@ Finanzas MUST capture payment date, method, amount, and receipt number for conce
 
 ### Requirement: Selección de Candidatos (Screen 11)
 
-The Director MUST see only candidates in their division's programs, with Admitir/Rechazar actions disabled once a decision exists for that candidate. Decisions MUST be permitted even when exam or induction results are missing.
+The Director MUST see only candidates in their division's programs. Each candidate's decision MUST be a Switch (not separate Admitir/Rechazar buttons): OFF = Rechazado (the default for every candidate, regardless of prior state), ON = Admitido. The Switch MUST remain fully reversible — toggleable in either direction any number of times — for as long as the screen's "Selección Abierta" badge is shown (i.e. while `selectionStatus = IN_REVIEW`); this changes only how the decision is captured/edited, not the underlying business process (`selectionStatus` still lives on `ProgramAdmissionConfig`; Servicios Escolares still closes it via Publicar Resultados on Screen 9). There is no "Sin decisión" state — every candidate is always either Admitido or Rechazado. Decisions MUST be permitted even when exam or induction results are missing. The "Decisión" filter MUST offer only Todos / Admitido / Rechazado.
 
-#### Scenario: Decision locks the row
-- GIVEN a candidate with no prior decision
-- WHEN the Director clicks Admitir
-- THEN the row badge updates to "Admitido" and both action buttons become disabled
+#### Scenario: Toggling the switch updates the decision
+- GIVEN a candidate whose switch is OFF (Rechazado, the default)
+- WHEN the Director turns the switch ON
+- THEN the candidate's decision becomes Admitido
+
+#### Scenario: Decision is reversible while selection is open
+- GIVEN a candidate whose switch is ON (Admitido) and the screen still shows "Selección Abierta"
+- WHEN the Director turns the switch OFF
+- THEN the candidate's decision becomes Rechazado
 
 ### Requirement: Generar Matrículas (Screen 12)
 
