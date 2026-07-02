@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   UserPlus,
   Megaphone,
+  IdCard,
 } from 'lucide-react'
 import { mockCandidates } from '../../shared/admision/mockData'
 import type { Candidate } from '../../shared/admision/types'
@@ -29,6 +30,9 @@ const admitidos = mockCandidates.filter(c => c.status === 'ACCEPTED' || c.status
  * induction-completion count, which was the original (superseded) UX prompt rule.
  */
 const canPublicarResultados = !mockCandidates.some(c => c.status === 'ACCEPTED')
+
+/** Per the nav prompt: "Generar Matrículas" quick access is visible only while there's pending work — i.e. the mirror condition of `canPublicarResultados`. */
+const hayMatriculasPendientes = mockCandidates.some(c => c.status === 'ACCEPTED')
 
 const funnelStages: { label: string; count: number; color: string }[] = [
   { label: 'Registrados', count: totalFichasRegistradas, color: 'bg-gray-400' },
@@ -222,6 +226,15 @@ export default function AdmisionDashboard() {
             <UserPlus size={16} className="text-[#6B7280] group-hover:text-[#009574] transition-colors" />
             <span className="text-[13px] font-medium text-[#333333]">Registrar Candidato</span>
           </button>
+          {hayMatriculasPendientes && (
+            <button
+              onClick={() => navigate('/admision/matriculas')}
+              className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] rounded-lg hover:border-[#009574] hover:bg-[#e6f5f1] transition-colors group"
+            >
+              <IdCard size={16} className="text-[#6B7280] group-hover:text-[#009574] transition-colors" />
+              <span className="text-[13px] font-medium text-[#333333]">Generar Matrículas</span>
+            </button>
+          )}
           {canPublicarResultados && (
             <button
               onClick={() => navigate('/admision/publicar')}
