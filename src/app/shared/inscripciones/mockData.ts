@@ -16,6 +16,23 @@ import type {
 export const ACTIVE_PERIOD = 'Enero – Abril 2026'
 
 /**
+ * Dependent Municipio catalog, keyed by Estado — Screen 4 Paso 2's domicilio
+ * and antecedentes-de-bachillerato subsections both use this so the
+ * "Municipio dependiente de Estado" cascade (Figma spec) is honored literally,
+ * unlike Admisión's flat `MUNICIPIOS_CATALOGO` shortcut (see design.md's
+ * "Municipio as a real dependent Select" decision). Morelos is fully seeded
+ * (UTEZ's home state); a few neighboring estados carry a token entry each —
+ * full INEGI depth is out of scope for this mock frontend.
+ */
+export const MUNICIPIOS_POR_ESTADO: Record<string, string[]> = {
+  Morelos: ['Cuernavaca', 'Emiliano Zapata', 'Jiutepec', 'Temixco', 'Xochitepec', 'Yautepec'],
+  'Ciudad de México': ['Álvaro Obregón', 'Coyoacán', 'Iztapalapa', 'Tlalpan'],
+  'Estado de México': ['Toluca', 'Naucalpan', 'Ecatepec de Morelos'],
+  Guerrero: ['Acapulco de Juárez', 'Chilpancingo de los Bravo'],
+  Puebla: ['Puebla', 'Cholula de Rivadavia'],
+}
+
+/**
  * Example students spanning new-ingreso (this period) and reinscripción
  * (continuing from an earlier period) cases, plus a non-ACTIVE status
  * (`TEMPORARY_LOW`) so status badges have variety from the start.
