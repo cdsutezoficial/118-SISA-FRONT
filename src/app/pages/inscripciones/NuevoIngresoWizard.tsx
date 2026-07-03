@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, CheckCircle2, Circle, ExternalLink } from 'lucide-react'
 import { Wizard, type WizardStep } from '../../shared/Wizard'
 import { FieldLabel, FieldError, SearchSelect, SimpleSelect, Switch, inputCls } from '../../shared/ui'
 import { mockCandidates } from '../../shared/admision/mockData'
 import type { Candidate } from '../../shared/admision/types'
-import { mockStudents, MUNICIPIOS_POR_ESTADO, mockGroups } from '../../shared/inscripciones/mockData'
+import { mockStudents, MUNICIPIOS_POR_ESTADO, mockGroups, mockInstitutionalDocuments } from '../../shared/inscripciones/mockData'
 
 /**
  * Screen 4 — Inscripción Nuevo Ingreso: Wizard (5 pasos).
@@ -170,12 +170,24 @@ interface Paso3State {
 
 const emptyPaso3: Paso3State = { grupo: '' }
 
+// Only ACTIVE institutional documents must be reviewed/accepted — mirrors
+// Screen 6's own status toggle (an INACTIVE document is retired, not
+// presented to new students).
+const activeInstitutionalDocs = mockInstitutionalDocuments.filter(d => d.status === 'ACTIVE')
+
+interface Paso4State {
+  acceptedIds: string[]
+}
+
+const emptyPaso4: Paso4State = { acceptedIds: [] }
+
 export default function NuevoIngresoWizard() {
   const navigate = useNavigate()
 
   const [paso1, setPaso1] = useState<Paso1State>(emptyPaso1)
   const [paso2, setPaso2] = useState<Paso2State>(emptyPaso2)
   const [paso3, setPaso3] = useState<Paso3State>(emptyPaso3)
+  const [paso4, setPaso4] = useState<Paso4State>(emptyPaso4)
 
   const selectedCandidate = admittedCandidates.find(c => candidateLabel(c) === paso1.candidateLabel) ?? null
   const paso1Valid = selectedCandidate !== null
@@ -207,6 +219,15 @@ export default function NuevoIngresoWizard() {
   // ── Paso 3 validation ──
   const paso3Valid = paso3.grupo !== ''
   const selectedGroup = mockGroups.find(g => g.grupo === paso3.grupo) ?? null
+
+  // ── Paso 4 validation: every active institutional document must be accepted ──
+  const paso4Valid = activeInstitutionalDocs.length > 0 && activeInstitutionalDocs.every(d => paso4.acceptedIds.includes(d.id))
+
+  function toggleDocAccepted(docId: string) {
+    setPaso4(p => ({
+      acceptedIds: p.acceptedIds.includes(docId) ? p.acceptedIds.filter(id => id !== docId) : [...p.acceptedIds, docId],
+    }))
+  }
 
   function handleComplete() {
     // Implemented once Paso 5 (Pago) lands.
@@ -472,11 +493,50 @@ export default function NuevoIngresoWizard() {
     </div>
   )
 
+  // ── Paso 4 content: aceptación de Documentos Institucionales (accept-all gate) ──
+  const paso4Render = (
+    <div>
+      <p className="text-[13px] text-[#6B7280] mb-6">
+        Lee y acepta cada documento institucional antes de continuar. Debes aceptar los {activeInstitutionalDocs.length} documentos para avanzar.
+      </p>
+      <div className="space-y-3">
+        {activeInstitutionalDocs.map(doc => {
+          const accepted = paso4.acceptedIds.includes(doc.id)
+          return (
+            <div key={doc.id} className={`flex items-start gap-3 px-4 py-3 border rounded-lg transition-colors ${accepted ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white'}`}>
+              <button type="button" onClick={() => toggleDocAccepted(doc.id)} className="flex-shrink-0 mt-0.5">
+                {accepted ? <CheckCircle2 size={19} className="text-[#009574]" /> : <Circle size={19} className="text-[#6B7280]" />}
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[13px] font-semibold text-[#333333]">{doc.name}</p>
+                  <span className="text-[11px] text-[#6B7280] flex-shrink-0">{doc.version}</span>
+                </div>
+                <a href={doc.driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-1 text-[12px] text-[#009574] hover:underline">
+                  Ver documento <ExternalLink size={11} />
+                </a>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleDocAccepted(doc.id)}
+                className={`flex-shrink-0 px-3 py-1.5 text-[12px] font-semibold rounded-md transition-colors ${
+                  accepted ? 'bg-white border border-[#009574] text-[#009574]' : 'bg-[#009574] hover:bg-[#007a5e] text-white'
+                }`}
+              >
+                {accepted ? 'Aceptado' : 'He leído y acepto'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+
   const steps: WizardStep[] = [
     { id: 'admitido', label: 'Datos del Admitido', render: paso1Render, isValid: paso1Valid },
     { id: 'complementarios', label: 'Datos Complementarios', render: paso2Render, isValid: paso2Valid },
     { id: 'grupo', label: 'Grupo Asignado', render: paso3Render, isValid: paso3Valid },
-    { id: 'documentos', label: 'Documentos Institucionales', render: PASO_PENDIENTE },
+    { id: 'documentos', label: 'Documentos Institucionales', render: paso4Render, isValid: paso4Valid },
     { id: 'pago', label: 'Pago', render: PASO_PENDIENTE },
   ]
 
