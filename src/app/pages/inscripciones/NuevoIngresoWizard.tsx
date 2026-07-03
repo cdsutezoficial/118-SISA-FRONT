@@ -5,7 +5,7 @@ import { Wizard, type WizardStep } from '../../shared/Wizard'
 import { FieldLabel, FieldError, SearchSelect, SimpleSelect, Switch, inputCls } from '../../shared/ui'
 import { mockCandidates } from '../../shared/admision/mockData'
 import type { Candidate } from '../../shared/admision/types'
-import { mockStudents, MUNICIPIOS_POR_ESTADO } from '../../shared/inscripciones/mockData'
+import { mockStudents, MUNICIPIOS_POR_ESTADO, mockGroups } from '../../shared/inscripciones/mockData'
 
 /**
  * Screen 4 — Inscripción Nuevo Ingreso: Wizard (5 pasos).
@@ -164,11 +164,18 @@ const emptyPaso2: Paso2State = {
   trabaja: false, tipoTrabajo: '', empresa: '', puesto: '', horaInicio: '', horaFin: '',
 }
 
+interface Paso3State {
+  grupo: string
+}
+
+const emptyPaso3: Paso3State = { grupo: '' }
+
 export default function NuevoIngresoWizard() {
   const navigate = useNavigate()
 
   const [paso1, setPaso1] = useState<Paso1State>(emptyPaso1)
   const [paso2, setPaso2] = useState<Paso2State>(emptyPaso2)
+  const [paso3, setPaso3] = useState<Paso3State>(emptyPaso3)
 
   const selectedCandidate = admittedCandidates.find(c => candidateLabel(c) === paso1.candidateLabel) ?? null
   const paso1Valid = selectedCandidate !== null
@@ -196,6 +203,10 @@ export default function NuevoIngresoWizard() {
   )
 
   const paso2Valid = paso2.nationality !== '' && domicilioValid && bachilleratoValid && saludValid && laboralValid
+
+  // ── Paso 3 validation ──
+  const paso3Valid = paso3.grupo !== ''
+  const selectedGroup = mockGroups.find(g => g.grupo === paso3.grupo) ?? null
 
   function handleComplete() {
     // Implemented once Paso 5 (Pago) lands.
@@ -411,10 +422,60 @@ export default function NuevoIngresoWizard() {
     </div>
   )
 
+  // ── Paso 3 content: selección de Grupo Asignado ──
+  const paso3Render = (
+    <div>
+      <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Grupos Disponibles</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+        {mockGroups.map(g => (
+          <button
+            key={g.grupo}
+            type="button"
+            onClick={() => setPaso3({ grupo: g.grupo })}
+            className={`text-left px-4 py-3 border rounded-lg transition-colors ${
+              paso3.grupo === g.grupo ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
+            }`}
+          >
+            <p className="text-[14px] font-semibold text-[#333333]">{g.grupo}</p>
+            <p className="text-[12px] text-[#6B7280] mt-0.5">{g.nivel} · Turno {g.turno} · Capacidad {g.capacidad}</p>
+          </button>
+        ))}
+      </div>
+
+      {selectedGroup && (
+        <>
+          <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Materias del Grupo</p>
+          <div className="border border-[#E5E7EB] rounded-lg overflow-hidden">
+            <table className="w-full text-[13px]">
+              <thead className="bg-[#F8F9FA]">
+                <tr className="text-left text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">
+                  <th className="px-4 py-2.5">Materia</th>
+                  <th className="px-4 py-2.5">Clave</th>
+                  <th className="px-4 py-2.5">Créditos</th>
+                  <th className="px-4 py-2.5">Horario</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedGroup.materias.map(m => (
+                  <tr key={m.clave} className="border-t border-[#E5E7EB]">
+                    <td className="px-4 py-2.5 text-[#333333]">{m.materia}</td>
+                    <td className="px-4 py-2.5 text-[#6B7280] font-mono text-[12px]">{m.clave}</td>
+                    <td className="px-4 py-2.5 text-[#6B7280]">{m.creditos}</td>
+                    <td className="px-4 py-2.5 text-[#6B7280]">{m.horario}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+
   const steps: WizardStep[] = [
     { id: 'admitido', label: 'Datos del Admitido', render: paso1Render, isValid: paso1Valid },
     { id: 'complementarios', label: 'Datos Complementarios', render: paso2Render, isValid: paso2Valid },
-    { id: 'grupo', label: 'Grupo Asignado', render: PASO_PENDIENTE },
+    { id: 'grupo', label: 'Grupo Asignado', render: paso3Render, isValid: paso3Valid },
     { id: 'documentos', label: 'Documentos Institucionales', render: PASO_PENDIENTE },
     { id: 'pago', label: 'Pago', render: PASO_PENDIENTE },
   ]
