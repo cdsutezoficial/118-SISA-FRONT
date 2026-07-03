@@ -3,14 +3,14 @@
  *
  * Mirrors `dominio/04-inscripciones.md` (Bounded Context: Enrollment). Centralizes
  * the Student/Enrollment/EnrollmentSlip/StudentDocument/InstitutionalDocument/
- * DocumentAcceptance shapes so the 7 Inscripciones screens share one source of
- * truth, the same way `shared/admision/types.ts` does for the Admisión module.
+ * DocumentAcceptance/StudentProgramHistory shapes so the 7 Inscripciones screens
+ * share one source of truth, the same way `shared/admision/types.ts` does for the
+ * Admisión module.
  *
- * `StudentProgramHistory` (RF-INS-007, program-change bitácora) and `Class`
- * (Group + Subject + Teacher) are intentionally NOT modeled here — no screen in
- * this first slice (Foundation A + Screen 1 Dashboard) reads them. Add them when
- * Screen 3 ("Historial de Programas" tab) or Screen 4 ("Grupo Asignado" step)
- * are implemented.
+ * `Class` (Group + Subject + Teacher) is intentionally NOT modeled here — no
+ * screen in this slice reads a full aggregate; Screen 4 ("Grupo Asignado" step)
+ * and Screen 5 ("Materias") render from lighter mock rows instead. Add it when
+ * those screens land.
  */
 
 /** Matches `00-shared-kernel.md`'s `StudentStatus` enum. */
@@ -183,4 +183,29 @@ export interface DocumentAcceptance {
   /** Mock stand-in for the real hash of `studentId` + `documentId[]` + `acceptedAt`. */
   signatureHash: string
   items: DocumentAcceptanceItem[]
+}
+
+/**
+ * Reason a `StudentProgramHistory` row was opened. `INGRESO` is the first row
+ * every student gets (new-ingreso or reinscripción-style first enrollment);
+ * the other three values are only used by the "Cambiar Programa/Plan" mock
+ * modal (Screen 3, Tab 3) when closing the current row and opening a new one.
+ */
+export type ProgramChangeType = 'INGRESO' | 'CAMBIO_CARRERA' | 'CAMBIO_PLAN' | 'TSU_CONTINUIDAD'
+
+/**
+ * One row of a student's program-change bitácora (RF-INS-007). Matches
+ * `04-inscripciones.md`'s `StudentProgramHistory` aggregate. Invariant: a
+ * student has exactly ONE open row (`hasta: null`) at any time — that row is
+ * the currently active programa/plan; every other row is closed (`hasta` set).
+ */
+export interface StudentProgramHistory {
+  id: string
+  studentId: string
+  programa: string
+  plan: string
+  desde: string
+  /** `null` = this is the current, still-open program stage. */
+  hasta: string | null
+  tipoCambio: ProgramChangeType
 }
