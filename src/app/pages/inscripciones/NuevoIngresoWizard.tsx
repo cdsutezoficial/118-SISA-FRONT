@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight, CheckCircle2, Circle, ExternalLink } from 'lucide-react'
+import { ChevronRight, CheckCircle2, Circle, ExternalLink, Gift } from 'lucide-react'
 import { Wizard, type WizardStep } from '../../shared/Wizard'
 import { FieldLabel, FieldError, SearchSelect, SimpleSelect, Switch, inputCls } from '../../shared/ui'
 import { mockCandidates } from '../../shared/admision/mockData'
@@ -21,8 +21,6 @@ import { mockStudents, MUNICIPIOS_POR_ESTADO, mockGroups, mockInstitutionalDocum
  * parent-driven with one shared form object, so a partial-wizard split across
  * PRs would ship a non-functional intermediate state.
  */
-
-const PASO_PENDIENTE = <p className="text-[13px] text-[#6B7280]">Este paso se implementa en un commit posterior.</p>
 
 /** Read-only summary field — mirrors the page-local `ReadField` pattern already used in `CandidatoRegistro.tsx`/`EstudianteDetalle.tsx`. */
 function ReadField({ label, value }: { label: string; value: string }) {
@@ -181,6 +179,53 @@ interface Paso4State {
 
 const emptyPaso4: Paso4State = { acceptedIds: [] }
 
+// ─── Paso 5: cargos + pago ────────────────────────────────────────────────
+type MetodoPago = 'ONLINE' | 'VENTANILLA' | ''
+
+/** Cuota de inscripción de nuevo ingreso — flat mock amount (no fee catalog exists in this frontend slice). */
+const INSCRIPCION_MONTO = 2500
+
+interface Paso5State {
+  metodoPago: MetodoPago
+}
+
+const emptyPaso5: Paso5State = { metodoPago: '' }
+
+/** Next matrícula, following `mockStudents`' `{año4}{periodo1}{consecutivo4}` shape — mirrors `CandidatoRegistro.tsx`'s `nextFolio()`. */
+function nextMatricula(): string {
+  const prefix = '20263'
+  const lastNum = mockStudents.reduce((max, s) => {
+    if (!s.matricula.startsWith(prefix)) return max
+    const n = Number(s.matricula.slice(prefix.length))
+    return Number.isFinite(n) ? Math.max(max, n) : max
+  }, 0)
+  return `${prefix}${String(lastNum + 1).padStart(4, '0')}`
+}
+
+/** Success modal shown after "Finalizar Inscripción" — mirrors `ConfirmModal`'s visual language with a success accent. */
+function SuccessModal({ nombre, matricula, onClose }: { nombre: string; matricula: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" />
+      <div className="relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full max-w-sm mx-4 p-6 text-center">
+        <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 size={28} className="text-emerald-500" />
+        </div>
+        <h3 className="text-[16px] font-semibold text-[#333333] mb-1">Inscripción registrada</h3>
+        <p className="text-[13px] text-[#6B7280] mb-4">{nombre} fue inscrito(a) exitosamente. Matrícula asignada:</p>
+        <p className="text-[20px] font-bold text-[#009574] mb-6">{matricula}</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
+        >
+          Ir a Estudiantes
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function NuevoIngresoWizard() {
   const navigate = useNavigate()
 
@@ -188,6 +233,9 @@ export default function NuevoIngresoWizard() {
   const [paso2, setPaso2] = useState<Paso2State>(emptyPaso2)
   const [paso3, setPaso3] = useState<Paso3State>(emptyPaso3)
   const [paso4, setPaso4] = useState<Paso4State>(emptyPaso4)
+  const [paso5, setPaso5] = useState<Paso5State>(emptyPaso5)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [matricula] = useState(nextMatricula)
 
   const selectedCandidate = admittedCandidates.find(c => candidateLabel(c) === paso1.candidateLabel) ?? null
   const paso1Valid = selectedCandidate !== null
@@ -229,8 +277,15 @@ export default function NuevoIngresoWizard() {
     }))
   }
 
+  // ── Paso 5 validation: 100%-scholarship candidates (pagoFicha EXENTO) owe
+  // nothing for inscripción either — total drops to $0.00 and the payment
+  // method is not required. Anyone else must pick a método before finishing. ──
+  const isCoveredByBenefit = selectedCandidate?.pagoFicha.status === 'EXENTO'
+  const total = isCoveredByBenefit ? 0 : INSCRIPCION_MONTO
+  const paso5Valid = total === 0 || paso5.metodoPago !== ''
+
   function handleComplete() {
-    // Implemented once Paso 5 (Pago) lands.
+    setShowSuccess(true)
   }
 
   // ── Paso 1 content: selección del candidato admitido + resumen de su ficha ──
@@ -532,16 +587,58 @@ export default function NuevoIngresoWizard() {
     </div>
   )
 
+  // ── Paso 5 content: resumen de cargos + método de pago ──
+  const paso5Render = (
+    <div>
+      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+        <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Resumen</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <ReadField label="Estudiante" value={selectedCandidate?.nombre ?? ''} />
+          <ReadField label="Programa" value={selectedCandidate?.programa ?? ''} />
+          <ReadField label="Grupo Asignado" value={paso3.grupo} />
+        </div>
+
+        <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Cargo de Inscripción</p>
+        <p className="text-[24px] font-bold text-[#009574]">${total.toFixed(2)}</p>
+      </div>
+
+      {isCoveredByBenefit ? (
+        <div className="flex items-start gap-3 px-4 py-3 border border-emerald-200 bg-emerald-50 rounded-lg">
+          <Gift size={18} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+          <p className="text-[13px] text-emerald-800">
+            Este cargo está <strong>cubierto por beneficio</strong> (beca del 100% aplicada durante Admisión). No se requiere método de pago.
+          </p>
+        </div>
+      ) : (
+        <>
+          <FieldLabel required>¿Cómo desea pagar la inscripción?</FieldLabel>
+          <div className="space-y-3 mt-1">
+            <RadioCard selected={paso5.metodoPago === 'ONLINE'} title="Pagar en línea (Evo Payments)" onSelect={() => setPaso5({ metodoPago: 'ONLINE' })} />
+            <RadioCard selected={paso5.metodoPago === 'VENTANILLA'} title="Pagar en ventanilla de Finanzas" onSelect={() => setPaso5({ metodoPago: 'VENTANILLA' })} />
+          </div>
+        </>
+      )}
+    </div>
+  )
+
   const steps: WizardStep[] = [
     { id: 'admitido', label: 'Datos del Admitido', render: paso1Render, isValid: paso1Valid },
     { id: 'complementarios', label: 'Datos Complementarios', render: paso2Render, isValid: paso2Valid },
     { id: 'grupo', label: 'Grupo Asignado', render: paso3Render, isValid: paso3Valid },
     { id: 'documentos', label: 'Documentos Institucionales', render: paso4Render, isValid: paso4Valid },
-    { id: 'pago', label: 'Pago', render: PASO_PENDIENTE },
+    { id: 'pago', label: 'Pago', render: paso5Render, isValid: paso5Valid },
   ]
 
   return (
     <div className="max-w-[960px] mx-auto px-8 py-8">
+      {showSuccess && (
+        <SuccessModal
+          nombre={selectedCandidate?.nombre ?? ''}
+          matricula={matricula}
+          onClose={() => navigate('/inscripciones/estudiantes')}
+        />
+      )}
+
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
         <button onClick={() => navigate('/inscripciones')} className="hover:text-[#009574] transition-colors">
