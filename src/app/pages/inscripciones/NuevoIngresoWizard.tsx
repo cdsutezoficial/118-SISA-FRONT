@@ -1,6 +1,11 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import { Wizard, type WizardStep } from '../../shared/Wizard'
+import { FieldLabel, SearchSelect } from '../../shared/ui'
+import { mockCandidates } from '../../shared/admision/mockData'
+import type { Candidate } from '../../shared/admision/types'
+import { mockStudents } from '../../shared/inscripciones/mockData'
 
 /**
  * Screen 4 — Inscripción Nuevo Ingreso: Wizard (5 pasos).
@@ -19,15 +24,92 @@ import { Wizard, type WizardStep } from '../../shared/Wizard'
 
 const PASO_PENDIENTE = <p className="text-[13px] text-[#6B7280]">Este paso se implementa en un commit posterior.</p>
 
+/** Read-only summary field — mirrors the page-local `ReadField` pattern already used in `CandidatoRegistro.tsx`/`EstudianteDetalle.tsx`. */
+function ReadField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-[13px] text-[#333333] font-medium">{value || '—'}</p>
+    </div>
+  )
+}
+
+// ─── Paso 1: pool of candidates this wizard can enroll ──────────────────────
+// Only `ACCEPTED` candidates (Admisión's terminal "admitted" state) that
+// haven't already been converted into a Student are eligible — keeps the
+// mock data internally consistent (nobody gets enrolled twice).
+const enrolledCandidateIds = new Set(mockStudents.map(s => s.originCandidateId))
+const admittedCandidates = mockCandidates.filter(c => c.status === 'ACCEPTED' && !enrolledCandidateIds.has(c.id))
+const candidateLabel = (c: Candidate) => `${c.folio} — ${c.nombre}`
+const candidateOptions = admittedCandidates.map(candidateLabel)
+
+interface Paso1State {
+  candidateLabel: string
+}
+
+const emptyPaso1: Paso1State = { candidateLabel: '' }
+
 export default function NuevoIngresoWizard() {
   const navigate = useNavigate()
+
+  const [paso1, setPaso1] = useState<Paso1State>(emptyPaso1)
+
+  const selectedCandidate = admittedCandidates.find(c => candidateLabel(c) === paso1.candidateLabel) ?? null
+  const paso1Valid = selectedCandidate !== null
 
   function handleComplete() {
     // Implemented once Paso 5 (Pago) lands.
   }
 
+  // ── Paso 1 content: selección del candidato admitido + resumen de su ficha ──
+  const paso1Render = (
+    <div>
+      <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Candidato Admitido</p>
+      <div className="mb-8">
+        <FieldLabel required>Selecciona el candidato admitido a inscribir</FieldLabel>
+        <SearchSelect
+          options={candidateOptions}
+          value={paso1.candidateLabel}
+          onChange={v => setPaso1({ candidateLabel: v })}
+          placeholder="Buscar por folio o nombre"
+        />
+      </div>
+
+      {selectedCandidate ? (
+        <>
+          <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Datos del Admitido</p>
+          <div className="grid grid-cols-12 gap-6">
+            <div className="col-span-12 md:col-span-6">
+              <ReadField label="Nombre Completo" value={selectedCandidate.nombre} />
+            </div>
+            <div className="col-span-12 md:col-span-3">
+              <ReadField label="Folio" value={selectedCandidate.folio} />
+            </div>
+            <div className="col-span-12 md:col-span-3">
+              <ReadField label="CURP" value={selectedCandidate.curp} />
+            </div>
+            <div className="col-span-12 md:col-span-4">
+              <ReadField label="Correo Electrónico" value={selectedCandidate.email} />
+            </div>
+            <div className="col-span-12 md:col-span-4">
+              <ReadField label="Teléfono" value={selectedCandidate.telefono} />
+            </div>
+            <div className="col-span-12 md:col-span-4">
+              <ReadField label="Programa" value={selectedCandidate.programa} />
+            </div>
+            <div className="col-span-12 md:col-span-6">
+              <ReadField label="División" value={selectedCandidate.division} />
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="text-[13px] text-[#6B7280]">Selecciona un candidato para ver la información capturada durante Admisión.</p>
+      )}
+    </div>
+  )
+
   const steps: WizardStep[] = [
-    { id: 'admitido', label: 'Datos del Admitido', render: PASO_PENDIENTE },
+    { id: 'admitido', label: 'Datos del Admitido', render: paso1Render, isValid: paso1Valid },
     { id: 'complementarios', label: 'Datos Complementarios', render: PASO_PENDIENTE },
     { id: 'grupo', label: 'Grupo Asignado', render: PASO_PENDIENTE },
     { id: 'documentos', label: 'Documentos Institucionales', render: PASO_PENDIENTE },
