@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight, CheckCircle2, Circle, ExternalLink, Gift } from 'lucide-react'
+import { ChevronRight, CheckCircle2, Circle, ExternalLink, Gift, AlertTriangle } from 'lucide-react'
 import { Wizard, type WizardStep } from '../../shared/Wizard'
 import { FieldLabel, FieldError, SearchSelect, SimpleSelect, Switch, inputCls } from '../../shared/ui'
 import { mockCandidates } from '../../shared/admision/mockData'
@@ -59,7 +59,6 @@ const ESTADOS_CATALOGO = [
   'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala',
   'Veracruz', 'Yucatán', 'Zacatecas',
 ]
-const TIPOS_BACHILLERATO = ['General', 'Tecnológico', 'Bachillerato Técnico', 'CONALEP', 'Otro']
 const TIPOS_SANGRE = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 const TIPOS_TRABAJO = ['Tiempo completo', 'Medio tiempo', 'Freelance', 'Negocio propio']
 
@@ -117,9 +116,20 @@ function SwitchField({ label, checked, onChange }: { label: string; checked: boo
 
 type Nacionalidad = 'Mexicana' | 'Extranjera' | ''
 
+/**
+ * Paso 2 field-editability, per the PO's 2026-07-03 correction: this screen
+ * lets the recién-inscrito estudiante update ONLY a specific subset of what
+ * was already captured during Admisión (`Candidate.fichaCompleta`) — most of
+ * Paso 2 now displays that data read-only (`ReadField`) instead of re-asking
+ * for it. Nacionalidad, and most of Antecedentes de Bachillerato, are
+ * READ-ONLY here (already fixed at Admisión time); only Domicilio, Contacto,
+ * Área/Especialidad+Promedio+Periodo de Estudios, Laboral, and Contacto de
+ * Emergencia remain editable. Salud is left fully editable — untouched by
+ * this correction (the PO didn't mention it; flagged as an assumption in
+ * apply-progress for confirmation).
+ */
 interface Paso2State {
-  nationality: Nacionalidad
-  // Domicilio
+  // Domicilio — editable, prefilled from `fichaCompleta.domicilio` when available
   calle: string
   numeroExterior: string
   numeroInterior: string
@@ -128,45 +138,61 @@ interface Paso2State {
   municipioDomicilio: string
   localidad: string
   codigoPostal: string
-  // Antecedentes de Bachillerato
-  nombrePreparatoria: string
-  tipoBachillerato: string
-  studiedInMexico: boolean
-  estadoBachillerato: string
-  municipioBachillerato: string
-  cct: string
-  paisBachillerato: string
-  estadoBachilleratoExt: string
-  ciudadBachillerato: string
-  // Salud
+  // Contacto — editable (NEW section), prefilled from `Candidate.telefono`/`.email`
+  telefono: string
+  correo: string
+  // Antecedentes de Bachillerato — only these three are editable here; the
+  // rest (nombrePreparatoria, tipoBachillerato, studiedInMexico, estado/
+  // municipio or país/ciudad, cct) render read-only from `fichaCompleta`.
+  areaEspecialidad: string
+  promedio: string
+  periodoEstudios: string
+  // Salud — untouched, fully editable (deliberate no-op per PO correction scope)
   tipoSangre: string
   tieneAlergias: boolean
   alergias: string
-  // Laboral
+  // Laboral — untouched, fully editable
   trabaja: boolean
   tipoTrabajo: string
   empresa: string
   puesto: string
   horaInicio: string
   horaFin: string
+  // Contacto de Emergencia — editable (NEW section)
+  guardianName: string
+  guardianEmail: string
+  emergencyContactPhone: string
 }
 
 const emptyPaso2: Paso2State = {
-  nationality: '',
   calle: '', numeroExterior: '', numeroInterior: '', colonia: '',
   estadoDomicilio: '', municipioDomicilio: '', localidad: '', codigoPostal: '',
-  nombrePreparatoria: '', tipoBachillerato: '', studiedInMexico: true,
-  estadoBachillerato: '', municipioBachillerato: '', cct: '',
-  paisBachillerato: '', estadoBachilleratoExt: '', ciudadBachillerato: '',
+  telefono: '', correo: '',
+  areaEspecialidad: '', promedio: '', periodoEstudios: '',
   tipoSangre: '', tieneAlergias: false, alergias: '',
   trabaja: false, tipoTrabajo: '', empresa: '', puesto: '', horaInicio: '', horaFin: '',
+  guardianName: '', guardianEmail: '', emergencyContactPhone: '',
 }
 
+/** Grupo asignado (Paso 3): `manualOverrideOpen` reveals the exception picker; `manualGrupo` holds the reassigned choice once made. */
 interface Paso3State {
-  grupo: string
+  manualOverrideOpen: boolean
+  manualGrupo: string
 }
 
-const emptyPaso3: Paso3State = { grupo: '' }
+const emptyPaso3: Paso3State = { manualOverrideOpen: false, manualGrupo: '' }
+
+/**
+ * Mock: en producción esto vendría de GenerateMatriculasUseCase (Admisión),
+ * aquí se deriva determinísticamente para el prototipo — el grupo ya fue
+ * asignado aleatoriamente al generar la matrícula del candidato, antes de
+ * llegar a Inscripciones (ver `03-admision.md` GenerateMatriculasUseCase).
+ */
+function preAssignedGroup(candidate: Candidate | null): (typeof mockGroups)[number] | null {
+  if (!candidate || mockGroups.length === 0) return null
+  const seed = Number(candidate.id) || candidate.folio.length
+  return mockGroups[seed % mockGroups.length]
+}
 
 // Only ACTIVE institutional documents must be reviewed/accepted — mirrors
 // Screen 6's own status toggle (an INACTIVE document is retired, not
@@ -240,20 +266,56 @@ export default function NuevoIngresoWizard() {
   const selectedCandidate = admittedCandidates.find(c => candidateLabel(c) === paso1.candidateLabel) ?? null
   const paso1Valid = selectedCandidate !== null
 
+  // Prefills Paso 2's editable fields from data already captured during
+  // Admisión when the selected candidate changes — Domicilio/Promedio from
+  // `fichaCompleta` (only present for two demo candidates, per apply-progress
+  // note), Contacto from the always-present top-level `Candidate` fields.
+  useEffect(() => {
+    if (!selectedCandidate) return
+    const ficha = selectedCandidate.fichaCompleta
+    setPaso2(p => ({
+      ...p,
+      telefono: selectedCandidate.telefono,
+      correo: selectedCandidate.email,
+      ...(ficha ? {
+        calle: ficha.domicilio.calle,
+        numeroExterior: ficha.domicilio.numeroExterior,
+        numeroInterior: ficha.domicilio.numeroInterior,
+        colonia: ficha.domicilio.colonia,
+        estadoDomicilio: ficha.domicilio.estado,
+        municipioDomicilio: ficha.domicilio.municipio,
+        localidad: ficha.domicilio.localidad,
+        codigoPostal: ficha.domicilio.codigoPostal,
+        promedio: String(ficha.antecedentesEscolares.promedio),
+      } : {}),
+    }))
+    // Only re-prefill when the selected candidate itself changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCandidate])
+
   // ── Paso 2 validation ──
+  // Nacionalidad is read-only (consulta), sourced from Admisión's ficha — no
+  // longer a Paso 2 input. Falls back to '' (unknown → free-text domicilio
+  // branch) when the candidate has no `fichaCompleta`.
+  const nationality: Nacionalidad = selectedCandidate?.fichaCompleta?.datosGenerales.nacionalidad ?? ''
+  const fichaAntecedentes = selectedCandidate?.fichaCompleta?.antecedentesEscolares ?? null
+
   const cpValid = /^\d{5}$/.test(paso2.codigoPostal)
   const domicilioValid =
     paso2.calle.trim() !== '' && paso2.numeroExterior.trim() !== '' && paso2.colonia.trim() !== '' &&
     paso2.localidad.trim() !== '' && cpValid &&
-    (paso2.nationality === 'Mexicana'
+    (nationality === 'Mexicana'
       ? paso2.estadoDomicilio !== '' && paso2.municipioDomicilio !== ''
       : paso2.estadoDomicilio.trim() !== '' && paso2.municipioDomicilio.trim() !== '')
 
-  const bachilleratoValid =
-    paso2.nombrePreparatoria.trim() !== '' && paso2.tipoBachillerato !== '' &&
-    (paso2.studiedInMexico
-      ? paso2.estadoBachillerato !== '' && paso2.municipioBachillerato !== '' && paso2.cct.trim() !== ''
-      : paso2.paisBachillerato.trim() !== '' && paso2.estadoBachilleratoExt.trim() !== '' && paso2.ciudadBachillerato.trim() !== '')
+  const correoValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paso2.correo)
+  const contactoValid = paso2.telefono.trim() !== '' && correoValid
+
+  const promedioNum = Number(paso2.promedio)
+  const promedioValid = paso2.promedio.trim() !== '' && Number.isFinite(promedioNum) && promedioNum >= 0 && promedioNum <= 10
+  const periodoMatch = /^(\d{4})-(\d{4})$/.exec(paso2.periodoEstudios)
+  const periodoValid = periodoMatch !== null && Number(periodoMatch[2]) > Number(periodoMatch[1])
+  const bachilleratoValid = paso2.areaEspecialidad.trim() !== '' && promedioValid && periodoValid
 
   const saludValid = paso2.tipoSangre !== '' && (!paso2.tieneAlergias || paso2.alergias.trim() !== '')
 
@@ -262,11 +324,16 @@ export default function NuevoIngresoWizard() {
     paso2.horaInicio !== '' && paso2.horaFin !== ''
   )
 
-  const paso2Valid = paso2.nationality !== '' && domicilioValid && bachilleratoValid && saludValid && laboralValid
+  const guardianEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paso2.guardianEmail)
+  const contactoEmergenciaValid = paso2.guardianName.trim() !== '' && guardianEmailValid && paso2.emergencyContactPhone.trim() !== ''
 
-  // ── Paso 3 validation ──
-  const paso3Valid = paso3.grupo !== ''
-  const selectedGroup = mockGroups.find(g => g.grupo === paso3.grupo) ?? null
+  const paso2Valid = domicilioValid && contactoValid && bachilleratoValid && saludValid && laboralValid && contactoEmergenciaValid
+
+  // ── Paso 3 validation: pre-assigned group is valid by default; only the
+  // manual-override exception path requires an explicit pick. ──
+  const assignedGroup = preAssignedGroup(selectedCandidate)
+  const effectiveGroup = paso3.manualGrupo !== '' ? (mockGroups.find(g => g.grupo === paso3.manualGrupo) ?? null) : assignedGroup
+  const paso3Valid = paso3.manualOverrideOpen ? paso3.manualGrupo !== '' : assignedGroup !== null
 
   // ── Paso 4 validation: every active institutional document must be accepted ──
   const paso4Valid = activeInstitutionalDocs.length > 0 && activeInstitutionalDocs.every(d => paso4.acceptedIds.includes(d.id))
@@ -335,15 +402,14 @@ export default function NuevoIngresoWizard() {
     </div>
   )
 
-  // ── Paso 2 content: Domicilio + Antecedentes de Bachillerato + Salud + Laboral ──
+  // ── Paso 2 content: Domicilio + Contacto + Antecedentes de Bachillerato +
+  // Salud + Laboral + Contacto de Emergencia. Per the PO's correction, most
+  // fields here mirror what "ya se solicitó en la ficha de admisión" — shown
+  // read-only (`ReadField`) — and only a specific subset stays editable. ──
   const paso2Render = (
     <div>
       <div className="mb-8">
-        <FieldLabel required>Nacionalidad</FieldLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-          <RadioCard selected={paso2.nationality === 'Mexicana'} title="Mexicana" onSelect={() => setPaso2({ ...paso2, nationality: 'Mexicana', estadoDomicilio: '', municipioDomicilio: '' })} />
-          <RadioCard selected={paso2.nationality === 'Extranjera'} title="Extranjera" onSelect={() => setPaso2({ ...paso2, nationality: 'Extranjera', estadoDomicilio: '', municipioDomicilio: '' })} />
-        </div>
+        <ReadField label="Nacionalidad" value={nationality || 'No disponible'} />
       </div>
 
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Domicilio</p>
@@ -361,7 +427,7 @@ export default function NuevoIngresoWizard() {
           <TextField label="Colonia" required value={paso2.colonia} onChange={v => setPaso2({ ...paso2, colonia: v })} />
         </div>
 
-        {paso2.nationality === 'Mexicana' ? (
+        {nationality === 'Mexicana' ? (
           <>
             <div className="col-span-12 md:col-span-3">
               <FieldLabel required>Estado</FieldLabel>
@@ -402,53 +468,74 @@ export default function NuevoIngresoWizard() {
         </div>
       </div>
 
-      <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Antecedentes de Bachillerato</p>
+      <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Contacto</p>
+      <div className="grid grid-cols-12 gap-6 mb-8">
+        <div className="col-span-12 md:col-span-6">
+          <TextField label="Teléfono" required value={paso2.telefono} onChange={v => setPaso2({ ...paso2, telefono: v })} />
+        </div>
+        <div className="col-span-12 md:col-span-6">
+          <TextField
+            label="Correo Electrónico" required value={paso2.correo}
+            onChange={v => setPaso2({ ...paso2, correo: v })}
+            error={paso2.correo !== '' && !correoValid ? 'Correo inválido.' : undefined}
+          />
+        </div>
+      </div>
+
+      <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-1">Antecedentes de Bachillerato</p>
+      <p className="text-[12px] text-[#6B7280] mb-4">
+        Estos datos ya fueron capturados durante Admisión. Solo puedes actualizar Área/Especialidad, Promedio y Periodo de Estudios.
+      </p>
       <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12 md:col-span-8">
-          <TextField label="Nombre de la Preparatoria de Procedencia" required value={paso2.nombrePreparatoria} onChange={v => setPaso2({ ...paso2, nombrePreparatoria: v })} />
+          <ReadField label="Nombre de la Preparatoria de Procedencia" value={fichaAntecedentes?.nombrePreparatoria || 'No disponible'} />
         </div>
         <div className="col-span-12 md:col-span-4">
-          <FieldLabel required>Tipo de Bachillerato</FieldLabel>
-          <SimpleSelect options={TIPOS_BACHILLERATO} value={paso2.tipoBachillerato} onChange={v => setPaso2({ ...paso2, tipoBachillerato: v })} placeholder="Seleccionar" />
+          <ReadField label="Tipo de Bachillerato" value={fichaAntecedentes?.tipoBachillerato || 'No disponible'} />
         </div>
 
-        <div className="col-span-12">
-          <SwitchField label="¿Estudió el bachillerato en México?" checked={paso2.studiedInMexico} onChange={v => setPaso2({ ...paso2, studiedInMexico: v })} />
-        </div>
-
-        {paso2.studiedInMexico ? (
+        {fichaAntecedentes === null || fichaAntecedentes.estudioBachilleratoEnMexico ? (
           <>
             <div className="col-span-12 md:col-span-4">
-              <FieldLabel required>Estado de la Preparatoria</FieldLabel>
-              <SearchSelect options={ESTADOS_CATALOGO} value={paso2.estadoBachillerato} onChange={v => setPaso2({ ...paso2, estadoBachillerato: v, municipioBachillerato: '' })} placeholder="Selecciona un estado" />
+              <ReadField label="Estado de la Preparatoria" value={fichaAntecedentes?.estadoPreparatoria || 'No disponible'} />
             </div>
             <div className="col-span-12 md:col-span-4">
-              <FieldLabel required>Municipio de la Preparatoria</FieldLabel>
-              <SearchSelect
-                options={MUNICIPIOS_POR_ESTADO[paso2.estadoBachillerato] ?? []}
-                value={paso2.municipioBachillerato}
-                onChange={v => setPaso2({ ...paso2, municipioBachillerato: v })}
-                disabled={!paso2.estadoBachillerato}
-                placeholder={paso2.estadoBachillerato ? 'Selecciona un municipio' : 'Primero selecciona un estado'}
-              />
+              <ReadField label="Municipio de la Preparatoria" value={fichaAntecedentes?.municipioPreparatoria || 'No disponible'} />
             </div>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="Clave de Centro de Trabajo (CCT)" required value={paso2.cct} onChange={v => setPaso2({ ...paso2, cct: v.toUpperCase() })} placeholder="Ej. 17DCT0001A" />
+              <ReadField label="Clave de Centro de Trabajo (CCT)" value={fichaAntecedentes?.cct || 'No disponible'} />
             </div>
           </>
         ) : (
           <>
-            <div className="col-span-12 md:col-span-4">
-              <TextField label="País de la Preparatoria" required value={paso2.paisBachillerato} onChange={v => setPaso2({ ...paso2, paisBachillerato: v })} />
+            <div className="col-span-12 md:col-span-6">
+              <ReadField label="País de la Preparatoria" value={fichaAntecedentes.paisPreparatoria || 'No disponible'} />
             </div>
-            <div className="col-span-12 md:col-span-4">
-              <TextField label="Estado de la Preparatoria" required value={paso2.estadoBachilleratoExt} onChange={v => setPaso2({ ...paso2, estadoBachilleratoExt: v })} />
-            </div>
-            <div className="col-span-12 md:col-span-4">
-              <TextField label="Ciudad de la Preparatoria" required value={paso2.ciudadBachillerato} onChange={v => setPaso2({ ...paso2, ciudadBachillerato: v })} />
+            <div className="col-span-12 md:col-span-6">
+              <ReadField label="Ciudad de la Preparatoria" value={fichaAntecedentes.ciudadPreparatoria || 'No disponible'} />
             </div>
           </>
         )}
+
+        <div className="col-span-12 md:col-span-4">
+          <TextField label="Área/Especialidad de Bachillerato" required value={paso2.areaEspecialidad} onChange={v => setPaso2({ ...paso2, areaEspecialidad: v })} />
+        </div>
+        <div className="col-span-12 md:col-span-4">
+          <TextField
+            label="Promedio" required value={paso2.promedio}
+            onChange={v => setPaso2({ ...paso2, promedio: v })}
+            placeholder="Ej. 8.7"
+            error={paso2.promedio !== '' && !promedioValid ? 'Debe ser un número entre 0 y 10.' : undefined}
+          />
+        </div>
+        <div className="col-span-12 md:col-span-4">
+          <TextField
+            label="Periodo de Estudios" required value={paso2.periodoEstudios}
+            onChange={v => setPaso2({ ...paso2, periodoEstudios: v })}
+            placeholder="YYYY-YYYY"
+            error={paso2.periodoEstudios !== '' && !periodoValid ? 'Formato YYYY-YYYY, con año final mayor al inicial.' : undefined}
+          />
+        </div>
       </div>
 
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Salud</p>
@@ -470,7 +557,7 @@ export default function NuevoIngresoWizard() {
       </div>
 
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Laboral</p>
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12">
           <SwitchField label="¿Trabaja actualmente?" checked={paso2.trabaja} onChange={v => setPaso2({ ...paso2, trabaja: v })} />
         </div>
@@ -495,30 +582,80 @@ export default function NuevoIngresoWizard() {
           </>
         )}
       </div>
+
+      <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Contacto de Emergencia</p>
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 md:col-span-4">
+          <TextField label="Nombre de Padre/Madre o Tutor" required value={paso2.guardianName} onChange={v => setPaso2({ ...paso2, guardianName: v })} />
+        </div>
+        <div className="col-span-12 md:col-span-4">
+          <TextField
+            label="Correo de Tutor" required value={paso2.guardianEmail}
+            onChange={v => setPaso2({ ...paso2, guardianEmail: v })}
+            error={paso2.guardianEmail !== '' && !guardianEmailValid ? 'Correo inválido.' : undefined}
+          />
+        </div>
+        <div className="col-span-12 md:col-span-4">
+          <TextField label="Teléfono de Contacto" required value={paso2.emergencyContactPhone} onChange={v => setPaso2({ ...paso2, emergencyContactPhone: v })} />
+        </div>
+      </div>
     </div>
   )
 
-  // ── Paso 3 content: selección de Grupo Asignado ──
+  // ── Paso 3 content: Grupo Asignado — read-only pre-assigned group by
+  // default (already assigned randomly during Admisión's matrícula
+  // generation), with an explicit low-weight manual-override affordance for
+  // edge cases only, per the PO's 2026-07-03 correction. ──
   const paso3Render = (
     <div>
-      <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Grupos Disponibles</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
-        {mockGroups.map(g => (
-          <button
-            key={g.grupo}
-            type="button"
-            onClick={() => setPaso3({ grupo: g.grupo })}
-            className={`text-left px-4 py-3 border rounded-lg transition-colors ${
-              paso3.grupo === g.grupo ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
-            }`}
-          >
-            <p className="text-[14px] font-semibold text-[#333333]">{g.grupo}</p>
-            <p className="text-[12px] text-[#6B7280] mt-0.5">{g.nivel} · Turno {g.turno} · Capacidad {g.capacidad}</p>
-          </button>
-        ))}
-      </div>
+      <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Grupo Asignado</p>
 
-      {selectedGroup && (
+      {assignedGroup ? (
+        <div className="border border-[#E5E7EB] bg-[#F8F9FA] rounded-lg px-4 py-3 mb-3">
+          <p className="text-[14px] font-semibold text-[#333333]">{assignedGroup.grupo}</p>
+          <p className="text-[12px] text-[#6B7280] mt-0.5">{assignedGroup.nivel} · Turno {assignedGroup.turno} · Capacidad {assignedGroup.capacidad}</p>
+        </div>
+      ) : (
+        <p className="text-[13px] text-[#6B7280] mb-3">No hay un grupo pre-asignado para este candidato.</p>
+      )}
+
+      {paso3.manualGrupo !== '' && (
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[12px] font-medium">
+          <AlertTriangle size={14} />
+          Grupo reasignado manualmente
+        </div>
+      )}
+
+      {!paso3.manualOverrideOpen ? (
+        <button
+          type="button"
+          onClick={() => setPaso3(p => ({ ...p, manualOverrideOpen: true }))}
+          className="text-[12px] text-[#6B7280] hover:text-[#009574] underline underline-offset-2 mb-8"
+        >
+          ¿Necesitas reasignar el grupo manualmente?
+        </button>
+      ) : (
+        <div className="mb-8">
+          <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-2">Reasignación manual (excepción)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {mockGroups.map(g => (
+              <button
+                key={g.grupo}
+                type="button"
+                onClick={() => setPaso3(p => ({ ...p, manualGrupo: g.grupo }))}
+                className={`text-left px-4 py-3 border rounded-lg transition-colors ${
+                  paso3.manualGrupo === g.grupo ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
+                }`}
+              >
+                <p className="text-[14px] font-semibold text-[#333333]">{g.grupo}</p>
+                <p className="text-[12px] text-[#6B7280] mt-0.5">{g.nivel} · Turno {g.turno} · Capacidad {g.capacidad}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {effectiveGroup && (
         <>
           <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Materias del Grupo</p>
           <div className="border border-[#E5E7EB] rounded-lg overflow-hidden">
@@ -532,7 +669,7 @@ export default function NuevoIngresoWizard() {
                 </tr>
               </thead>
               <tbody>
-                {selectedGroup.materias.map(m => (
+                {effectiveGroup.materias.map(m => (
                   <tr key={m.clave} className="border-t border-[#E5E7EB]">
                     <td className="px-4 py-2.5 text-[#333333]">{m.materia}</td>
                     <td className="px-4 py-2.5 text-[#6B7280] font-mono text-[12px]">{m.clave}</td>
@@ -595,7 +732,7 @@ export default function NuevoIngresoWizard() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <ReadField label="Estudiante" value={selectedCandidate?.nombre ?? ''} />
           <ReadField label="Programa" value={selectedCandidate?.programa ?? ''} />
-          <ReadField label="Grupo Asignado" value={paso3.grupo} />
+          <ReadField label="Grupo Asignado" value={effectiveGroup?.grupo ?? ''} />
         </div>
 
         <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Cargo de Inscripción</p>

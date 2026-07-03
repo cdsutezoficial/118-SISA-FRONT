@@ -53,6 +53,7 @@ Single PR, sub-commit per step (form is lifted/shared across steps). Fallback sp
 - [x] 3.5 [commit] Paso 4 — Documentos Institucionales: accept-all gate disables Siguiente
 - [x] 3.6 [commit] Paso 5 — Pago: hide método + show "cubierto por beneficio" when total is $0.00, else require método before Finalizar; success modal
 - [x] 3.7 Verify: accept-all gate, $0-total hides payment, non-zero requires method, nationality/bachillerato branching scenarios; tsc + build clean; request size:exception if PR >400 lines
+- [x] 3.8 [commit] PO correction: fix Paso 2 field editability (add Contacto + Contacto de Emergencia sections, read-only Nacionalidad/Bachillerato sourced from `fichaCompleta`, editable Área/Especialidad + Promedio + Periodo de Estudios) and Paso 3 pre-assigned read-only Grupo Asignado with manual-override exception; populate `fichaCompleta` mock data for 2 demo candidates
 
 ## Phase 4: Reinscripción Wizard (PR 4) [spec: Reinscripción Wizard]
 
