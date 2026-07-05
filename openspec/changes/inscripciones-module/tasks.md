@@ -57,9 +57,9 @@ Single PR, sub-commit per step (form is lifted/shared across steps). Fallback sp
 
 ## Phase 4: Reinscripción Wizard (PR 4) [spec: Reinscripción Wizard]
 
-- [ ] 4.1 Create `ReinscripcionWizard.tsx` 3-step: Paso 1 student search + `FinanceQueryPort.hasActiveDebt` gate blocks Siguiente with alert; Paso 2 materias table with RETAKE (Recursamiento) vs REGULAR badge; Paso 3 confirmación
-- [ ] 4.2 Wire `router.tsx` `reinscripcion` stub → component
-- [ ] 4.3 Verify: active-debt blocks Siguiente; previously-failed subject shows Recursamiento; tsc + build clean
+- [x] 4.1 Create `ReinscripcionWizard.tsx` 3-step: Paso 1 student search + `FinanceQueryPort.hasActiveDebt` gate blocks Siguiente with alert; Paso 2 materias table with RETAKE (Recursamiento) vs REGULAR badge; Paso 3 confirmación
+- [x] 4.2 Wire `router.tsx` `reinscripcion` stub → component
+- [x] 4.3 Verify: active-debt blocks Siguiente; previously-failed subject shows Recursamiento; tsc + build clean
 
 ## Phase 5: Documentos Institucionales (PR 5) [spec: Documentos Institucionales]
 

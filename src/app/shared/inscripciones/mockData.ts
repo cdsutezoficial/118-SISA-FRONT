@@ -315,6 +315,20 @@ export const mockDocumentAcceptances: DocumentAcceptance[] = [
 ]
 
 /**
+ * Mock stand-in for `FinanceQueryPort.hasActiveDebt(studentId)` (see
+ * `04-inscripciones.md`'s RN-INS-001 and the Reinscripción invariant) — no
+ * Finanzas bounded context exists in this frontend slice, so Screen 5's debt
+ * gate reads this lookup instead of a real cross-module query. Only María
+ * Torres Soto (id `3`) carries an active debt: she's ACTIVE but hasn't
+ * reinscrito this period yet (see the `mockEnrollments` comment above), which
+ * makes her the natural "blocked by debt" demo candidate — no story
+ * contradiction with an already-completed reinscripción.
+ */
+export const mockActiveDebts: Record<string, boolean> = {
+  '3': true,
+}
+
+/**
  * Program-change bitácora (RF-INS-007) for Screen 3's "Historial de
  * Programas" tab. Invariant enforced by construction: every `studentId` has
  * exactly one open row (`hasta: null`). Luis (id 2) carries two rows —
