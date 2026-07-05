@@ -32,6 +32,10 @@ import HabilitarInduccion from './pages/admision/HabilitarInduccion'
 import PortalInduccion from './pages/portal/PortalInduccion'
 import PortalInduccionPago from './pages/portal/PortalInduccionPago'
 
+// Inscripciones — Screen 1 Dashboard is real; Screens 2-7 remain Foundation A
+// stubs until their own `inscripciones/screen-0N-*` work units land.
+import InscripcionesDashboard from './pages/inscripciones/InscripcionesDashboard'
+
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
 import DivisionesForm from './pages/DivisionesForm'
@@ -184,10 +188,8 @@ const router = createBrowserRouter([
 
       // Inscripciones
       //
-      // Foundation A stub — real screens land in later `inscripciones/screen-0N-*`
-      // work units, mirroring how Admisión's `foundation-a` only stubbed its
-      // Dashboard route. Here every screen (including the Dashboard) is stubbed
-      // upfront so the module's route/nav structure is reserved from the start.
+      // Screen 1 (Dashboard) is real; Screens 2-7 remain Foundation A stubs
+      // until their own `inscripciones/screen-0N-*` work units land.
       //
       // Role guard: mirrors Admisión's rule — the index route (`/inscripciones`,
       // the Dashboard) is the ONE deliberate exception, NEVER wrapped in
@@ -201,8 +203,7 @@ const router = createBrowserRouter([
       {
         path: 'inscripciones',
         children: [
-          // TODO(inscripciones-module screen-01): replace with <InscripcionesDashboard />
-          { index: true, element: <div className="p-6 text-sm text-[#6B7280]">Inscripciones — Dashboard (próximamente)</div> },
+          { index: true, element: <InscripcionesDashboard /> },
           {
             path: 'estudiantes',
             element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><div className="p-6 text-sm text-[#6B7280]">Estudiantes — Listado (próximamente)</div></RequireRole>,
