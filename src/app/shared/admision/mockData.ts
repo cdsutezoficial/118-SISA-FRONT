@@ -1,4 +1,81 @@
-import type { Candidate } from './types'
+import type { Candidate, FichaAdmisionCompleta } from './types'
+
+/**
+ * Ficha completa mock — populated only for the two candidates used as
+ * manual-test-candidates in the Nuevo Ingreso Wizard (Screen 4), per the PO's
+ * 2026-07-03 correction: Paso 2 of that wizard needs real (non-blank)
+ * read-only data to demonstrate "ya capturado en Admisión". Every other
+ * candidate deliberately keeps `fichaCompleta` undefined.
+ */
+function makeFichaEmilianoCastro(): FichaAdmisionCompleta {
+  return {
+    datosGenerales: {
+      nombres: 'Emiliano', apellidoPaterno: 'Castro', apellidoMaterno: 'Uribe',
+      curp: 'CAUE040527HMSSRR04', fechaNacimiento: '27/05/2004', sexo: 'Hombre',
+      estadoNacimiento: 'Morelos', nacionalidad: 'Mexicana',
+      municipioNacimiento: 'Jiutepec', paisNacimiento: '', ciudadNacimiento: '',
+      estadoCivil: 'Soltero/a', lenguaNatal: 'Español', tieneHijos: false,
+    },
+    domicilio: {
+      calle: 'Calle Reforma', numeroExterior: '245', numeroInterior: '3', colonia: 'Centro',
+      estado: 'Morelos', municipio: 'Jiutepec', localidad: 'Jiutepec', codigoPostal: '62550',
+    },
+    contacto: { telefonoCasa: '777 312 4509', celular: '777 123 4509' },
+    informacionComplementaria: {
+      tieneEnfermedadPreexistente: false, tieneDiscapacidad: false,
+      padresHablanLenguaIndigena: false, hablaLenguaIndigena: false,
+      seIdentificaIndigena: false, seIdentificaNoBinario: false,
+      perteneceComunidadLgbttiq: false, esAfrodescendiente: false,
+    },
+    ingresos: {
+      ingresoMensualFamiliar: 6000, trabaja: false, tipoTrabajo: '', telefonoTrabajo: '',
+      ingresoMensual: null, nombreEmpresa: '', puesto: '', horaInicio: '', horaFin: '',
+    },
+    seleccionCarrera: { modalidad: 'Presencial' },
+    antecedentesEscolares: {
+      nombrePreparatoria: 'CBTIS No. 25', tipoBachillerato: 'Tecnológico',
+      estudioBachilleratoEnMexico: true,
+      estadoPreparatoria: 'Morelos', municipioPreparatoria: 'Jiutepec',
+      paisPreparatoria: '', ciudadPreparatoria: '',
+      promedio: 9.4, cct: '17DCT0025P', cctConfirmacion: '17DCT0025P',
+    },
+  }
+}
+
+function makeFichaDiegoHerrera(): FichaAdmisionCompleta {
+  return {
+    datosGenerales: {
+      nombres: 'Diego', apellidoPaterno: 'Herrera', apellidoMaterno: 'Campos',
+      curp: 'HECD040611HMSRRG05', fechaNacimiento: '11/06/2004', sexo: 'Hombre',
+      estadoNacimiento: 'Morelos', nacionalidad: 'Mexicana',
+      municipioNacimiento: 'Cuernavaca', paisNacimiento: '', ciudadNacimiento: '',
+      estadoCivil: 'Soltero/a', lenguaNatal: 'Español', tieneHijos: false,
+    },
+    domicilio: {
+      calle: 'Av. Universidad', numeroExterior: '1001', numeroInterior: '', colonia: 'Chamilpa',
+      estado: 'Morelos', municipio: 'Cuernavaca', localidad: 'Cuernavaca', codigoPostal: '62210',
+    },
+    contacto: { telefonoCasa: '777 312 4506', celular: '777 123 4506' },
+    informacionComplementaria: {
+      tieneEnfermedadPreexistente: false, tieneDiscapacidad: false,
+      padresHablanLenguaIndigena: false, hablaLenguaIndigena: false,
+      seIdentificaIndigena: false, seIdentificaNoBinario: false,
+      perteneceComunidadLgbttiq: false, esAfrodescendiente: false,
+    },
+    ingresos: {
+      ingresoMensualFamiliar: 12000, trabaja: false, tipoTrabajo: '', telefonoTrabajo: '',
+      ingresoMensual: null, nombreEmpresa: '', puesto: '', horaInicio: '', horaFin: '',
+    },
+    seleccionCarrera: { modalidad: 'Presencial' },
+    antecedentesEscolares: {
+      nombrePreparatoria: 'Preparatoria Emiliano Zapata', tipoBachillerato: 'General',
+      estudioBachilleratoEnMexico: true,
+      estadoPreparatoria: 'Morelos', municipioPreparatoria: 'Cuernavaca',
+      paisPreparatoria: '', ciudadPreparatoria: '',
+      promedio: 8.7, cct: '17EBH0045X', cctConfirmacion: '17EBH0045X',
+    },
+  }
+}
 
 /**
  * Example candidates spanning all 6 `CandidateStatus` values so every
@@ -114,6 +191,7 @@ export const mockCandidates: Candidate[] = [
     induccionHabilitada: true,
     pagoFicha: { status: 'CONFIRMADO', monto: 500, referencia: 'REF-88216', metodo: 'Evo Payments', fecha: '11/05/2026' },
     pagoInduccion: { status: 'CONFIRMADO', monto: 350, referencia: 'REF-91003', metodo: 'Evo Payments', fecha: '15/05/2026' },
+    fichaCompleta: makeFichaDiegoHerrera(),
   },
   {
     id: '7',
@@ -169,5 +247,6 @@ export const mockCandidates: Candidate[] = [
     induccionHabilitada: true,
     pagoFicha: { status: 'EXENTO', monto: 0, montoOriginal: 500, referencia: 'DESC-100', metodo: 'Descuento 100%', fecha: '01/05/2026' },
     pagoInduccion: { status: 'EXENTO', monto: 0, montoOriginal: 350, referencia: 'DESC-100', metodo: 'Descuento 100%', fecha: '01/05/2026' },
+    fichaCompleta: makeFichaEmilianoCastro(),
   },
 ]

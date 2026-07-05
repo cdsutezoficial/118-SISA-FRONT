@@ -16,6 +16,23 @@ import type {
 export const ACTIVE_PERIOD = 'Enero – Abril 2026'
 
 /**
+ * Dependent Municipio catalog, keyed by Estado — Screen 4 Paso 2's domicilio
+ * and antecedentes-de-bachillerato subsections both use this so the
+ * "Municipio dependiente de Estado" cascade (Figma spec) is honored literally,
+ * unlike Admisión's flat `MUNICIPIOS_CATALOGO` shortcut (see design.md's
+ * "Municipio as a real dependent Select" decision). Morelos is fully seeded
+ * (UTEZ's home state); a few neighboring estados carry a token entry each —
+ * full INEGI depth is out of scope for this mock frontend.
+ */
+export const MUNICIPIOS_POR_ESTADO: Record<string, string[]> = {
+  Morelos: ['Cuernavaca', 'Emiliano Zapata', 'Jiutepec', 'Temixco', 'Xochitepec', 'Yautepec'],
+  'Ciudad de México': ['Álvaro Obregón', 'Coyoacán', 'Iztapalapa', 'Tlalpan'],
+  'Estado de México': ['Toluca', 'Naucalpan', 'Ecatepec de Morelos'],
+  Guerrero: ['Acapulco de Juárez', 'Chilpancingo de los Bravo'],
+  Puebla: ['Puebla', 'Cholula de Rivadavia'],
+}
+
+/**
  * Example students spanning new-ingreso (this period) and reinscripción
  * (continuing from an earlier period) cases, plus a non-ACTIVE status
  * (`TEMPORARY_LOW`) so status badges have variety from the start.
@@ -169,6 +186,55 @@ export const mockEnrollmentSlips: EnrollmentSlip[] = [
   { id: 's4', studentId: '4', status: 'DELIVERED', generatedAt: '16/01/2026', deliveredAt: '22/01/2026' },
   { id: 's5', studentId: '5', status: 'READY', generatedAt: '17/01/2026', deliveredAt: null },
   { id: 's6', studentId: '6', status: 'DELIVERED', generatedAt: '04/05/2020', deliveredAt: '11/05/2020' },
+]
+
+/**
+ * Groups a new-ingreso student can be assigned to (Screen 4 Paso 3). Lighter
+ * than a full `Class` aggregate — per design.md's "Screen 3 tabs & Screen 7
+ * side-panel need two deferred entities" decision, `Class`/`CourseClass`
+ * isn't modeled yet; this is the minimal shape the wizard's Grupo step needs
+ * (nivel/turno/capacidad + a materias-of-the-group table).
+ */
+export const mockGroups: {
+  grupo: string
+  nivel: string
+  turno: string
+  capacidad: number
+  materias: { materia: string; clave: string; creditos: number; horario: string }[]
+}[] = [
+  {
+    grupo: 'IDGS-101-A',
+    nivel: '1er Cuatrimestre TSU',
+    turno: 'Matutino',
+    capacidad: 35,
+    materias: [
+      { materia: 'Fundamentos de Programación', clave: 'FP-101', creditos: 6, horario: 'Lun-Vie 07:00-09:00' },
+      { materia: 'Cálculo Diferencial', clave: 'CAL-101', creditos: 8, horario: 'Lun-Vie 09:00-11:00' },
+      { materia: 'Taller de Ética', clave: 'ETI-101', creditos: 4, horario: 'Mar-Jue 11:00-12:30' },
+    ],
+  },
+  {
+    grupo: 'IDGS-101-B',
+    nivel: '1er Cuatrimestre TSU',
+    turno: 'Vespertino',
+    capacidad: 30,
+    materias: [
+      { materia: 'Fundamentos de Programación', clave: 'FP-101', creditos: 6, horario: 'Lun-Vie 16:00-18:00' },
+      { materia: 'Cálculo Diferencial', clave: 'CAL-101', creditos: 8, horario: 'Lun-Vie 18:00-20:00' },
+      { materia: 'Taller de Ética', clave: 'ETI-101', creditos: 4, horario: 'Mar-Jue 20:00-21:30' },
+    ],
+  },
+  {
+    grupo: 'II-101-A',
+    nivel: '1er Cuatrimestre TSU',
+    turno: 'Matutino',
+    capacidad: 32,
+    materias: [
+      { materia: 'Fundamentos de Programación', clave: 'FP-101', creditos: 6, horario: 'Lun-Vie 07:00-09:00' },
+      { materia: 'Cálculo Diferencial', clave: 'CAL-101', creditos: 8, horario: 'Lun-Vie 09:00-11:00' },
+      { materia: 'Procesos de Manufactura', clave: 'PM-101', creditos: 6, horario: 'Mié-Vie 11:00-13:00' },
+    ],
+  },
 ]
 
 /** Expediente físico — only seeded for a couple of students; Screen 7 will expand this. */
