@@ -63,9 +63,9 @@ Single PR, sub-commit per step (form is lifted/shared across steps). Fallback sp
 
 ## Phase 5: Documentos Institucionales (PR 5) [spec: Documentos Institucionales]
 
-- [ ] 5.1 Create `DocumentosInstitucionales.tsx`: CRUD list + register/edit modal (FileUpload PDF); scope GLOBAL/DIVISION/PROGRAM field-gating (división required for DIVISION/PROGRAM, programa only for PROGRAM, both hidden for GLOBAL); ACTIVE/INACTIVE toggle; inline acceptance-list view
-- [ ] 5.2 Wire `router.tsx` `documentos` stub → component
-- [ ] 5.3 Verify: PROGRAM scope blocks save without división+programa; GLOBAL hides both fields; tsc + build clean
+- [x] 5.1 Create `DocumentosInstitucionales.tsx`: CRUD list + register/edit modal (FileUpload PDF); scope GLOBAL/DIVISION/PROGRAM field-gating (división required for DIVISION/PROGRAM, programa only for PROGRAM, both hidden for GLOBAL); ACTIVE/INACTIVE toggle; inline acceptance-list view
+- [x] 5.2 Wire `router.tsx` `documentos` stub → component
+- [x] 5.3 Verify: PROGRAM scope blocks save without división+programa; GLOBAL hides both fields; tsc + build clean
 
 ## Phase 6: Expediente Recibidos (PR 6, parallel to PR 5) [spec: Expediente Delivery Checklist]
 
