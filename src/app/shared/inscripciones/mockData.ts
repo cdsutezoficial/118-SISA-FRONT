@@ -5,6 +5,7 @@ import type {
   StudentDocument,
   InstitutionalDocument,
   DocumentAcceptance,
+  StudentProgramHistory,
 } from './types'
 
 /**
@@ -245,4 +246,21 @@ export const mockDocumentAcceptances: DocumentAcceptance[] = [
       { id: 'dai2', documentId: 'doc2' },
     ],
   },
+]
+
+/**
+ * Program-change bitácora (RF-INS-007) for Screen 3's "Historial de
+ * Programas" tab. Invariant enforced by construction: every `studentId` has
+ * exactly one open row (`hasta: null`). Luis (id 2) carries two rows —
+ * closed `IRT-2021` → open `IRT-2022` — to demonstrate a real `CAMBIO_PLAN`
+ * history; every other student only has their original `INGRESO` row.
+ */
+export const mockStudentProgramHistory: StudentProgramHistory[] = [
+  { id: 'ph1', studentId: '1', programa: 'Ingeniería en Desarrollo y Gestión de Software', plan: 'IDGS-2022', desde: '15/01/2026', hasta: null, tipoCambio: 'INGRESO' },
+  { id: 'ph2', studentId: '2', programa: 'Ingeniería en Redes y Telecomunicaciones', plan: 'IRT-2021', desde: '10/09/2023', hasta: '05/09/2024', tipoCambio: 'INGRESO' },
+  { id: 'ph3', studentId: '2', programa: 'Ingeniería en Redes y Telecomunicaciones', plan: 'IRT-2022', desde: '06/09/2024', hasta: null, tipoCambio: 'CAMBIO_PLAN' },
+  { id: 'ph4', studentId: '3', programa: 'Ingeniería en Desarrollo y Gestión de Software', plan: 'IDGS-2022', desde: '05/09/2022', hasta: null, tipoCambio: 'INGRESO' },
+  { id: 'ph5', studentId: '4', programa: 'Ingeniería Industrial', plan: 'II-2021', desde: '15/01/2026', hasta: null, tipoCambio: 'INGRESO' },
+  { id: 'ph6', studentId: '5', programa: 'Ingeniería en Desarrollo y Gestión de Software', plan: 'IDGS-2022', desde: '16/01/2026', hasta: null, tipoCambio: 'INGRESO' },
+  { id: 'ph7', studentId: '6', programa: 'Licenciatura en Administración', plan: 'LADM-2015', desde: '02/05/2020', hasta: null, tipoCambio: 'INGRESO' },
 ]

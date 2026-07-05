@@ -37,10 +37,10 @@ Order: PR1 → PR2 → PR3 → PR4 → (PR5 ∥ PR6), all base `main`.
 
 ## Phase 2: Estudiante Detalle (PR 2) [spec: Estudiante Detalle]
 
-- [ ] 2.1 Add `ProgramChangeType`/`StudentProgramHistory` to `src/app/shared/inscripciones/types.ts`; add `mockStudentProgramHistory` to `mockData.ts` (exactly one open row per student, `hasta: null`)
-- [ ] 2.2 Create `EstudianteDetalle.tsx`: summary card + 4 tabs (Info General/Historial Académico/Historial Programas/Documentos); Cambiar-Programa mock modal (Confirmar blocked until all 4 fields set)
-- [ ] 2.3 Wire `router.tsx` `estudiantes/detalle` stub → component
-- [ ] 2.4 Verify: one open program-history row per student; modal gate blocks partial fields; tsc + build clean
+- [x] 2.1 Add `ProgramChangeType`/`StudentProgramHistory` to `src/app/shared/inscripciones/types.ts`; add `mockStudentProgramHistory` to `mockData.ts` (exactly one open row per student, `hasta: null`)
+- [x] 2.2 Create `EstudianteDetalle.tsx`: summary card + 4 tabs (Info General/Historial Académico/Historial Programas/Documentos); Cambiar-Programa mock modal (Confirmar blocked until all 4 fields set)
+- [x] 2.3 Wire `router.tsx` `estudiantes/detalle` stub → component
+- [x] 2.4 Verify: one open program-history row per student; modal gate blocks partial fields; tsc + build clean
 
 ## Phase 3: Nuevo Ingreso Wizard (PR 3, size:exception) [spec: Nuevo Ingreso Wizard]
 

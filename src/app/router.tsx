@@ -32,10 +32,11 @@ import HabilitarInduccion from './pages/admision/HabilitarInduccion'
 import PortalInduccion from './pages/portal/PortalInduccion'
 import PortalInduccionPago from './pages/portal/PortalInduccionPago'
 
-// Inscripciones — Screens 1-2 are real; Screens 3-7 remain Foundation A
+// Inscripciones — Screens 1-3 are real; Screens 4-7 remain Foundation A
 // stubs until their own `inscripciones/screen-0N-*` work units land.
 import InscripcionesDashboard from './pages/inscripciones/InscripcionesDashboard'
 import EstudiantesList from './pages/inscripciones/EstudiantesList'
+import EstudianteDetalle from './pages/inscripciones/EstudianteDetalle'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -189,9 +190,9 @@ const router = createBrowserRouter([
 
       // Inscripciones
       //
-      // Screens 1-2 (Dashboard, Estudiantes — Listado) are real; Screens 3-7
-      // remain Foundation A stubs until their own `inscripciones/screen-0N-*`
-      // work units land.
+      // Screens 1-3 (Dashboard, Estudiantes — Listado, Estudiante — Detalle)
+      // are real; Screens 4-7 remain Foundation A stubs until their own
+      // `inscripciones/screen-0N-*` work units land.
       //
       // Role guard: mirrors Admisión's rule — the index route (`/inscripciones`,
       // the Dashboard) is the ONE deliberate exception, NEVER wrapped in
@@ -212,7 +213,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'estudiantes/detalle',
-            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><div className="p-6 text-sm text-[#6B7280]">Estudiante — Detalle (próximamente)</div></RequireRole>,
+            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><EstudianteDetalle /></RequireRole>,
           },
           {
             path: 'nuevo-ingreso',
