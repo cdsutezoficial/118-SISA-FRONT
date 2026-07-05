@@ -237,18 +237,57 @@ export const mockGroups: {
   },
 ]
 
-/** Expediente físico — only seeded for a couple of students; Screen 7 will expand this. */
+/**
+ * Expediente físico — Screen 7 (Expediente Recibidos) checklist source. Every
+ * student now has one row per `REQUIRED_DOCUMENT_TYPES` entry (see
+ * `ExpedienteRecibidos.tsx`) so the delivered/total progress indicator and
+ * "estado expediente" badge are always well-defined (never a 0/0 vacuous
+ * "Completo"). Mix of already-complete (id 3), near-complete (id 2, id 1),
+ * partial (id 6), and not-started (id 4) students for the demo.
+ */
 export const mockStudentDocuments: StudentDocument[] = [
-  { id: 'd1', studentId: '2', documentType: 'ACTA_NACIMIENTO', receivedAt: '20/09/2023', receivedBy: 'Rosa Elena Pacheco' },
-  { id: 'd2', studentId: '2', documentType: 'CURP', receivedAt: '20/09/2023', receivedBy: 'Rosa Elena Pacheco' },
-  { id: 'd3', studentId: '2', documentType: 'CERTIFICADO_BACHILLERATO', receivedAt: null, receivedBy: null },
-  { id: 'd4', studentId: '2', documentType: 'FOTOGRAFIA', receivedAt: '20/09/2023', receivedBy: 'Rosa Elena Pacheco' },
-  { id: 'd5', studentId: '2', documentType: 'COMPROBANTE_DOMICILIO', receivedAt: null, receivedBy: null },
-  { id: 'd6', studentId: '5', documentType: 'ACTA_NACIMIENTO', receivedAt: null, receivedBy: null },
-  { id: 'd7', studentId: '5', documentType: 'CURP', receivedAt: '17/01/2026', receivedBy: 'Rosa Elena Pacheco' },
-  { id: 'd8', studentId: '5', documentType: 'CERTIFICADO_BACHILLERATO', receivedAt: null, receivedBy: null },
-  { id: 'd9', studentId: '5', documentType: 'FOTOGRAFIA', receivedAt: null, receivedBy: null },
-  { id: 'd10', studentId: '5', documentType: 'COMPROBANTE_DOMICILIO', receivedAt: null, receivedBy: null },
+  // Ana García López (id 1) — PENDING student, 4/5 delivered: the intended
+  // "mark the last one → flips to Completo" manual-verification scenario.
+  { id: 'd1', studentId: '1', documentType: 'ACTA_NACIMIENTO', receivedAt: '15/06/2026', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd2', studentId: '1', documentType: 'CURP', receivedAt: '15/06/2026', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd3', studentId: '1', documentType: 'CERTIFICADO_BACHILLERATO', receivedAt: '18/06/2026', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd4', studentId: '1', documentType: 'FOTOGRAFIA', receivedAt: '18/06/2026', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd5', studentId: '1', documentType: 'COMPROBANTE_DOMICILIO', receivedAt: null, receivedBy: null },
+
+  // Luis Mendoza Ruiz (id 2) — 3/5 delivered.
+  { id: 'd6', studentId: '2', documentType: 'ACTA_NACIMIENTO', receivedAt: '20/09/2023', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd7', studentId: '2', documentType: 'CURP', receivedAt: '20/09/2023', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd8', studentId: '2', documentType: 'CERTIFICADO_BACHILLERATO', receivedAt: null, receivedBy: null },
+  { id: 'd9', studentId: '2', documentType: 'FOTOGRAFIA', receivedAt: '20/09/2023', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd10', studentId: '2', documentType: 'COMPROBANTE_DOMICILIO', receivedAt: null, receivedBy: null },
+
+  // María Torres Soto (id 3) — 5/5 delivered: already-Completo demo row.
+  { id: 'd11', studentId: '3', documentType: 'ACTA_NACIMIENTO', receivedAt: '08/09/2022', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd12', studentId: '3', documentType: 'CURP', receivedAt: '08/09/2022', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd13', studentId: '3', documentType: 'CERTIFICADO_BACHILLERATO', receivedAt: '10/09/2022', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd14', studentId: '3', documentType: 'FOTOGRAFIA', receivedAt: '10/09/2022', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd15', studentId: '3', documentType: 'COMPROBANTE_DOMICILIO', receivedAt: '10/09/2022', receivedBy: 'Rosa Elena Pacheco' },
+
+  // Pedro Ramírez Cruz (id 4) — 0/5: not-started demo row (TEMPORARY_LOW status, unrelated to expediente).
+  { id: 'd16', studentId: '4', documentType: 'ACTA_NACIMIENTO', receivedAt: null, receivedBy: null },
+  { id: 'd17', studentId: '4', documentType: 'CURP', receivedAt: null, receivedBy: null },
+  { id: 'd18', studentId: '4', documentType: 'CERTIFICADO_BACHILLERATO', receivedAt: null, receivedBy: null },
+  { id: 'd19', studentId: '4', documentType: 'FOTOGRAFIA', receivedAt: null, receivedBy: null },
+  { id: 'd20', studentId: '4', documentType: 'COMPROBANTE_DOMICILIO', receivedAt: null, receivedBy: null },
+
+  // Diego Fernández Ruiz (id 5) — 1/5 delivered.
+  { id: 'd21', studentId: '5', documentType: 'ACTA_NACIMIENTO', receivedAt: null, receivedBy: null },
+  { id: 'd22', studentId: '5', documentType: 'CURP', receivedAt: '17/01/2026', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd23', studentId: '5', documentType: 'CERTIFICADO_BACHILLERATO', receivedAt: null, receivedBy: null },
+  { id: 'd24', studentId: '5', documentType: 'FOTOGRAFIA', receivedAt: null, receivedBy: null },
+  { id: 'd25', studentId: '5', documentType: 'COMPROBANTE_DOMICILIO', receivedAt: null, receivedBy: null },
+
+  // Sofía Ramírez Cordero (id 6) — 3/5 delivered.
+  { id: 'd26', studentId: '6', documentType: 'ACTA_NACIMIENTO', receivedAt: '04/05/2020', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd27', studentId: '6', documentType: 'CURP', receivedAt: '04/05/2020', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd28', studentId: '6', documentType: 'CERTIFICADO_BACHILLERATO', receivedAt: '06/05/2020', receivedBy: 'Rosa Elena Pacheco' },
+  { id: 'd29', studentId: '6', documentType: 'FOTOGRAFIA', receivedAt: null, receivedBy: null },
+  { id: 'd30', studentId: '6', documentType: 'COMPROBANTE_DOMICILIO', receivedAt: null, receivedBy: null },
 ]
 
 /** Matches Screen 6's example rows exactly. */
