@@ -69,6 +69,6 @@ Single PR, sub-commit per step (form is lifted/shared across steps). Fallback sp
 
 ## Phase 6: Expediente Recibidos (PR 6, parallel to PR 5) [spec: Expediente Delivery Checklist]
 
-- [ ] 6.1 Create `ExpedienteRecibidos.tsx`: delivered/total progress indicator, estado-expediente badge (Completo only when all required `StudentDocument` received); row select opens inline right side-panel checklist (Entregado/Pendiente, no navigation); marking delivered sets `receivedAt`/`receivedBy`, does NOT alter `Student.status`
-- [ ] 6.2 Wire `router.tsx` `expediente` stub → component
-- [ ] 6.3 Verify: last doc delivered flips badge to Completo (5/5); `Student.status` unchanged after delivery; tsc + build clean
+- [x] 6.1 Create `ExpedienteRecibidos.tsx`: delivered/total progress indicator, estado-expediente badge (Completo only when all required `StudentDocument` received); row select opens inline right side-panel checklist (Entregado/Pendiente, no navigation); marking delivered sets `receivedAt`/`receivedBy`, does NOT alter `Student.status`
+- [x] 6.2 Wire `router.tsx` `expediente` stub → component
+- [x] 6.3 Verify: last doc delivered flips badge to Completo (5/5); `Student.status` unchanged after delivery; tsc + build clean

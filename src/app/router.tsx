@@ -32,14 +32,14 @@ import HabilitarInduccion from './pages/admision/HabilitarInduccion'
 import PortalInduccion from './pages/portal/PortalInduccion'
 import PortalInduccionPago from './pages/portal/PortalInduccionPago'
 
-// Inscripciones — Screens 1-4 are real; Screens 5-7 remain Foundation A
-// stubs until their own `inscripciones/screen-0N-*` work units land.
+// Inscripciones — all 7 screens are real.
 import InscripcionesDashboard from './pages/inscripciones/InscripcionesDashboard'
 import EstudiantesList from './pages/inscripciones/EstudiantesList'
 import EstudianteDetalle from './pages/inscripciones/EstudianteDetalle'
 import NuevoIngresoWizard from './pages/inscripciones/NuevoIngresoWizard'
 import ReinscripcionWizard from './pages/inscripciones/ReinscripcionWizard'
 import DocumentosInstitucionales from './pages/inscripciones/DocumentosInstitucionales'
+import ExpedienteRecibidos from './pages/inscripciones/ExpedienteRecibidos'
 
 // Divisiones
 import DivisionesList from './pages/DivisionesList'
@@ -193,10 +193,9 @@ const router = createBrowserRouter([
 
       // Inscripciones
       //
-      // Screens 1-6 (Dashboard, Estudiantes — Listado, Estudiante — Detalle,
-      // Inscripción Nuevo Ingreso, Reinscripción, Documentos Institucionales)
-      // are real; Screen 7 remains a Foundation A stub until its own
-      // `inscripciones/screen-0N-*` work unit lands.
+      // All 7 screens (Dashboard, Estudiantes — Listado, Estudiante — Detalle,
+      // Inscripción Nuevo Ingreso, Reinscripción, Documentos Institucionales,
+      // Expediente — Documentos Recibidos) are real as of Screen 7 landing.
       //
       // Role guard: mirrors Admisión's rule — the index route (`/inscripciones`,
       // the Dashboard) is the ONE deliberate exception, NEVER wrapped in
@@ -233,7 +232,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'expediente',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><div className="p-6 text-sm text-[#6B7280]">Expediente — Documentos Recibidos (próximamente)</div></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><ExpedienteRecibidos /></RequireRole>,
           },
         ],
       },
