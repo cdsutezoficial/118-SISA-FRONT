@@ -24,32 +24,34 @@ Chain strategy: pending
 
 ## Phase 1: Foundation (env + auth helper)
 
-- [ ] 1.1 Create `.env.development` with `VITE_API_URL=http://localhost:8080`
-- [ ] 1.2 Create `.env.example` mirroring 1.1 (committed template)
-- [ ] 1.3 Create `src/app/shared/auth.ts`: `API_URL`, `ROLE_MAP`, `mapRole()`, `decodeJwtPayload()` (base64url), storage key helpers (`sisa.accessToken`/`refreshToken`/`authMode`/`mustChangePassword`), `apiLogin()`, `apiChangePassword()`, types `LoginResponse`/`JwtClaims`/`ApiError`
+- [x] 1.1 Create `.env.development` with `VITE_API_URL=http://localhost:8080`
+- [x] 1.2 Create `.env.example` mirroring 1.1 (committed template)
+- [x] 1.3 Create `src/app/shared/auth.ts`: `API_URL`, `ROLE_MAP`, `mapRole()`, `decodeJwtPayload()` (base64url), storage key helpers (`sisa.accessToken`/`refreshToken`/`authMode`/`mustChangePassword`), `apiLogin()`, `apiChangePassword()`, types `LoginResponse`/`JwtClaims`/`ApiError`
 
 ## Phase 2: Session State — RoleContext (depends: Phase 1)
 
-- [ ] 2.1 Modify `src/app/shared/RoleContext.tsx`: add `authMode`/`mustChangePassword`/session fields; keep `role`/`setRole`/`availableRoles`/`user` unchanged — *useRole Hook and Provider (MOD)*
-- [ ] 2.2 Add `login(res)`: persist tokens, decode JWT, `mapRole()` → `role`, set `authMode='real'` + `mustChangePassword` — *Login Establishes Or Rejects A Real Session; JWT-derived role scenario*
-- [ ] 2.3 Add `logout()`: clear tokens/claims/`mustChangePassword`, keep `authMode='real'` — *Logout Clears Session State*
-- [ ] 2.4 Add `completePasswordChange()`: clear `mustChangePassword` — *Mandatory Password Change (completion)*
-- [ ] 2.5 Add rehydration effect on mount: restore session from storage if present — *session persists across reload scenario*
+- [x] 2.1 Modify `src/app/shared/RoleContext.tsx`: add `authMode`/`mustChangePassword`/session fields; keep `role`/`setRole`/`availableRoles`/`user` unchanged — *useRole Hook and Provider (MOD)*
+- [x] 2.2 Add `login(res)`: persist tokens, decode JWT, `mapRole()` → `role`, set `authMode='real'` + `mustChangePassword` — *Login Establishes Or Rejects A Real Session; JWT-derived role scenario*
+- [x] 2.3 Add `logout()`: clear tokens/claims/`mustChangePassword`, keep `authMode='real'` — *Logout Clears Session State*
+- [x] 2.4 Add `completePasswordChange()`: clear `mustChangePassword` — *Mandatory Password Change (completion)*
+- [x] 2.5 Add rehydration effect on mount: restore session from storage if present — *session persists across reload scenario*
 
 ## Phase 3: Route Gate (depends: Phase 2)
 
-- [ ] 3.1 Create `src/app/shared/RequireAuth.tsx`: mock mode passthrough; real mode redirects `/login` on missing/expired token (calls `logout()`), redirects `/usuarios/cambiar-password` while `mustChangePassword` pending — *Authenticated Routes Gated By Session State; Mandatory Password Change (nav blocked); Logout (no stale access)*
-- [ ] 3.2 Modify `src/app/router.tsx`: wrap shell group `element: <RequireAuth><AppLayout/></RequireAuth>`
+- [x] 3.1 Create `src/app/shared/RequireAuth.tsx`: mock mode passthrough; real mode redirects `/login` on missing/expired token (calls `logout()`), redirects `/usuarios/cambiar-password` while `mustChangePassword` pending — *Authenticated Routes Gated By Session State; Mandatory Password Change (nav blocked); Logout (no stale access)*
+- [x] 3.2 Modify `src/app/router.tsx`: wrap shell group `element: <RequireAuth><AppLayout/></RequireAuth>`
 
 ## Phase 4: Screens & Navbar (depends: Phase 2; parallelizable — disjoint files)
 
-- [ ] 4.1 Modify `src/app/pages/Login.tsx`: replace `setTimeout` with `apiLogin()`; map 401/423/network → inline banners; on success call `login(res)`, navigate per `mustChangePassword` — *Login Establishes Or Rejects A Real Session (all scenarios)*
-- [ ] 4.2 Modify `src/app/pages/CambiarPassword.tsx`: call `apiChangePassword()` with Bearer; inline error banner (401/403 → `logout()`+redirect); hide Cancelar/breadcrumb nav-away while pending; on 200 → `completePasswordChange()` → `/dashboard` — *Mandatory Password Change (completion)*
-- [ ] 4.3 Modify `src/app/layouts/AppLayout.tsx`: "Cerrar sesión" → `logout()` + navigate `/login`; hide/disable role-switcher when `authMode==='real'`, unchanged in mock mode — *Navbar Role Dropdown (MOD, both scenarios)*
+- [x] 4.1 Modify `src/app/pages/Login.tsx`: replace `setTimeout` with `apiLogin()`; map 401/423/network → inline banners; on success call `login(res)`, navigate per `mustChangePassword` — *Login Establishes Or Rejects A Real Session (all scenarios)*
+- [x] 4.2 Modify `src/app/pages/CambiarPassword.tsx`: call `apiChangePassword()` with Bearer; inline error banner (401/403 → `logout()`+redirect); hide Cancelar/breadcrumb nav-away while pending; on 200 → `completePasswordChange()` → `/dashboard` — *Mandatory Password Change (completion)* (dual-mode judgment call: mock-mode submissions keep the legacy simulated flow instead of hitting the real API — see apply-progress deviations)
+- [x] 4.3 Modify `src/app/layouts/AppLayout.tsx`: "Cerrar sesión" → `logout()` + navigate `/login`; hide/disable role-switcher when `authMode==='real'`, unchanged in mock mode — *Navbar Role Dropdown (MOD, both scenarios)*
 
 ## Phase 5: Manual Verification (depends: Phases 1-4; no test runner in repo)
 
 Run `pnpm typecheck` first (only automated gate). Then, backend on `:8080` seeded with an ADMIN user, `pnpm dev` running:
+
+`pnpm typecheck` and `pnpm build` both PASS (exit code 0). Backend contract (POST /auth/login 200/401, POST /auth/change-password 204) verified live via curl against a running `118-SISA-BACK` instance seeded with an ADMIN user, and the real JWT it returned was decoded correctly by the exact `decodeJwtPayload`/`mapRole` logic in `auth.ts` (confirmed with a standalone Node script — `roles:['ADMIN']` → `ADMINISTRADOR`). Every changed module was also confirmed to transform cleanly through the Vite dev server (200 on each file). No browser-automation tool was available in this session to click through the actual UI, so the scenarios below are NOT checked off — they were reasoned through against the implemented code paths, not visually confirmed in a live browser. Recommend a manual pass in an actual browser before merge.
 
 - [ ] 5.1 Mock mode unaffected: fresh tab, switcher changes role live for all consumers, no reload
 - [ ] 5.2 Valid ADMIN login → tokens stored, role derived `ADMINISTRADOR`, redirected to `/dashboard`
