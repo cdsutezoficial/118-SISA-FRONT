@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { ChevronRight, Eye, EyeOff, AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router'
+import { useRole } from '../shared/RoleContext'
+import { apiChangePassword, getAccessToken } from '../shared/auth'
+import type { ApiError } from '../shared/auth'
 
 // ─── Password strength ─────────────────────────────────────────────────────────
 
@@ -71,12 +74,14 @@ function PasswordInput({ id, value, onChange, placeholder, hasError, disabled }:
 
 export default function CambiarPassword() {
   const navigate = useNavigate()
+  const { authMode, mustChangePassword, completePasswordChange, logout } = useRole()
   const [actual, setActual] = useState('')
   const [nueva, setNueva] = useState('')
   const [confirmar, setConfirmar] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [apiErrorMsg, setApiErrorMsg] = useState('')
 
   const strength = calcStrength(nueva)
 
@@ -85,23 +90,54 @@ export default function CambiarPassword() {
   const errCoincide  = submitted && !!confirmar && nueva !== confirmar
   const noCoincide   = !!confirmar && nueva !== confirmar
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitted(true)
+    setApiErrorMsg('')
     if (!actual.trim() || !nueva.trim() || nueva !== confirmar) return
     setLoading(true)
-    setTimeout(() => {
+
+    // Mock mode has no real session/token — only ADMIN has a backend user
+    // today, so every other role's dev workflow keeps the legacy simulation
+    // unchanged (this change scopes real integration to login/session only).
+    if (authMode === 'mock') {
+      setTimeout(() => {
+        setLoading(false)
+        setDone(true)
+        setTimeout(() => navigate('/dashboard'), 2500)
+      }, 1000)
+      return
+    }
+
+    try {
+      const token = getAccessToken()
+      if (!token) throw { status: 401 } as ApiError
+      await apiChangePassword(actual, nueva, token)
       setLoading(false)
       setDone(true)
+      completePasswordChange()
       setTimeout(() => navigate('/dashboard'), 2500)
-    }, 1000)
+    } catch (err) {
+      setLoading(false)
+      const apiErr = err as Partial<ApiError>
+      if (apiErr.status === 401 || apiErr.status === 403) {
+        logout()
+        navigate('/login')
+        return
+      }
+      setApiErrorMsg(apiErr.message ?? 'No se pudo actualizar la contraseña. Intenta de nuevo.')
+    }
   }
 
   return (
     <div className="max-w-[1100px] mx-auto px-8 py-8">
-      {/* Breadcrumb */}
+      {/* Breadcrumb — "Inicio" nav-away is disabled while a password change is
+          mandatory (first login / forced change): the user must complete it
+          before reaching any other authenticated route. */}
       <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
+        {mustChangePassword
+          ? <span className="cursor-not-allowed opacity-60">Inicio</span>
+          : <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>}
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Mi Cuenta</span>
         <ChevronRight size={13} />
@@ -195,14 +231,25 @@ export default function CambiarPassword() {
                   <p className="mt-1 flex items-center gap-1 text-[12px] text-emerald-600"><CheckCircle2 size={12} />Las contraseñas coinciden.</p>
                 )}
               </div>
+
+              {/* API error banner */}
+              {apiErrorMsg && (
+                <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700">
+                  <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                  {apiErrorMsg}
+                </div>
+              )}
             </div>
 
-            {/* Actions */}
+            {/* Actions — Cancelar is hidden while a password change is
+                mandatory; there is nowhere else authenticated to go back to. */}
             <div className="flex items-center justify-end gap-3 mt-6">
-              <button type="button" onClick={() => navigate('/dashboard')}
-                className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
-                Cancelar
-              </button>
+              {!mustChangePassword && (
+                <button type="button" onClick={() => navigate('/dashboard')}
+                  className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+                  Cancelar
+                </button>
+              )}
               <button type="submit" disabled={loading}
                 className={`flex items-center gap-2 px-5 py-2 text-[13px] font-semibold rounded-md transition-all ${
                   loading

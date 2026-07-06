@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router'
 import AuthLayout from './layouts/AuthLayout'
 import AppLayout from './layouts/AppLayout'
 import { RequireRole } from './shared/RequireRole'
+import { RequireAuth } from './shared/RequireAuth'
 
 // Auth pages
 import Login from './pages/Login'
@@ -111,8 +112,12 @@ const router = createBrowserRouter([
   },
 
   // ─── Shell layout (Navbar + Sidebar) ────────────────────────────────────────
+  // Gated by `RequireAuth`: mock mode passes through unchanged; a real
+  // session must be present/non-expired, and a pending mandatory password
+  // change is force-routed to `/usuarios/cambiar-password`. See
+  // `shared/RequireAuth.tsx`.
   {
-    element: <AppLayout />,
+    element: <RequireAuth><AppLayout /></RequireAuth>,
     children: [
       { path: 'dashboard', element: <Dashboard /> },
 
