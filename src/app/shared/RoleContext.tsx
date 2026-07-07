@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   mapRole,
@@ -117,17 +117,18 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [mockRole, setMockRoleState] = useState<Role | null>(readStoredRole)
   const [authMode, setAuthModeState] = useState<'mock' | 'real'>(getStoredAuthMode)
   const [mustChangePassword, setMustChangePasswordState] = useState<boolean>(getStoredMustChangePassword)
-  const [claims, setClaims] = useState<JwtClaims | null>(null)
-
-  // Rehydrate a real session from storage after a full reload. Runs once on
-  // mount only — `login()`/`logout()` update `claims` directly afterwards.
-  useEffect(() => {
-    if (getStoredAuthMode() !== 'real') return
+  // Lazy initializer (not a `useEffect`) so a real session's `claims` — and
+  // therefore `role` — is correct on the VERY FIRST render after a full
+  // reload/direct URL navigation. An effect-based rehydration leaves `claims`
+  // `null` for one render before running, which `RequireRole` reads
+  // synchronously — a route wrapped in `RequireRole` would bounce an already
+  // -authenticated real-mode user away on every hard reload, since `role`
+  // resolves to `null` before the effect ever fires.
+  const [claims, setClaims] = useState<JwtClaims | null>(() => {
+    if (getStoredAuthMode() !== 'real') return null
     const token = getAccessToken()
-    if (!token) return
-    setClaims(decodeJwtPayload(token))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    return token ? decodeJwtPayload(token) : null
+  })
 
   function setRole(next: Role | null) {
     writeStoredRole(next)
