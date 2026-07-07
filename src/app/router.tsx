@@ -285,7 +285,16 @@ const router = createBrowserRouter([
       { path: 'escalas/form', element: <EscalaForm /> },
 
       // Usuarios (includes extras: detalle + asignar-rol + cambiar-password)
-      { path: 'usuarios',                    element: <UsuariosList /> },
+      //
+      // Role guard: only the list route is wrapped here — `GET /users` is now
+      // enforced server-side to ADMIN/SERVICIOS_ESCOLARES, so wrapping the
+      // list gives a clean redirect instead of a raw 403/blank state for any
+      // other role. `usuarios/new`, `usuarios/detalle`, etc. are untouched —
+      // out of scope for this change.
+      {
+        path: 'usuarios',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><UsuariosList /></RequireRole>,
+      },
       { path: 'usuarios/new',                element: <UsuariosForm /> },
       { path: 'usuarios/form',               element: <UsuariosForm /> },
       { path: 'usuarios/detalle',            element: <UsuarioDetalle /> },

@@ -2,78 +2,213 @@ import { useState, useRef, useEffect } from 'react'
 import {
   ChevronRight, Search, Eye, Pencil, ToggleLeft, KeyRound, LockKeyholeOpen,
   Plus, ChevronLeft, ChevronRight as ChevRight, X, ChevronDown,
-  Clock, CheckCircle2, Info,
+  Clock, CheckCircle2, Info, Loader2, AlertCircle,
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '../shared/hooks'
+import { API_URL, getAccessToken } from '../shared/auth'
+import type { ApiError } from '../shared/auth'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface SelectOption { value: string; label: string }
 
+/** Full 11-value backend `RoleType` enum (see `01-identidad.md`) — deliberately
+ * broader than `RoleContext`'s `Role` union, which only covers the 5 roles
+ * with an existing dashboard screen. An admin managing accounts needs to see
+ * every role, including ones with no frontend concept yet (Docente,
+ * Estudiante, Egresado, the estadías roles). Local to this screen only —
+ * never merge into `auth.ts`'s `ROLE_MAP`/`mapRole`, which serves navigation
+ * gating, a different concern. */
+type BackendRoleType =
+  | 'ADMIN'
+  | 'SERVICIOS_ESCOLARES'
+  | 'GESTOR_ACADEMICO'
+  | 'DIRECTOR_DIVISION'
+  | 'JEFATURA_ESTADIAS'
+  | 'ASISTENTE_ESTADIAS'
+  | 'COORDINACION_ESTADIAS_DIVISION'
+  | 'PERSONAL_FINANZAS'
+  | 'DOCENTE'
+  | 'ESTUDIANTE'
+  | 'EGRESADO'
+
+type BackendUserStatus = 'ACTIVE' | 'INACTIVE' | 'LOCKED'
+
+interface UserRoleAssignment {
+  roleType: BackendRoleType
+  divisionId: string | null
+}
+
+interface UserListItem {
+  userId: string
+  personId: string
+  fullName: string
+  username: string
+  roles: UserRoleAssignment[]
+  status: BackendUserStatus
+  lastLoginAt: string | null
+}
+
+interface UsersPageResponse {
+  items: UserListItem[]
+  totalElements: number
+  totalPages: number
+  page: number
+  size: number
+}
+
 interface Usuario {
-  id: number
+  id: string
   nombre: string
   usuario: string
-  roles: string[]
+  roles: BackendRoleType[]
   ultimoAcceso: string
   estado: 'Activo' | 'Inactivo' | 'Bloqueada'
   initials: string
   avatarColor: string
 }
 
-// ─── Data ──────────────────────────────────────────────────────────────────────
+// ─── Role labels + badge styles (all 11 backend RoleType values) ──────────────
 
-const rolOptions: SelectOption[] = [
-  { value: 'Estudiante',       label: 'Estudiante' },
-  { value: 'Docente',          label: 'Docente' },
-  { value: 'Tutor',            label: 'Tutor' },
-  { value: 'Gestor Académico', label: 'Gestor Académico' },
-  { value: 'Administrador',    label: 'Administrador' },
-]
-
-const estadoOptions: SelectOption[] = [
-  { value: '',        label: 'Todos' },
-  { value: 'Activo',    label: 'Activo' },
-  { value: 'Inactivo',  label: 'Inactivo' },
-  { value: 'Bloqueada', label: 'Bloqueada' },
-]
-
-const rolStyle: Record<string, string> = {
-  'Estudiante':       'bg-blue-50 text-blue-700 border border-blue-200',
-  'Docente':          'bg-violet-50 text-violet-700 border border-violet-200',
-  'Tutor':            'bg-amber-50 text-amber-700 border border-amber-200',
-  'Gestor Académico': 'bg-teal-50 text-teal-700 border border-teal-200',
-  'Administrador':    'bg-[#e6f5f1] text-[#009574] border border-[#009574]/30',
+const ROLE_LABELS: Record<BackendRoleType, string> = {
+  ADMIN: 'Administrador',
+  SERVICIOS_ESCOLARES: 'Servicios Escolares',
+  GESTOR_ACADEMICO: 'Gestor Académico',
+  DIRECTOR_DIVISION: 'Director de División',
+  JEFATURA_ESTADIAS: 'Jefatura de Estadías',
+  ASISTENTE_ESTADIAS: 'Asistente de Estadías',
+  COORDINACION_ESTADIAS_DIVISION: 'Coordinación de Estadías de División',
+  PERSONAL_FINANZAS: 'Finanzas',
+  DOCENTE: 'Docente',
+  ESTUDIANTE: 'Estudiante',
+  EGRESADO: 'Egresado',
 }
 
-const allUsuarios: Usuario[] = [
-  {
-    id: 1, nombre: 'Ana García López', usuario: '202630001@utez.edu.mx',
-    roles: ['Estudiante'], ultimoAcceso: 'hace 2 horas', estado: 'Activo',
-    initials: 'AG', avatarColor: 'bg-blue-100 text-blue-700',
-  },
-  {
-    id: 2, nombre: 'Dr. Carlos Mendoza', usuario: 'cmendoza@utez.edu.mx',
-    roles: ['Docente', 'Tutor'], ultimoAcceso: 'hace 1 día', estado: 'Activo',
-    initials: 'CM', avatarColor: 'bg-violet-100 text-violet-700',
-  },
-  {
-    id: 3, nombre: 'Lic. Rosa Jiménez', usuario: 'rjimenez@utez.edu.mx',
-    roles: ['Gestor Académico'], ultimoAcceso: 'hace 3 días', estado: 'Activo',
-    initials: 'RJ', avatarColor: 'bg-teal-100 text-teal-700',
-  },
-  {
-    id: 4, nombre: 'Admin Sistema', usuario: 'admin@utez.edu.mx',
-    roles: ['Administrador'], ultimoAcceso: 'hace 5 min', estado: 'Activo',
-    initials: 'AS', avatarColor: 'bg-[#e6f5f1] text-[#009574]',
-  },
-  {
-    id: 5, nombre: 'Juan Torres Ríos', usuario: 'jtorres@utez.edu.mx',
-    roles: ['Docente'], ultimoAcceso: 'hace 2 días', estado: 'Bloqueada',
-    initials: 'JT', avatarColor: 'bg-red-100 text-red-700',
-  },
+const ROLE_BADGE_STYLE: Record<BackendRoleType, string> = {
+  ADMIN: 'bg-[#e6f5f1] text-[#009574] border border-[#009574]/30',
+  SERVICIOS_ESCOLARES: 'bg-blue-50 text-blue-700 border border-blue-200',
+  GESTOR_ACADEMICO: 'bg-teal-50 text-teal-700 border border-teal-200',
+  DIRECTOR_DIVISION: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+  JEFATURA_ESTADIAS: 'bg-purple-50 text-purple-700 border border-purple-200',
+  ASISTENTE_ESTADIAS: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200',
+  COORDINACION_ESTADIAS_DIVISION: 'bg-pink-50 text-pink-700 border border-pink-200',
+  PERSONAL_FINANZAS: 'bg-amber-50 text-amber-700 border border-amber-200',
+  DOCENTE: 'bg-violet-50 text-violet-700 border border-violet-200',
+  ESTUDIANTE: 'bg-cyan-50 text-cyan-700 border border-cyan-200',
+  EGRESADO: 'bg-orange-50 text-orange-700 border border-orange-200',
+}
+
+const rolOptions: SelectOption[] = (Object.keys(ROLE_LABELS) as BackendRoleType[]).map(value => ({
+  value,
+  label: ROLE_LABELS[value],
+}))
+
+const estadoOptions: SelectOption[] = [
+  { value: '',         label: 'Todos' },
+  { value: 'ACTIVE',   label: 'Activo' },
+  { value: 'INACTIVE', label: 'Inactivo' },
+  { value: 'LOCKED',   label: 'Bloqueada' },
 ]
+
+const ESTADO_LABEL: Record<BackendUserStatus, Usuario['estado']> = {
+  ACTIVE: 'Activo',
+  INACTIVE: 'Inactivo',
+  LOCKED: 'Bloqueada',
+}
+
+// ─── Avatar helpers ─────────────────────────────────────────────────────────
+
+const AVATAR_PALETTE = [
+  'bg-blue-100 text-blue-700',
+  'bg-violet-100 text-violet-700',
+  'bg-teal-100 text-teal-700',
+  'bg-amber-100 text-amber-700',
+  'bg-[#e6f5f1] text-[#009574]',
+  'bg-pink-100 text-pink-700',
+  'bg-indigo-100 text-indigo-700',
+  'bg-cyan-100 text-cyan-700',
+]
+
+/** Deterministic per-name color so a row's avatar doesn't flicker between
+ * refetches — backend has no color/avatar concept, this is purely cosmetic. */
+function avatarColorFor(name: string): string {
+  const sum = Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+  return AVATAR_PALETTE[sum % AVATAR_PALETTE.length]
+}
+
+function initialsFor(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
+}
+
+/** Simple relative-time formatting for `lastLoginAt`, mirroring the mock
+ * copy's tone ('hace 2 horas'). Falls back to a locale date past 30 days,
+ * and to 'Nunca' when the user has never logged in. */
+function formatUltimoAcceso(iso: string | null): string {
+  if (!iso) return 'Nunca'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return 'Nunca'
+  const diffMs = Date.now() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'hace instantes'
+  if (diffMin < 60) return `hace ${diffMin} min`
+  const diffHrs = Math.floor(diffMin / 60)
+  if (diffHrs < 24) return `hace ${diffHrs} hora${diffHrs === 1 ? '' : 's'}`
+  const diffDays = Math.floor(diffHrs / 24)
+  if (diffDays < 30) return `hace ${diffDays} día${diffDays === 1 ? '' : 's'}`
+  return date.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function mapUserToRow(item: UserListItem): Usuario {
+  const roles = item.roles.map(r => r.roleType)
+  return {
+    id: item.userId,
+    nombre: item.fullName,
+    usuario: item.username,
+    roles,
+    ultimoAcceso: formatUltimoAcceso(item.lastLoginAt),
+    estado: ESTADO_LABEL[item.status],
+    initials: initialsFor(item.fullName),
+    avatarColor: avatarColorFor(item.fullName),
+  }
+}
+
+// ─── GET /users ─────────────────────────────────────────────────────────────
+
+async function fetchUsers(params: {
+  role: string; status: string; search: string; page: number; size: number
+}): Promise<UsersPageResponse> {
+  const query = new URLSearchParams()
+  if (params.role) query.set('role', params.role)
+  if (params.status) query.set('status', params.status)
+  if (params.search) query.set('search', params.search)
+  query.set('page', String(params.page))
+  query.set('size', String(params.size))
+
+  const token = getAccessToken()
+  const res = await fetch(`${API_URL}/users?${query.toString()}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) {
+    let message = `Error ${res.status}`
+    try {
+      const body: unknown = await res.json()
+      if (body && typeof body === 'object') {
+        const candidate = body as { message?: unknown; error?: unknown }
+        if (typeof candidate.message === 'string') message = candidate.message
+        else if (typeof candidate.error === 'string') message = candidate.error
+      }
+    } catch {
+      // Non-JSON or empty error body — fall back to the generic status message.
+    }
+    const apiErr: ApiError = { status: res.status, message }
+    throw apiErr
+  }
+  return (await res.json()) as UsersPageResponse
+}
 
 // ─── Confirm modal for unlock ─────────────────────────────────────────────────
 
@@ -200,7 +335,7 @@ function SearchSelect({ options, value, onChange, placeholder }: {
                 <li key={o.value}>
                   <button type="button" onClick={() => { onChange(o.value); setOpen(false) }}
                     className={`w-full text-left px-3 py-2 text-[13px] flex items-center gap-2 transition-colors ${value === o.value ? 'bg-[#e6f5f1] text-[#009574] font-medium' : 'text-[#333333] hover:bg-[#F8F9FA]'}`}>
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${rolStyle[o.label] ?? 'bg-gray-100 text-gray-600'}`}>{o.label}</span>
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${ROLE_BADGE_STYLE[o.value as BackendRoleType] ?? 'bg-gray-100 text-gray-600'}`}>{o.label}</span>
                   </button>
                 </li>
               ))
@@ -274,15 +409,15 @@ function ActionBtn({ icon, tooltip, danger, accent, onClick }: {
 
 // ─── Roles cell ────────────────────────────────────────────────────────────────
 
-function RolesCell({ roles }: { roles: string[] }) {
+function RolesCell({ roles }: { roles: BackendRoleType[] }) {
   const maxVisible = 2
   const visible = roles.slice(0, maxVisible)
   const extra = roles.length - maxVisible
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {visible.map(r => (
-        <span key={r} className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${rolStyle[r] ?? 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
-          {r}
+        <span key={r} className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${ROLE_BADGE_STYLE[r] ?? 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+          {ROLE_LABELS[r] ?? r}
         </span>
       ))}
       {extra > 0 && (
@@ -300,27 +435,56 @@ export default function UsuariosList() {
   const navigate = useNavigate()
   const pendingToast = usePendingToast()
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [rolFilter, setRolFilter] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('')
   const [page, setPage] = useState(1)
   const [resetTarget, setResetTarget] = useState<Usuario | null>(null)
   const [unlockTarget, setUnlockTarget] = useState<Usuario | null>(null)
-  const [usuarios, setUsuarios] = useState<Usuario[]>(allUsuarios)
+  const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [totalElements, setTotalElements] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
+  const [errorMsg, setErrorMsg] = useState('')
   const [toast, setToast] = useState(pendingToast ?? '')
   const perPage = 10
 
-  const filtered = usuarios.filter(u => {
-    const matchRol   = !rolFilter    || u.roles.includes(rolFilter)
-    const matchEst   = !estadoFilter || u.estado === estadoFilter
-    const q = search.toLowerCase()
-    const matchQ     = !q || u.nombre.toLowerCase().includes(q) || u.usuario.toLowerCase().includes(q)
-    return matchRol && matchEst && matchQ
-  })
+  // Debounce free-text search — the fetch effect below only reacts to
+  // `debouncedSearch`, not every keystroke of `search`.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
-  const totalPages = Math.ceil(filtered.length / perPage)
-  const paginated  = filtered.slice((page - 1) * perPage, page * perPage)
-  const startRow   = filtered.length === 0 ? 0 : (page - 1) * perPage + 1
-  const endRow     = Math.min(page * perPage, filtered.length)
+  useEffect(() => {
+    let cancelled = false
+    setLoadStatus('loading')
+    setErrorMsg('')
+    fetchUsers({ role: rolFilter, status: estadoFilter, search: debouncedSearch, page: page - 1, size: perPage })
+      .then(data => {
+        if (cancelled) return
+        setUsuarios(data.items.map(mapUserToRow))
+        setTotalElements(data.totalElements)
+        setTotalPages(data.totalPages)
+        setLoadStatus('idle')
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setLoadStatus('error')
+        const apiErr = err as Partial<ApiError>
+        if (apiErr.status === 401) {
+          setErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
+        } else if (apiErr.status === 403) {
+          setErrorMsg('No tienes permiso para consultar usuarios.')
+        } else {
+          setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+        }
+      })
+    return () => { cancelled = true }
+  }, [rolFilter, estadoFilter, debouncedSearch, page])
+
+  const startRow   = totalElements === 0 ? 0 : (page - 1) * perPage + 1
+  const endRow     = Math.min(page * perPage, totalElements)
   const hasFilters = !!rolFilter || !!estadoFilter || !!search
 
   function handleResetConfirm() {
@@ -405,6 +569,14 @@ export default function UsuariosList() {
         )}
       </div>
 
+      {/* Error banner */}
+      {loadStatus === 'error' && errorMsg && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
+          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+          {errorMsg}
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
         <table className="w-full text-[13px]">
@@ -420,18 +592,29 @@ export default function UsuariosList() {
             </tr>
           </thead>
           <tbody>
-            {paginated.length === 0 ? (
+            {loadStatus === 'loading' ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-16 text-center">
+                  <div className="flex flex-col items-center gap-3 text-[#6B7280]">
+                    <Loader2 size={24} className="animate-spin text-[#009574]" />
+                    <p className="text-[13px] font-medium">Cargando usuarios...</p>
+                  </div>
+                </td>
+              </tr>
+            ) : usuarios.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-16 text-center">
                   <div className="flex flex-col items-center gap-3 text-[#6B7280]">
                     <Search size={36} className="text-[#E5E7EB]" />
                     <p className="text-[13px] font-medium">No se encontraron usuarios</p>
-                    <p className="text-[12px]">Intenta ajustar los filtros de búsqueda</p>
+                    <p className="text-[12px]">
+                      {loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
+                    </p>
                   </div>
                 </td>
               </tr>
             ) : (
-              paginated.map((row, i) => {
+              usuarios.map((row, i) => {
                 const rowNum = (page - 1) * perPage + i + 1
                 return (
                   <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
@@ -492,7 +675,7 @@ export default function UsuariosList() {
         {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-[#E5E7EB] bg-[#F8F9FA]">
           <p className="text-[12px] text-[#6B7280]">
-            {filtered.length === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${filtered.length} registros`}
+            {totalElements === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${totalElements} registros`}
           </p>
           <div className="flex items-center gap-2">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
