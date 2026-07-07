@@ -3,8 +3,8 @@ import { ChevronRight, Pencil, Save, X, ArrowLeft, Loader2, AlertCircle } from '
 import { FieldLabel, FieldHelp, inputCls, ModeSwitcher } from '../shared/ui'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '../shared/hooks'
-import { API_URL, getAccessToken } from '../shared/auth'
-import type { ApiError } from '../shared/auth'
+import { apiGet, apiPost, apiPut } from '../shared/apiClient'
+import type { ApiError } from '../shared/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,60 +24,6 @@ interface DivisionFormPayload {
   code: string
   description: string
   directorPersonId: string | null
-}
-
-// ─── API calls ──────────────────────────────────────────────────────────────
-
-async function parseError(res: Response): Promise<ApiError> {
-  let message = `Error ${res.status}`
-  try {
-    const body: unknown = await res.json()
-    if (body && typeof body === 'object') {
-      const candidate = body as { message?: unknown; error?: unknown }
-      if (typeof candidate.message === 'string') message = candidate.message
-      else if (typeof candidate.error === 'string') message = candidate.error
-    }
-  } catch {
-    // Non-JSON or empty error body — fall back to the generic status message.
-  }
-  return { status: res.status, message }
-}
-
-function authHeaders(): HeadersInit {
-  const token = getAccessToken()
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }
-}
-
-async function fetchDivision(id: string): Promise<DivisionResponse> {
-  const token = getAccessToken()
-  const res = await fetch(`${API_URL}/divisions/${id}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  if (!res.ok) throw await parseError(res)
-  return (await res.json()) as DivisionResponse
-}
-
-async function createDivision(payload: DivisionFormPayload): Promise<DivisionResponse> {
-  const res = await fetch(`${API_URL}/divisions`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) throw await parseError(res)
-  return (await res.json()) as DivisionResponse
-}
-
-async function updateDivision(id: string, payload: DivisionFormPayload): Promise<DivisionResponse> {
-  const res = await fetch(`${API_URL}/divisions/${id}`, {
-    method: 'PUT',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) throw await parseError(res)
-  return (await res.json()) as DivisionResponse
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
@@ -106,7 +52,7 @@ export default function DivisionesForm() {
     let cancelled = false
     setLoadStatus('loading')
     setLoadErrorMsg('')
-    fetchDivision(id)
+    apiGet<DivisionResponse>(`/divisions/${id}`)
       .then(data => {
         if (cancelled) return
         setNombre(data.name)
@@ -147,10 +93,10 @@ export default function DivisionesForm() {
     }
     try {
       if (isRegister) {
-        await createDivision(payload)
+        await apiPost<DivisionResponse>('/divisions', payload)
         navigate('/divisiones', { state: { toast: 'División registrada exitosamente.' } })
       } else if (id) {
-        await updateDivision(id, payload)
+        await apiPut<DivisionResponse>(`/divisions/${id}`, payload)
         navigate('/divisiones', { state: { toast: 'División actualizada exitosamente.' } })
       }
     } catch (err) {

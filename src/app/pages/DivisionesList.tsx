@@ -3,8 +3,8 @@ import { ChevronRight, Search, Eye, Pencil, Plus, ChevronLeft, ChevronRight as C
 import { Toast, ActionBtn, Switch } from '../shared/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '../shared/hooks'
-import { API_URL, getAccessToken } from '../shared/auth'
-import type { ApiError } from '../shared/auth'
+import { apiGet, apiPatch } from '../shared/apiClient'
+import type { ApiError } from '../shared/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,55 +26,6 @@ interface DivisionsPageResponse {
   totalPages: number
   page: number
   size: number
-}
-
-// ─── GET /divisions ─────────────────────────────────────────────────────────
-
-async function fetchDivisions(params: {
-  status: string; search: string; page: number; size: number
-}): Promise<DivisionsPageResponse> {
-  const query = new URLSearchParams()
-  if (params.status) query.set('status', params.status)
-  if (params.search) query.set('search', params.search)
-  query.set('page', String(params.page))
-  query.set('size', String(params.size))
-
-  const token = getAccessToken()
-  const res = await fetch(`${API_URL}/divisions?${query.toString()}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  if (!res.ok) throw await parseError(res)
-  return (await res.json()) as DivisionsPageResponse
-}
-
-// ─── PATCH /divisions/{id}/status ───────────────────────────────────────────
-
-async function patchDivisionStatus(id: string, status: DivisionStatus): Promise<void> {
-  const token = getAccessToken()
-  const res = await fetch(`${API_URL}/divisions/${id}/status`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ status }),
-  })
-  if (!res.ok) throw await parseError(res)
-}
-
-async function parseError(res: Response): Promise<ApiError> {
-  let message = `Error ${res.status}`
-  try {
-    const body: unknown = await res.json()
-    if (body && typeof body === 'object') {
-      const candidate = body as { message?: unknown; error?: unknown }
-      if (typeof candidate.message === 'string') message = candidate.message
-      else if (typeof candidate.error === 'string') message = candidate.error
-    }
-  } catch {
-    // Non-JSON or empty error body — fall back to the generic status message.
-  }
-  return { status: res.status, message }
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
@@ -106,7 +57,12 @@ export default function DivisionesList() {
     let cancelled = false
     setLoadStatus('loading')
     setErrorMsg('')
-    fetchDivisions({ status: statusFilter, search: debouncedSearch, page: page - 1, size: perPage })
+    apiGet<DivisionsPageResponse>('/divisions', {
+      status: statusFilter || undefined,
+      search: debouncedSearch || undefined,
+      page: page - 1,
+      size: perPage,
+    })
       .then(data => {
         if (cancelled) return
         setDivisions(data.items)
@@ -136,10 +92,15 @@ export default function DivisionesList() {
     const nextStatus: DivisionStatus = division.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
     setTogglingId(division.id)
     try {
-      await patchDivisionStatus(division.id, nextStatus)
+      await apiPatch<void>(`/divisions/${division.id}/status`, { status: nextStatus })
       // Refetch-after-toggle keeps `programCount`/pagination metadata correct
       // without duplicating the PATCH response's (narrower) shape locally.
-      const data = await fetchDivisions({ status: statusFilter, search: debouncedSearch, page: page - 1, size: perPage })
+      const data = await apiGet<DivisionsPageResponse>('/divisions', {
+        status: statusFilter || undefined,
+        search: debouncedSearch || undefined,
+        page: page - 1,
+        size: perPage,
+      })
       setDivisions(data.items)
       setTotalElements(data.totalElements)
       setTotalPages(data.totalPages)
