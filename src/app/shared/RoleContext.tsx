@@ -1,5 +1,16 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import {
+  mapRole,
+  decodeJwtPayload,
+  getAccessToken,
+  getStoredAuthMode,
+  getStoredMustChangePassword,
+  persistSession,
+  clearSession,
+  persistMustChangePasswordCleared,
+} from './auth'
+import type { LoginResponse, JwtClaims } from './auth'
 
 /**
  * Persists the mock role across full page reloads (sessionStorage — scoped to
@@ -41,9 +52,15 @@ function writeStoredRole(role: Role | null) {
  * 3. `null` (anonymous visitor) — pre-registration public flow
  *    (`/portal/registro*`). No login at all.
  *
- * This is a mock provider only: role is local `useState`, not real auth. When
- * real auth arrives, only this file's internals change — `useRole()` callers
- * are unaffected.
+ * Dual-mode session (real login integration, see
+ * `openspec/changes/real-login-integration/design.md`): **mock mode**
+ * (`authMode === 'mock'`, the default on a fresh tab) keeps every behavior
+ * above exactly as it was — local `useState`, manual switcher. **Real mode**
+ * (`authMode === 'real'`, entered via `login()` after `POST /auth/login`
+ * succeeds) derives `role` from the session's decoded JWT `roles` claim
+ * instead, and the switcher stops applying. Only `ADMIN` has a seeded backend
+ * user today, so mock mode stays available for every other in-progress
+ * module's staff roles.
  */
 export type Role =
   | 'ADMINISTRADOR'
@@ -61,11 +78,22 @@ export interface RoleUser {
 export interface RoleContextValue {
   /** `null` = anonymous visitor (pre-registration public flow). */
   role: Role | null
+  /** No-op in real mode — the switcher never overrides a JWT-derived role. */
   setRole: (role: Role | null) => void
   /** Staff dropdown source — never contains `null` or `CANDIDATO`. */
   availableRoles: Role[]
   /** `null` when anonymous (`role === null`). */
   user: RoleUser | null
+  /** `'mock'` (manual switcher, default) or `'real'` (JWT-derived, entered via `login()`). */
+  authMode: 'mock' | 'real'
+  /** `true` right after a login response with `mustChangePassword: true`, until `completePasswordChange()`. */
+  mustChangePassword: boolean
+  /** Establishes a real session from a successful `/auth/login` response. */
+  login: (res: LoginResponse) => void
+  /** Clears the real session; `authMode` stays `'real'` so re-access routes to `/login`, not back to mock mode. */
+  logout: () => void
+  /** Clears the pending mandatory-password-change flag after `/auth/change-password` succeeds. */
+  completePasswordChange: () => void
 }
 
 const MOCK_USER: RoleUser = { name: 'María González', email: 'admin@utez.edu.mx' }
@@ -86,18 +114,57 @@ const ALL_ROLES: Role[] = [...AVAILABLE_ROLES, 'CANDIDATO']
 const RoleContext = createContext<RoleContextValue | undefined>(undefined)
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [role, setRoleState] = useState<Role | null>(readStoredRole)
+  const [mockRole, setMockRoleState] = useState<Role | null>(readStoredRole)
+  const [authMode, setAuthModeState] = useState<'mock' | 'real'>(getStoredAuthMode)
+  const [mustChangePassword, setMustChangePasswordState] = useState<boolean>(getStoredMustChangePassword)
+  const [claims, setClaims] = useState<JwtClaims | null>(null)
+
+  // Rehydrate a real session from storage after a full reload. Runs once on
+  // mount only — `login()`/`logout()` update `claims` directly afterwards.
+  useEffect(() => {
+    if (getStoredAuthMode() !== 'real') return
+    const token = getAccessToken()
+    if (!token) return
+    setClaims(decodeJwtPayload(token))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function setRole(next: Role | null) {
     writeStoredRole(next)
-    setRoleState(next)
+    setMockRoleState(next)
   }
+
+  function login(res: LoginResponse) {
+    persistSession(res)
+    setClaims(decodeJwtPayload(res.accessToken))
+    setAuthModeState('real')
+    setMustChangePasswordState(res.mustChangePassword)
+  }
+
+  function logout() {
+    clearSession()
+    setClaims(null)
+    setMustChangePasswordState(false)
+    setAuthModeState('real') // stays 'real' — re-access must route to /login, not fall back to mock mode
+  }
+
+  function completePasswordChange() {
+    persistMustChangePasswordCleared()
+    setMustChangePasswordState(false)
+  }
+
+  const role = authMode === 'real' ? mapRole(claims?.roles ?? []) : mockRole
 
   const value: RoleContextValue = {
     role,
     setRole,
     availableRoles: AVAILABLE_ROLES,
     user: role === null ? null : MOCK_USER,
+    authMode,
+    mustChangePassword,
+    login,
+    logout,
+    completePasswordChange,
   }
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>

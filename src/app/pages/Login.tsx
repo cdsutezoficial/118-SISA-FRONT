@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Eye, EyeOff, AlertCircle, Loader2, GraduationCap } from 'lucide-react'
+import { useRole } from '../shared/RoleContext'
+import { apiLogin } from '../shared/auth'
+import type { ApiError } from '../shared/auth'
 
 // ─── LlaveMX logo mark ────────────────────────────────────────────────────────
 
@@ -53,13 +56,14 @@ function UniversityIllustration() {
 
 export default function Login() {
   const navigate = useNavigate()
+  const { login } = useRole()
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!usuario.trim() || !password.trim()) {
       setStatus('error')
@@ -68,18 +72,25 @@ export default function Login() {
     }
     setStatus('loading')
     setErrorMsg('')
-    // Simulate async auth — accept any non-empty credentials after 1.2s
-    setTimeout(() => {
-      if (password === 'error') {
-        setStatus('error')
+    try {
+      // Sent as `username` regardless of the input's `type="email"` — the
+      // seeded ADMIN username is email-shaped, so this isn't a mismatch.
+      const res = await apiLogin(usuario, password)
+      login(res)
+      navigate(res.mustChangePassword ? '/usuarios/cambiar-password' : '/dashboard')
+    } catch (err) {
+      setStatus('error')
+      const apiErr = err as Partial<ApiError>
+      if (apiErr.status === 401) {
         setErrorMsg('Credenciales incorrectas. Verifica tu usuario y contraseña.')
-      } else if (password === 'primer') {
-        // Primer acceso — mustChangePassword
-        navigate('/usuarios/cambiar-password')
+      } else if (apiErr.status === 423) {
+        setErrorMsg('Esta cuenta está bloqueada. Contacta a soporte técnico.')
       } else {
-        navigate('/dashboard')
+        // Network failure (fetch threw before reaching the server) or an
+        // unmapped status — same generic banner either way.
+        setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
       }
-    }, 1200)
+    }
   }
 
   const isLoading = status === 'loading'

@@ -58,7 +58,15 @@ function Navbar({ onRoleMenuToggle, roleMenuOpen }: {
   roleMenuOpen: boolean
 }) {
   const navigate = useNavigate()
-  const { role, setRole, availableRoles, user } = useRole()
+  const { role, setRole, availableRoles, user, authMode, logout } = useRole()
+  const isRealSession = authMode === 'real'
+
+  function handleLogout() {
+    // Only a real session has anything to clear; in mock mode this preserves
+    // the exact prior behavior (navigate to /login, nothing else).
+    if (isRealSession) logout()
+    navigate('/login')
+  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-[#E5E7EB] flex items-center px-6 justify-between">
@@ -67,15 +75,22 @@ function Navbar({ onRoleMenuToggle, roleMenuOpen }: {
       </span>
       <div className="flex items-center gap-2">
         <div className="relative">
+          {/* Real session: role dropdown is disabled (not just visually — no
+              onClick, aria-disabled) so the JWT-derived role can never be
+              self-escalated via manual selection. Mock mode: unchanged. */}
           <button
-            onClick={onRoleMenuToggle}
-            className="flex items-center gap-2 text-sm text-[#333333] px-3 py-1.5 rounded-md hover:bg-[#F8F9FA] border border-[#E5E7EB] transition-colors"
+            onClick={isRealSession ? undefined : onRoleMenuToggle}
+            disabled={isRealSession}
+            aria-disabled={isRealSession}
+            className={`flex items-center gap-2 text-sm text-[#333333] px-3 py-1.5 rounded-md border border-[#E5E7EB] transition-colors ${
+              isRealSession ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[#F8F9FA]'
+            }`}
           >
             <UserCog size={15} className="text-[#6B7280]" />
             <span className="font-medium">{role ? ROLE_LABELS[role] : 'Seleccionar rol'}</span>
-            <ChevronDown size={14} className="text-[#6B7280]" />
+            {!isRealSession && <ChevronDown size={14} className="text-[#6B7280]" />}
           </button>
-          {roleMenuOpen && (
+          {!isRealSession && roleMenuOpen && (
             <div className="absolute right-0 top-9 w-52 bg-white border border-[#E5E7EB] rounded-lg shadow-lg py-1 z-50">
               <div className="px-4 py-2.5 border-b border-[#E5E7EB]">
                 <p className="text-[12px] font-semibold text-[#333333]">{user?.name}</p>
@@ -110,7 +125,7 @@ function Navbar({ onRoleMenuToggle, roleMenuOpen }: {
           <HelpCircle size={16} /><span className="hidden sm:inline">Manual</span>
         </button>
         <button
-          onClick={() => navigate('/login')}
+          onClick={handleLogout}
           className="flex items-center gap-1.5 text-sm text-[#6B7280] hover:text-red-600 px-2 py-1.5 rounded-md hover:bg-red-50 transition-colors"
         >
           <LogOut size={16} /><span className="hidden sm:inline">Cerrar sesión</span>
