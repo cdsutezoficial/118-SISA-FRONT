@@ -243,7 +243,17 @@ const router = createBrowserRouter([
       },
 
       // Divisiones
-      { path: 'divisiones',      element: <DivisionesList /> },
+      //
+      // Role guard: only the list route is wrapped here, mirroring the
+      // `usuarios` precedent — `GET /divisions` (and every other `/divisions`
+      // verb) is enforced server-side to ADMIN/SERVICIOS_ESCOLARES, so
+      // wrapping the list gives a clean redirect instead of a raw 403/blank
+      // state for any other role. `divisiones/new`/`divisiones/form` are
+      // untouched — out of scope for this change.
+      {
+        path: 'divisiones',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><DivisionesList /></RequireRole>,
+      },
       { path: 'divisiones/new',  element: <DivisionesForm /> },
       { path: 'divisiones/form', element: <DivisionesForm /> },
 

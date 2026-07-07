@@ -121,3 +121,21 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   })
   return handleResponse<T>(res)
 }
+
+export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method: 'PUT',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  return handleResponse<T>(res)
+}
+
+export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method: 'PATCH',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  return handleResponse<T>(res)
+}
