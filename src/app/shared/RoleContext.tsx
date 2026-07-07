@@ -1,16 +1,15 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   mapRole,
   decodeJwtPayload,
-  getAccessToken,
-  getStoredAuthMode,
   getStoredMustChangePassword,
   persistSession,
   clearSession,
   persistMustChangePasswordCleared,
 } from './auth'
 import type { LoginResponse, JwtClaims } from './auth'
+import { getAccessToken, getStoredAuthMode, setUnauthorizedHandler } from './apiClient'
 
 /**
  * Persists the mock role across full page reloads (sessionStorage — scoped to
@@ -153,6 +152,18 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     persistMustChangePasswordCleared()
     setMustChangePasswordState(false)
   }
+
+  // Registers the global 401 reaction once — any `apiGet`/`apiPost` call
+  // (from anywhere in the app) that gets a 401 back triggers `logout()`
+  // through this handler, on top of whatever local error handling the
+  // calling screen already does (e.g. a red banner). `apiClient.ts` can't
+  // import this module directly (RoleContext already depends on `auth.ts`,
+  // which depends on `apiClient.ts` — importing back would cycle), hence the
+  // callback-registration indirection.
+  useEffect(() => {
+    setUnauthorizedHandler(logout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const role = authMode === 'real' ? mapRole(claims?.roles ?? []) : mockRole
 

@@ -1,14 +1,19 @@
 import type { Role } from './RoleContext'
+import { apiPost } from './apiClient'
 
 /**
  * Real backend integration for login/session only (see
- * `openspec/changes/real-login-integration/design.md`). Plain `fetch`, no
- * HTTP client library, no `jwt-decode` — a minimal manual base64url decoder
- * is enough because this change only ever reads `sub`/`roles`/`exp` off the
- * access token, never verifies its signature (verification is the backend's
- * job).
+ * `openspec/changes/real-login-integration/design.md`). No `jwt-decode` — a
+ * minimal manual base64url decoder is enough because this change only ever
+ * reads `sub`/`roles`/`exp` off the access token, never verifies its
+ * signature (verification is the backend's job).
+ *
+ * HTTP plumbing (`API_URL`, request/error handling, token/session-mode read
+ * accessors) lives in `apiClient.ts` — this module is a CONSUMER of it, not
+ * the other way around (see `sdd/real-login-integration/api-client-refactor`
+ * for why the boundary is drawn there). This module keeps the WRITE-side
+ * session functions below, which are session-domain concerns, not HTTP ones.
  */
-export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080'
 
 /**
  * Backend `RoleType` → frontend `Role` lookup. Only roles with an existing
@@ -76,35 +81,16 @@ export interface LoginResponse {
   mustChangePassword: boolean
 }
 
-export interface ApiError {
-  status: number
-  message: string
-}
-
 // ─── Storage ────────────────────────────────────────────────────────────────
 // `sisa.` prefix mirrors the existing `sisa.mockRole` key (untouched by this
 // change). sessionStorage: tab-scoped, survives reload, cleared on tab close.
+// Read accessors for the access/auth-mode keys live in `apiClient.ts` (needed
+// there to build requests); this module keeps the WRITE side only.
 
 const ACCESS_TOKEN_KEY = 'sisa.accessToken'
 const REFRESH_TOKEN_KEY = 'sisa.refreshToken'
 const AUTH_MODE_KEY = 'sisa.authMode'
 const MUST_CHANGE_PASSWORD_KEY = 'sisa.mustChangePassword'
-
-export function getAccessToken(): string | null {
-  try {
-    return sessionStorage.getItem(ACCESS_TOKEN_KEY)
-  } catch {
-    return null
-  }
-}
-
-export function getStoredAuthMode(): 'mock' | 'real' {
-  try {
-    return sessionStorage.getItem(AUTH_MODE_KEY) === 'real' ? 'real' : 'mock'
-  } catch {
-    return 'mock'
-  }
-}
 
 export function getStoredMustChangePassword(): boolean {
   try {
@@ -151,44 +137,26 @@ export function persistMustChangePasswordCleared(): void {
 }
 
 // ─── API calls ──────────────────────────────────────────────────────────────
-
-async function parseApiError(res: Response): Promise<ApiError> {
-  let message = `Error ${res.status}`
-  try {
-    const body: unknown = await res.json()
-    if (body && typeof body === 'object') {
-      const candidate = body as { message?: unknown; error?: unknown }
-      if (typeof candidate.message === 'string') message = candidate.message
-      else if (typeof candidate.error === 'string') message = candidate.error
-    }
-  } catch {
-    // Non-JSON or empty error body — fall back to the generic status message.
-  }
-  return { status: res.status, message }
-}
+// Both go through `apiPost` (apiClient.ts) — it auto-attaches
+// `Authorization: Bearer <token>` when one exists in storage and parses
+// errors uniformly.
+//
+// `apiLogin` doesn't need an auth header (unauthenticated `/auth/login`
+// call), but letting `apiPost` attach one unconditionally is harmless: there
+// is normally no token yet at login time, and even a stale one from a prior
+// session wouldn't be checked by this endpoint. No opt-out is added.
 
 export async function apiLogin(username: string, password: string): Promise<LoginResponse> {
-  const res = await fetch(`${API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  })
-  if (!res.ok) throw await parseApiError(res)
-  return (await res.json()) as LoginResponse
+  return apiPost<LoginResponse>('/auth/login', { username, password })
 }
 
-export async function apiChangePassword(
-  currentPassword: string,
-  newPassword: string,
-  accessToken: string
-): Promise<void> {
-  const res = await fetch(`${API_URL}/auth/change-password`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ currentPassword, newPassword }),
-  })
-  if (!res.ok) throw await parseApiError(res)
+/**
+ * Reads the access token implicitly via `apiPost`'s automatic Bearer
+ * attachment rather than taking it as a parameter — at every call site
+ * (`CambiarPassword.tsx`), `authMode` is already `'real'`, meaning `login()`
+ * already ran and `persistSession()` already stored the token, so it's
+ * always present in storage by the time this is called.
+ */
+export async function apiChangePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiPost<void>('/auth/change-password', { currentPassword, newPassword })
 }

@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { ChevronRight, Eye, EyeOff, AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useRole } from '../shared/RoleContext'
-import { apiChangePassword, getAccessToken } from '../shared/auth'
-import type { ApiError } from '../shared/auth'
+import { apiChangePassword } from '../shared/auth'
+import type { ApiError } from '../shared/apiClient'
 
 // ─── Password strength ─────────────────────────────────────────────────────────
 
@@ -110,9 +110,12 @@ export default function CambiarPassword() {
     }
 
     try {
-      const token = getAccessToken()
-      if (!token) throw { status: 401 } as ApiError
-      await apiChangePassword(actual, nueva, token)
+      // No explicit token param — `apiChangePassword` reads it from storage
+      // via `apiPost`'s automatic Bearer attachment. `RequireAuth` already
+      // guarantees a valid token before this screen renders in real mode; a
+      // 401/403 here (e.g. token invalidated mid-session) is still caught
+      // below and routes back to `/login`.
+      await apiChangePassword(actual, nueva)
       setLoading(false)
       setDone(true)
       completePasswordChange()

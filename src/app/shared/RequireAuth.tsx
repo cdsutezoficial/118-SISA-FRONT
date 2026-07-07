@@ -2,7 +2,8 @@ import { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import type { ReactNode } from 'react'
 import { useRole } from './RoleContext'
-import { getAccessToken, decodeJwtPayload } from './auth'
+import { decodeJwtPayload } from './auth'
+import { getAccessToken } from './apiClient'
 
 const CAMBIAR_PASSWORD_PATH = '/usuarios/cambiar-password'
 

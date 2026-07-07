@@ -6,8 +6,8 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '../shared/hooks'
-import { API_URL, getAccessToken } from '../shared/auth'
-import type { ApiError } from '../shared/auth'
+import { apiGet } from '../shared/apiClient'
+import type { ApiError } from '../shared/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -174,40 +174,6 @@ function mapUserToRow(item: UserListItem): Usuario {
     initials: initialsFor(item.fullName),
     avatarColor: avatarColorFor(item.fullName),
   }
-}
-
-// ─── GET /users ─────────────────────────────────────────────────────────────
-
-async function fetchUsers(params: {
-  role: string; status: string; search: string; page: number; size: number
-}): Promise<UsersPageResponse> {
-  const query = new URLSearchParams()
-  if (params.role) query.set('role', params.role)
-  if (params.status) query.set('status', params.status)
-  if (params.search) query.set('search', params.search)
-  query.set('page', String(params.page))
-  query.set('size', String(params.size))
-
-  const token = getAccessToken()
-  const res = await fetch(`${API_URL}/users?${query.toString()}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  if (!res.ok) {
-    let message = `Error ${res.status}`
-    try {
-      const body: unknown = await res.json()
-      if (body && typeof body === 'object') {
-        const candidate = body as { message?: unknown; error?: unknown }
-        if (typeof candidate.message === 'string') message = candidate.message
-        else if (typeof candidate.error === 'string') message = candidate.error
-      }
-    } catch {
-      // Non-JSON or empty error body — fall back to the generic status message.
-    }
-    const apiErr: ApiError = { status: res.status, message }
-    throw apiErr
-  }
-  return (await res.json()) as UsersPageResponse
 }
 
 // ─── Confirm modal for unlock ─────────────────────────────────────────────────
@@ -460,7 +426,13 @@ export default function UsuariosList() {
     let cancelled = false
     setLoadStatus('loading')
     setErrorMsg('')
-    fetchUsers({ role: rolFilter, status: estadoFilter, search: debouncedSearch, page: page - 1, size: perPage })
+    apiGet<UsersPageResponse>('/users', {
+      role: rolFilter || undefined,
+      status: estadoFilter || undefined,
+      search: debouncedSearch || undefined,
+      page: page - 1,
+      size: perPage,
+    })
       .then(data => {
         if (cancelled) return
         setUsuarios(data.items.map(mapUserToRow))

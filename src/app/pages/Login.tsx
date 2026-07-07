@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 import { Eye, EyeOff, AlertCircle, Loader2, GraduationCap } from 'lucide-react'
 import { useRole } from '../shared/RoleContext'
 import { apiLogin } from '../shared/auth'
-import type { ApiError } from '../shared/auth'
+import type { ApiError } from '../shared/apiClient'
 
 // ─── LlaveMX logo mark ────────────────────────────────────────────────────────
 
