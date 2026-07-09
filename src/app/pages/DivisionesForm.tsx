@@ -117,9 +117,9 @@ export default function DivisionesForm() {
   }
 
   return (
-    <div className="max-w-[1100px] mx-auto px-8 py-8">
+    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
+      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
         <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
@@ -132,7 +132,7 @@ export default function DivisionesForm() {
       </nav>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#333333]">
             {isRegister ? 'Registrar División' : isView ? 'Ver División' : 'Editar División'}
@@ -176,7 +176,7 @@ export default function DivisionesForm() {
         ) : (
           <div className="grid grid-cols-12 gap-4">
             {/* Nombre */}
-            <div className="col-span-8">
+            <div className="col-span-12 sm:col-span-8">
               <FieldLabel required={!isView}>Nombre de la División</FieldLabel>
               <input
                 value={nombre}
@@ -188,7 +188,7 @@ export default function DivisionesForm() {
               <FieldHelp>Nombre completo y oficial de la división académica.</FieldHelp>
             </div>
             {/* Clave */}
-            <div className="col-span-4">
+            <div className="col-span-12 sm:col-span-4">
               <FieldLabel required={!isView}>Clave</FieldLabel>
               <input
                 value={clave}
@@ -232,18 +232,18 @@ export default function DivisionesForm() {
 
       {/* Actions */}
       {loadStatus !== 'loading' && (
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
           {isView ? (
             <>
               <button
                 onClick={() => navigate('/divisiones')}
-                className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
               >
                 <ArrowLeft size={14} />Regresar
               </button>
               <button
                 onClick={() => navigate(`/divisiones/form?mode=edit&id=${id}`)}
-                className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
               >
                 <Pencil size={14} />Editar
               </button>
@@ -253,14 +253,14 @@ export default function DivisionesForm() {
               <button
                 onClick={() => navigate('/divisiones')}
                 disabled={isSubmitting}
-                className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <X size={14} />Cancelar
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                 {isRegister ? 'Registrar División' : 'Guardar Cambios'}

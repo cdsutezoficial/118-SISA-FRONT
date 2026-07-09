@@ -116,11 +116,11 @@ export default function DivisionesList() {
   }
 
   return (
-    <div className="max-w-[1100px] mx-auto px-8 py-8">
+    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
+      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
         <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
@@ -129,14 +129,14 @@ export default function DivisionesList() {
       </nav>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#333333]">Divisiones Académicas</h1>
           <p className="text-[14px] text-[#6B7280] mt-1">Gestiona las divisiones académicas registradas en el sistema.</p>
         </div>
         <button
           onClick={() => navigate('/divisiones/new')}
-          className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors sm:whitespace-nowrap sm:self-start"
         >
           <Plus size={15} />Registrar División
         </button>
@@ -150,31 +150,33 @@ export default function DivisionesList() {
         </div>
       )}
 
-      {/* Search, filter & table */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#E5E7EB] flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-            <input
-              value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1) }}
-              placeholder="Buscar por nombre o clave…"
-              className="w-full pl-9 pr-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
-            className="px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
-          >
-            <option value="">Todos los estados</option>
-            <option value="ACTIVE">Activo</option>
-            <option value="INACTIVE">Inactivo</option>
-          </select>
-          <span className="text-[12px] text-[#6B7280]">
-            {totalElements} resultado{totalElements !== 1 ? 's' : ''}
-          </span>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <div className="relative flex-1 sm:max-w-sm">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            placeholder="Buscar por nombre o clave…"
+            className="w-full pl-9 pr-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+          />
         </div>
+        <select
+          value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
+          className="w-full sm:w-auto px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+        >
+          <option value="">Todos los estados</option>
+          <option value="ACTIVE">Activo</option>
+          <option value="INACTIVE">Inactivo</option>
+        </select>
+        <span className="text-[12px] text-[#6B7280] hidden sm:inline">
+          {totalElements} resultado{totalElements !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* ── Desktop table (md+) ─────────────────────────────────────────────── */}
+      <div className="hidden md:block bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
@@ -242,7 +244,7 @@ export default function DivisionesList() {
             )}
           </tbody>
         </table>
-        {/* Pagination */}
+        {/* Pagination — desktop */}
         <div className="px-4 py-3 border-t border-[#E5E7EB] flex items-center justify-between">
           <span className="text-[12px] text-[#6B7280]">
             {totalElements === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${totalElements}`}
@@ -259,6 +261,96 @@ export default function DivisionesList() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
+      <div className="md:hidden space-y-3">
+        {loadStatus === 'loading' ? (
+          <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
+            <div className="flex flex-col items-center gap-3 text-[#6B7280]">
+              <Loader2 size={24} className="animate-spin text-[#009574]" />
+              <p className="text-[13px] font-medium">Cargando divisiones...</p>
+            </div>
+          </div>
+        ) : divisions.length === 0 ? (
+          <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
+            <div className="flex flex-col items-center gap-3 text-[#6B7280]">
+              <Search size={36} className="text-[#E5E7EB]" />
+              <p className="text-[13px] font-medium">No se encontraron divisiones</p>
+              <p className="text-[12px]">Intenta ajustar los filtros de búsqueda</p>
+            </div>
+          </div>
+        ) : (
+          divisions.map(row => (
+            <div key={row.id} className="bg-white border border-[#E5E7EB] rounded-lg p-4">
+              {/* Top row: clave + estado */}
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
+                  {row.code}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={row.status === 'ACTIVE'}
+                    disabled={togglingId === row.id}
+                    onChange={() => handleToggleStatus(row)}
+                  />
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                    row.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
+                  }`}>
+                    {row.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+              </div>
+              {/* Name */}
+              <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{row.name}</p>
+              {/* Description */}
+              {row.description && (
+                <p className="text-[12px] text-[#6B7280] mb-2 leading-snug line-clamp-2">{row.description}</p>
+              )}
+              {/* Program count */}
+              <p className="text-[12px] text-[#6B7280] mb-3">
+                <span className="font-semibold text-[#333333]">{row.programCount}</span> programa{row.programCount !== 1 ? 's' : ''}
+              </p>
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+                <button
+                  onClick={() => navigate(`/divisiones/form?mode=view&id=${row.id}`)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#6B7280] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
+                >
+                  <Eye size={14} />Ver
+                </button>
+                <button
+                  onClick={() => navigate(`/divisiones/form?mode=edit&id=${row.id}`)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
+                >
+                  <Pencil size={14} />Editar
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+
+        {/* Pagination — mobile */}
+        {totalElements > 0 && (
+          <div className="flex flex-col items-center gap-3 pt-2">
+            <p className="text-[12px] text-[#6B7280]">
+              Mostrando {startRow}–{endRow} de {totalElements}
+            </p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed">
+                <ChevronLeft size={13} />Anterior
+              </button>
+              <span className="px-3 py-1.5 text-[12px] font-semibold text-[#009574] border border-[#009574] rounded-md bg-white tabular-nums">
+                {page} / {totalPages}
+              </span>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0}
+                className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed">
+                Siguiente<ChevRight size={13} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

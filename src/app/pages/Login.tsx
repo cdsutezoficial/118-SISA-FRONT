@@ -96,7 +96,7 @@ export default function Login() {
   const isLoading = status === 'loading'
 
   return (
-    <div className="min-h-screen flex font-['Inter',sans-serif]">
+    <div className="min-h-screen w-full overflow-x-hidden flex font-['Inter',sans-serif]">
       {/* ── Left panel ───────────────────────────────────────────────────── */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#009574] flex-col items-center justify-center px-12 py-16 relative overflow-hidden">
         {/* Subtle radial glow */}
@@ -133,7 +133,7 @@ export default function Login() {
       </div>
 
       {/* ── Right panel ──────────────────────────────────────────────────── */}
-      <div className="flex-1 bg-white flex flex-col items-center justify-center px-8 py-12">
+      <div className="flex-1 min-w-0 bg-white flex flex-col items-center justify-center px-5 sm:px-8 py-10 sm:py-12">
         {/* Mobile logo */}
         <div className="flex lg:hidden items-center gap-2 mb-8">
           <div className="w-9 h-9 rounded-xl bg-[#009574] flex items-center justify-center">
@@ -147,7 +147,7 @@ export default function Login() {
         <div className="w-full max-w-sm">
           {/* Heading */}
           <div className="mb-8">
-            <h2 className="text-[26px] font-bold text-[#333333] leading-tight">Iniciar Sesión</h2>
+            <h2 className="text-[22px] sm:text-[26px] font-bold text-[#333333] leading-tight">Iniciar Sesión</h2>
             <p className="text-[14px] text-[#6B7280] mt-1">
               Ingresa tus credenciales institucionales para continuar.
             </p>
