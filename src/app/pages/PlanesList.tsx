@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   ChevronRight, Search, Eye, Pencil, ToggleLeft, Plus,
   ChevronLeft, ChevronRight as ChevRight, X, ChevronDown, BookOpen, Layers, BookMarked,
@@ -7,7 +7,7 @@ import { Toast, ActionBtn } from '../shared/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '../shared/hooks'
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface Plan {
   id: number
@@ -22,20 +22,20 @@ interface Plan {
 
 interface SelectOption { value: string; label: string }
 
-// â”€â”€â”€ Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Data ──────────────────────────────────────────────────────────────────────
 
 const allPlanes: Plan[] = [
-  { id: 1, clave: 'IDGS-2022', programa: 'IngenierÃ­a en Desarrollo y GestiÃ³n de Software', programaClave: 'IDGS', anio: 2022, niveles: 11, materias: 44, estado: 'Activo' },
-  { id: 2, clave: 'IRT-2022',  programa: 'IngenierÃ­a en Redes y Telecomunicaciones',         programaClave: 'IRT',  anio: 2022, niveles: 11, materias: 42, estado: 'Activo' },
-  { id: 3, clave: 'II-2021',   programa: 'IngenierÃ­a Industrial',                             programaClave: 'II',   anio: 2021, niveles: 11, materias: 40, estado: 'Activo' },
-  { id: 4, clave: 'AGE-2022',  programa: 'AdministraciÃ³n y GestiÃ³n Empresarial',              programaClave: 'AGE',  anio: 2022, niveles: 6,  materias: 24, estado: 'Activo' },
+  { id: 1, clave: 'IDGS-2022', programa: 'Ingeniería en Desarrollo y Gestión de Software', programaClave: 'IDGS', anio: 2022, niveles: 11, materias: 44, estado: 'Activo' },
+  { id: 2, clave: 'IRT-2022',  programa: 'Ingeniería en Redes y Telecomunicaciones',         programaClave: 'IRT',  anio: 2022, niveles: 11, materias: 42, estado: 'Activo' },
+  { id: 3, clave: 'II-2021',   programa: 'Ingeniería Industrial',                             programaClave: 'II',   anio: 2021, niveles: 11, materias: 40, estado: 'Activo' },
+  { id: 4, clave: 'AGE-2022',  programa: 'Administración y Gestión Empresarial',              programaClave: 'AGE',  anio: 2022, niveles: 6,  materias: 24, estado: 'Activo' },
 ]
 
 const programaOptions: SelectOption[] = [
-  { value: 'IDGS', label: 'Ing. en Desarrollo y GestiÃ³n de Software' },
+  { value: 'IDGS', label: 'Ing. en Desarrollo y Gestión de Software' },
   { value: 'IRT',  label: 'Ing. en Redes y Telecomunicaciones' },
-  { value: 'II',   label: 'IngenierÃ­a Industrial' },
-  { value: 'AGE',  label: 'AdministraciÃ³n y GestiÃ³n Empresarial' },
+  { value: 'II',   label: 'Ingeniería Industrial' },
+  { value: 'AGE',  label: 'Administración y Gestión Empresarial' },
 ]
 
 const estadoOptions: SelectOption[] = [
@@ -44,7 +44,7 @@ const estadoOptions: SelectOption[] = [
   { value: 'Inactivo', label: 'Inactivo' },
 ]
 
-// â”€â”€â”€ SearchSelect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── SearchSelect ──────────────────────────────────────────────────────────────
 
 function SearchSelect({ options, value, onChange, placeholder }: {
   options: SelectOption[]; value: string; onChange: (v: string) => void; placeholder: string
@@ -107,7 +107,7 @@ function SearchSelect({ options, value, onChange, placeholder }: {
   )
 }
 
-// â”€â”€â”€ SimpleSelect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── SimpleSelect ──────────────────────────────────────────────────────────────
 
 function SimpleSelect({ options, value, onChange }: {
   options: SelectOption[]; value: string; onChange: (v: string) => void
@@ -141,7 +141,7 @@ function SimpleSelect({ options, value, onChange }: {
   )
 }
 
-// â”€â”€â”€ Status badge (shared between table and cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Status badge (shared between table and cards) ─────────────────────────────
 
 function EstadoBadge({ estado }: { estado: Plan['estado'] }) {
   return estado === 'Activo' ? (
@@ -155,7 +155,7 @@ function EstadoBadge({ estado }: { estado: Plan['estado'] }) {
   )
 }
 
-// â”€â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PlanesList() {
   const navigate = useNavigate()
@@ -189,7 +189,7 @@ export default function PlanesList() {
       <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
         <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
-        <span className="text-[#6B7280]">ConfiguraciÃ³n AcadÃ©mica</span>
+        <span className="text-[#6B7280]">Configuración Académica</span>
         <ChevronRight size={13} />
         <span className="text-[#333333] font-medium">Planes de Estudio</span>
       </nav>
@@ -199,7 +199,7 @@ export default function PlanesList() {
         <div>
           <h1 className="text-2xl font-semibold text-[#333333]">Planes de Estudio</h1>
           <p className="text-[14px] text-[#6B7280] mt-1 max-w-xl">
-            Consulta y administra los planes de estudio de cada programa educativo. Cada programa puede tener mÃºltiples planes con distintos aÃ±os de vigencia.
+            Consulta y administra los planes de estudio de cada programa educativo. Cada programa puede tener múltiples planes con distintos años de vigencia.
           </p>
         </div>
         <button
@@ -237,7 +237,7 @@ export default function PlanesList() {
         )}
       </div>
 
-      {/* â”€â”€ Desktop table (md+) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Desktop table (md+) ─────────────────────────────────────────────── */}
       <div className="hidden md:block bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
         <table className="w-full text-[13px]">
           <thead>
@@ -245,7 +245,7 @@ export default function PlanesList() {
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-10">#</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Clave del Plan</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Programa Educativo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28 text-center">AÃ±o de Vigencia</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28 text-center">Año de Vigencia</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32 text-center">Niveles</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32 text-center">Materias</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Estado</th>
@@ -259,7 +259,7 @@ export default function PlanesList() {
                   <div className="flex flex-col items-center gap-3 text-[#6B7280]">
                     <BookOpen size={36} className="text-[#E5E7EB]" />
                     <p className="text-[13px] font-medium">No se encontraron planes de estudio</p>
-                    <p className="text-[12px]">Intenta ajustar los filtros de bÃºsqueda</p>
+                    <p className="text-[12px]">Intenta ajustar los filtros de búsqueda</p>
                   </div>
                 </td>
               </tr>
@@ -309,10 +309,10 @@ export default function PlanesList() {
           </tbody>
         </table>
 
-        {/* Pagination footer â€” desktop */}
+        {/* Pagination footer — desktop */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-[#E5E7EB] bg-[#F8F9FA]">
           <p className="text-[12px] text-[#6B7280]">
-            {filtered.length === 0 ? 'Sin registros' : `Mostrando ${startRow}â€“${endRow} de ${filtered.length} registros`}
+            {filtered.length === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${filtered.length} registros`}
           </p>
           <div className="flex items-center gap-2">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
@@ -333,14 +333,14 @@ export default function PlanesList() {
         </div>
       </div>
 
-      {/* â”€â”€ Mobile cards (< md) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
       <div className="md:hidden space-y-3">
         {paginated.length === 0 ? (
           <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
             <div className="flex flex-col items-center gap-3 text-[#6B7280]">
               <BookOpen size={36} className="text-[#E5E7EB]" />
               <p className="text-[13px] font-medium">No se encontraron planes de estudio</p>
-              <p className="text-[12px]">Intenta ajustar los filtros de bÃºsqueda</p>
+              <p className="text-[12px]">Intenta ajustar los filtros de búsqueda</p>
             </div>
           </div>
         ) : (
@@ -358,13 +358,13 @@ export default function PlanesList() {
               {/* Stats row */}
               <div className="flex items-center gap-4 text-[12px] text-[#6B7280] mb-3">
                 <span className="font-semibold text-[#333333] tabular-nums">{row.anio}</span>
-                <span className="text-[#E5E7EB]">Â·</span>
+                <span className="text-[#E5E7EB]">·</span>
                 <div className="flex items-center gap-1">
                   <Layers size={12} />
                   <span className="font-semibold tabular-nums text-[#333333]">{row.niveles}</span>
                   <span>niveles</span>
                 </div>
-                <span className="text-[#E5E7EB]">Â·</span>
+                <span className="text-[#E5E7EB]">·</span>
                 <div className="flex items-center gap-1">
                   <BookMarked size={12} />
                   <span className="font-semibold tabular-nums text-[#333333]">{row.materias}</span>
@@ -395,11 +395,11 @@ export default function PlanesList() {
           ))
         )}
 
-        {/* Pagination footer â€” mobile */}
+        {/* Pagination footer — mobile */}
         {filtered.length > 0 && (
           <div className="flex flex-col items-center gap-3 pt-2">
             <p className="text-[12px] text-[#6B7280]">
-              Mostrando {startRow}â€“{endRow} de {filtered.length} registros
+              Mostrando {startRow}–{endRow} de {filtered.length} registros
             </p>
             <div className="flex items-center gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
