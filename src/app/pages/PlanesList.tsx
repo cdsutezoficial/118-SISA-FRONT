@@ -1,150 +1,50 @@
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ChevronRight, Search, Eye, Pencil, ToggleLeft, Plus,
-  ChevronLeft, ChevronRight as ChevRight, X, ChevronDown, BookOpen, Layers, BookMarked,
+  ChevronLeft, ChevronRight as ChevRight, X, Loader2, AlertCircle, BookOpen, Layers,
 } from 'lucide-react'
 import { Toast, ActionBtn } from '../shared/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '../shared/hooks'
+import { apiGet } from '../shared/apiClient'
+import type { ApiError } from '../shared/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-interface Plan {
-  id: number
-  clave: string
-  programa: string
-  programaClave: string
-  anio: number
-  niveles: number
-  materias: number
-  estado: 'Activo' | 'Inactivo'
+type PlanStatus = 'ACTIVE' | 'INACTIVE'
+
+interface ProgramSummary {
+  id: string
+  name: string
+  code: string
 }
 
-interface SelectOption { value: string; label: string }
-
-// ─── Data ──────────────────────────────────────────────────────────────────────
-
-const allPlanes: Plan[] = [
-  { id: 1, clave: 'IDGS-2022', programa: 'Ingeniería en Desarrollo y Gestión de Software', programaClave: 'IDGS', anio: 2022, niveles: 11, materias: 44, estado: 'Activo' },
-  { id: 2, clave: 'IRT-2022',  programa: 'Ingeniería en Redes y Telecomunicaciones',         programaClave: 'IRT',  anio: 2022, niveles: 11, materias: 42, estado: 'Activo' },
-  { id: 3, clave: 'II-2021',   programa: 'Ingeniería Industrial',                             programaClave: 'II',   anio: 2021, niveles: 11, materias: 40, estado: 'Activo' },
-  { id: 4, clave: 'AGE-2022',  programa: 'Administración y Gestión Empresarial',              programaClave: 'AGE',  anio: 2022, niveles: 6,  materias: 24, estado: 'Activo' },
-]
-
-const programaOptions: SelectOption[] = [
-  { value: 'IDGS', label: 'Ing. en Desarrollo y Gestión de Software' },
-  { value: 'IRT',  label: 'Ing. en Redes y Telecomunicaciones' },
-  { value: 'II',   label: 'Ingeniería Industrial' },
-  { value: 'AGE',  label: 'Administración y Gestión Empresarial' },
-]
-
-const estadoOptions: SelectOption[] = [
-  { value: '', label: 'Todos los estados' },
-  { value: 'Activo',   label: 'Activo' },
-  { value: 'Inactivo', label: 'Inactivo' },
-]
-
-// ─── SearchSelect ──────────────────────────────────────────────────────────────
-
-function SearchSelect({ options, value, onChange, placeholder }: {
-  options: SelectOption[]; value: string; onChange: (v: string) => void; placeholder: string
-}) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function outside(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', outside)
-    return () => document.removeEventListener('mousedown', outside)
-  }, [])
-
-  const filtered = options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()) || o.value.toLowerCase().includes(query.toLowerCase()))
-  const selected = options.find(o => o.value === value)
-
-  return (
-    <div ref={ref} className="relative w-full sm:w-64">
-      <button type="button" onClick={() => { setOpen(!open); setQuery('') }}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-left transition hover:border-[#009574]/50 focus:outline-none">
-        <span className={`truncate ${selected ? 'text-[#333333]' : 'text-[#6B7280]'}`}>{selected ? selected.label : placeholder}</span>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {value && (
-            <span role="button" tabIndex={0}
-              onClick={e => { e.stopPropagation(); onChange('') }}
-              onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), onChange(''))}
-              className="text-[#6B7280] hover:text-[#333333] p-0.5 rounded">
-              <X size={12} />
-            </span>
-          )}
-          <ChevronDown size={14} className={`text-[#6B7280] transition-transform ${open ? 'rotate-180' : ''}`} />
-        </div>
-      </button>
-      {open && (
-        <div className="absolute top-full mt-1 left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden">
-          <div className="p-2 border-b border-[#E5E7EB]">
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-              <input autoFocus type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar programa..."
-                className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:border-[#009574]" />
-            </div>
-          </div>
-          <ul className="max-h-52 overflow-y-auto py-1">
-            {filtered.length === 0
-              ? <li className="px-3 py-2 text-[12px] text-[#6B7280] text-center">Sin resultados</li>
-              : filtered.map(o => (
-                <li key={o.value}>
-                  <button type="button" onClick={() => { onChange(o.value); setOpen(false) }}
-                    className={`w-full text-left px-3 py-2 text-[13px] transition-colors ${value === o.value ? 'bg-[#e6f5f1] text-[#009574] font-medium' : 'text-[#333333] hover:bg-[#F8F9FA]'}`}>
-                    {o.label}
-                  </button>
-                </li>
-              ))
-            }
-          </ul>
-        </div>
-      )}
-    </div>
-  )
+interface ProgramsPageResponse {
+  items: ProgramSummary[]
 }
 
-// ─── SimpleSelect ──────────────────────────────────────────────────────────────
-
-function SimpleSelect({ options, value, onChange }: {
-  options: SelectOption[]; value: string; onChange: (v: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    function outside(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', outside)
-    return () => document.removeEventListener('mousedown', outside)
-  }, [])
-  const selected = options.find(o => o.value === value) ?? options[0]
-  return (
-    <div ref={ref} className="relative w-full sm:w-36">
-      <button type="button" onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-left hover:border-[#009574]/50 focus:outline-none transition">
-        <span className="text-[#333333]">{selected.label}</span>
-        <ChevronDown size={14} className={`text-[#6B7280] transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute top-full mt-1 left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 py-1">
-          {options.map(o => (
-            <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false) }}
-              className={`w-full text-left px-3 py-2 text-[13px] transition-colors ${value === o.value ? 'bg-[#e6f5f1] text-[#009574] font-medium' : 'text-[#333333] hover:bg-[#F8F9FA]'}`}>
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+interface PlanListItem {
+  id: string
+  programId: string
+  version: string
+  validityPeriod: string
+  effectiveFrom: string
+  totalLevels: number
+  status: PlanStatus
 }
 
-// ─── Status badge (shared between table and cards) ─────────────────────────────
+interface PlansPageResponse {
+  items: PlanListItem[]
+  totalElements: number
+  totalPages: number
+  page: number
+  size: number
+}
 
-function EstadoBadge({ estado }: { estado: Plan['estado'] }) {
-  return estado === 'Activo' ? (
+// ─── Status badge ──────────────────────────────────────────────────────────────
+
+function EstadoBadge({ status }: { status: PlanStatus }) {
+  return status === 'ACTIVE' ? (
     <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Activo
     </span>
@@ -155,6 +55,12 @@ function EstadoBadge({ estado }: { estado: Plan['estado'] }) {
   )
 }
 
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PlanesList() {
@@ -162,24 +68,72 @@ export default function PlanesList() {
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
   const [search, setSearch] = useState('')
-  const [programaFilter, setProgramaFilter] = useState('')
-  const [estadoFilter, setEstadoFilter] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [programFilter, setProgramFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState<PlanStatus | ''>('')
   const [page, setPage] = useState(1)
-  const perPage = 10
+  const [plans, setPlans] = useState<PlanListItem[]>([])
+  const [programs, setPrograms] = useState<ProgramSummary[]>([])
+  const [totalElements, setTotalElements] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
+  const [errorMsg, setErrorMsg] = useState('')
+  const perPage = 20
 
-  const filtered = allPlanes.filter(p => {
-    const matchProg  = !programaFilter || p.programaClave === programaFilter
-    const matchEst   = !estadoFilter   || p.estado === estadoFilter
-    const q = search.toLowerCase()
-    const matchQ = !q || p.clave.toLowerCase().includes(q) || p.programa.toLowerCase().includes(q) || String(p.anio).includes(q)
-    return matchProg && matchEst && matchQ
-  })
+  // Load programs once for the filter dropdown (id → name/code mapping).
+  useEffect(() => {
+    apiGet<ProgramsPageResponse>('/programs', { size: 100 })
+      .then(data => setPrograms(data.items))
+      .catch(() => {/* non-critical — filter just won't populate */})
+  }, [])
 
-  const totalPages = Math.ceil(filtered.length / perPage)
-  const paginated  = filtered.slice((page - 1) * perPage, page * perPage)
-  const startRow   = filtered.length === 0 ? 0 : (page - 1) * perPage + 1
-  const endRow     = Math.min(page * perPage, filtered.length)
-  const hasFilters = !!programaFilter || !!estadoFilter || !!search
+  // Debounce free-text search.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadStatus('loading')
+    setErrorMsg('')
+    apiGet<PlansPageResponse>('/plans', {
+      programId: programFilter || undefined,
+      status: statusFilter || undefined,
+      search: debouncedSearch || undefined,
+      page: page - 1,
+      size: perPage,
+    })
+      .then(data => {
+        if (cancelled) return
+        setPlans(data.items)
+        setTotalElements(data.totalElements)
+        setTotalPages(data.totalPages)
+        setLoadStatus('idle')
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setLoadStatus('error')
+        const apiErr = err as Partial<ApiError>
+        if (apiErr.status === 401) {
+          setErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
+        } else if (apiErr.status === 403) {
+          setErrorMsg('No tienes permiso para consultar planes de estudio.')
+        } else {
+          setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+        }
+      })
+    return () => { cancelled = true }
+  }, [programFilter, statusFilter, debouncedSearch, page])
+
+  const startRow = totalElements === 0 ? 0 : (page - 1) * perPage + 1
+  const endRow = Math.min(page * perPage, totalElements)
+  const hasFilters = !!programFilter || !!statusFilter || !!search
+
+  function programLabel(programId: string): string {
+    const p = programs.find(p => p.id === programId)
+    return p ? `${p.code} — ${p.name}` : '—'
+  }
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
@@ -199,7 +153,7 @@ export default function PlanesList() {
         <div>
           <h1 className="text-2xl font-semibold text-[#333333]">Planes de Estudio</h1>
           <p className="text-[14px] text-[#6B7280] mt-1 max-w-xl">
-            Consulta y administra los planes de estudio de cada programa educativo. Cada programa puede tener múltiples planes con distintos años de vigencia.
+            Consulta y administra los planes de estudio de cada programa educativo. Cada programa puede tener múltiples planes vigentes simultáneamente.
           </p>
         </div>
         <button
@@ -212,25 +166,43 @@ export default function PlanesList() {
 
       <hr className="border-[#E5E7EB] my-5 sm:my-6" />
 
+      {/* Error banner */}
+      {loadStatus === 'error' && errorMsg && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
+          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+          {errorMsg}
+        </div>
+      )}
+
       {/* Filters + search */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mb-5">
-        <SearchSelect
-          options={programaOptions} value={programaFilter}
-          onChange={v => { setProgramaFilter(v); setPage(1) }}
-          placeholder="Todos los programas"
-        />
-        <SimpleSelect
-          options={estadoOptions} value={estadoFilter}
-          onChange={v => { setEstadoFilter(v); setPage(1) }}
-        />
+        <select
+          value={programFilter}
+          onChange={e => { setProgramFilter(e.target.value); setPage(1) }}
+          className="w-full sm:w-64 px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+        >
+          <option value="">Todos los programas</option>
+          {programs.map(p => (
+            <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value as PlanStatus | ''); setPage(1) }}
+          className="w-full sm:w-36 px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+        >
+          <option value="">Todos los estados</option>
+          <option value="ACTIVE">Activo</option>
+          <option value="INACTIVE">Inactivo</option>
+        </select>
         <div className="relative flex-1 sm:max-w-xs">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-          <input type="text" placeholder="Buscar plan..." value={search}
+          <input type="text" placeholder="Buscar por versión o clave de titulación..." value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
             className="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition" />
         </div>
         {hasFilters && (
-          <button onClick={() => { setProgramaFilter(''); setEstadoFilter(''); setSearch(''); setPage(1) }}
+          <button onClick={() => { setProgramFilter(''); setStatusFilter(''); setSearch(''); setPage(1) }}
             className="flex items-center gap-1 text-[12px] text-[#6B7280] hover:text-[#333333] transition-colors">
             <X size={13} />Limpiar filtros
           </button>
@@ -243,17 +215,26 @@ export default function PlanesList() {
           <thead>
             <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-10">#</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Clave del Plan</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Versión</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Vigencia</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Programa Educativo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28 text-center">Año de Vigencia</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32 text-center">Niveles</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32 text-center">Materias</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32 text-center">Vigente desde</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24 text-center">Niveles</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Estado</th>
               <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {paginated.length === 0 ? (
+            {loadStatus === 'loading' ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-16 text-center">
+                  <div className="flex flex-col items-center gap-3 text-[#6B7280]">
+                    <Loader2 size={24} className="animate-spin text-[#009574]" />
+                    <p className="text-[13px] font-medium">Cargando planes de estudio...</p>
+                  </div>
+                </td>
+              </tr>
+            ) : plans.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-16 text-center">
                   <div className="flex flex-col items-center gap-3 text-[#6B7280]">
@@ -264,36 +245,31 @@ export default function PlanesList() {
                 </td>
               </tr>
             ) : (
-              paginated.map((row, i) => {
+              plans.map((row, i) => {
                 const rowNum = (page - 1) * perPage + i + 1
                 return (
                   <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
                     <td className="px-4 py-3 text-[#6B7280] font-medium">{rowNum}</td>
                     <td className="px-4 py-3">
                       <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
-                        {row.clave}
+                        {row.version}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-[#6B7280]">{row.validityPeriod}</td>
                     <td className="px-4 py-3">
-                      <span className="font-medium text-[#333333]">{row.programa}</span>
+                      <span className="font-medium text-[#333333]">{programLabel(row.programId)}</span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className="text-[13px] font-semibold text-[#333333] tabular-nums">{row.anio}</span>
+                      <span className="text-[13px] text-[#333333] tabular-nums">{formatDate(row.effectiveFrom)}</span>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="inline-flex items-center gap-1.5 text-[12px] text-[#333333]">
                         <Layers size={13} className="text-[#6B7280]" />
-                        <span className="font-semibold tabular-nums">{row.niveles}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="inline-flex items-center gap-1.5 text-[12px] text-[#333333]">
-                        <BookMarked size={13} className="text-[#6B7280]" />
-                        <span className="font-semibold tabular-nums">{row.materias}</span>
+                        <span className="font-semibold tabular-nums">{row.totalLevels}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <EstadoBadge estado={row.estado} />
+                      <EstadoBadge status={row.status} />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-0.5">
@@ -312,19 +288,16 @@ export default function PlanesList() {
         {/* Pagination footer — desktop */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-[#E5E7EB] bg-[#F8F9FA]">
           <p className="text-[12px] text-[#6B7280]">
-            {filtered.length === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${filtered.length} registros`}
+            {totalElements === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${totalElements} registros`}
           </p>
           <div className="flex items-center gap-2">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
               className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-[#F8F9FA] transition-colors">
               <ChevronLeft size={13} />Anterior
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-              <button key={p} onClick={() => setPage(p)}
-                className={`w-8 h-8 text-[12px] font-medium rounded-md border transition-colors ${p === page ? 'bg-[#009574] text-white border-[#009574]' : 'bg-white text-[#333333] border-[#E5E7EB] hover:bg-[#F8F9FA]'}`}>
-                {p}
-              </button>
-            ))}
+            <span className="px-3 py-1.5 text-[12px] font-semibold text-white bg-[#009574] border border-[#009574] rounded-md tabular-nums">
+              {page} / {totalPages || 1}
+            </span>
             <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0}
               className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-[#F8F9FA] transition-colors">
               Siguiente<ChevRight size={13} />
@@ -335,7 +308,14 @@ export default function PlanesList() {
 
       {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
       <div className="md:hidden space-y-3">
-        {paginated.length === 0 ? (
+        {loadStatus === 'loading' ? (
+          <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
+            <div className="flex flex-col items-center gap-3 text-[#6B7280]">
+              <Loader2 size={24} className="animate-spin text-[#009574]" />
+              <p className="text-[13px] font-medium">Cargando planes de estudio...</p>
+            </div>
+          </div>
+        ) : plans.length === 0 ? (
           <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
             <div className="flex flex-col items-center gap-3 text-[#6B7280]">
               <BookOpen size={36} className="text-[#E5E7EB]" />
@@ -344,31 +324,27 @@ export default function PlanesList() {
             </div>
           </div>
         ) : (
-          paginated.map(row => (
+          plans.map(row => (
             <div key={row.id} className="bg-white border border-[#E5E7EB] rounded-lg p-4">
-              {/* Top row: clave + badge */}
+              {/* Top row: versión + badge */}
               <div className="flex items-start justify-between gap-2 mb-2">
                 <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
-                  {row.clave}
+                  {row.version}
                 </span>
-                <EstadoBadge estado={row.estado} />
+                <EstadoBadge status={row.status} />
               </div>
               {/* Program name */}
-              <p className="text-[13px] font-medium text-[#333333] mb-3 leading-snug">{row.programa}</p>
+              <p className="text-[13px] font-medium text-[#333333] mb-3 leading-snug">{programLabel(row.programId)}</p>
               {/* Stats row */}
-              <div className="flex items-center gap-4 text-[12px] text-[#6B7280] mb-3">
-                <span className="font-semibold text-[#333333] tabular-nums">{row.anio}</span>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#6B7280] mb-3">
+                <span className="text-[#333333]">{row.validityPeriod}</span>
+                <span className="text-[#E5E7EB]">·</span>
+                <span className="tabular-nums">{formatDate(row.effectiveFrom)}</span>
                 <span className="text-[#E5E7EB]">·</span>
                 <div className="flex items-center gap-1">
                   <Layers size={12} />
-                  <span className="font-semibold tabular-nums text-[#333333]">{row.niveles}</span>
+                  <span className="font-semibold tabular-nums text-[#333333]">{row.totalLevels}</span>
                   <span>niveles</span>
-                </div>
-                <span className="text-[#E5E7EB]">·</span>
-                <div className="flex items-center gap-1">
-                  <BookMarked size={12} />
-                  <span className="font-semibold tabular-nums text-[#333333]">{row.materias}</span>
-                  <span>materias</span>
                 </div>
               </div>
               {/* Actions */}
@@ -396,10 +372,10 @@ export default function PlanesList() {
         )}
 
         {/* Pagination footer — mobile */}
-        {filtered.length > 0 && (
+        {totalElements > 0 && (
           <div className="flex flex-col items-center gap-3 pt-2">
             <p className="text-[12px] text-[#6B7280]">
-              Mostrando {startRow}–{endRow} de {filtered.length} registros
+              Mostrando {startRow}–{endRow} de {totalElements} registros
             </p>
             <div className="flex items-center gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
@@ -407,7 +383,7 @@ export default function PlanesList() {
                 <ChevronLeft size={13} />Anterior
               </button>
               <span className="px-3 py-1.5 text-[12px] font-semibold text-[#009574] border border-[#009574] rounded-md bg-white tabular-nums">
-                {page} / {totalPages}
+                {page} / {totalPages || 1}
               </span>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0}
                 className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed">
