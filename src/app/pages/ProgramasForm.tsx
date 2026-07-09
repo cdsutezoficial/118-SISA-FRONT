@@ -74,6 +74,7 @@ export default function ProgramasForm() {
   const [divisionId, setDivisionId] = useState('')
   const [dgpCode, setDgpCode] = useState('')
   const [description, setDescription] = useState('')
+  const [continuityProgramId, setContinuityProgramId] = useState<string | null>(null)
 
   // ─── Auxiliary state ───────────────────────────────────────────────────────
   const [divisions, setDivisions] = useState<SelectOption[]>([])
@@ -107,6 +108,7 @@ export default function ProgramasForm() {
         setDivisionId(data.divisionId)
         setDgpCode(data.dgpCode ?? '')
         setDescription(data.description ?? '')
+        setContinuityProgramId(data.continuityProgramId)
         setLoadStatus('idle')
       })
       .catch((err: unknown) => {
@@ -160,7 +162,7 @@ export default function ProgramasForm() {
       code: code.trim(),
       level: level as AcademicLevel,
       modality: modality as ProgramModality,
-      continuityProgramId: null,
+      continuityProgramId,
       description: description.trim() || null,
       dgpCode: dgpCode.trim() || null,
     }
