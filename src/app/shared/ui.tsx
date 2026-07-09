@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronDown, X, Check, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Pencil, Eye, RotateCcw } from 'lucide-react'
+import { ChevronDown, X, Check, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Pencil, Eye, RotateCcw, Search } from 'lucide-react'
 import { formatDate, MONTHS, DAYS } from './utils'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -111,6 +111,135 @@ export function SearchSelect({ options, value, onChange, placeholder = 'Seleccio
               </button>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── SearchSelectField ────────────────────────────────────────────────────────
+// Generic searchable dropdown for { value, label } pairs. Designed for form
+// fields: fills its container (w-full), supports disabled and hasError states.
+// Companion to the string-only SearchSelect above — do not merge them.
+
+export interface SelectOption {
+  value: string
+  label: string
+}
+
+interface SearchSelectFieldProps {
+  options: SelectOption[]
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  disabled?: boolean
+  hasError?: boolean
+  searchPlaceholder?: string
+}
+
+export function SearchSelectField({
+  options,
+  value,
+  onChange,
+  placeholder = 'Seleccionar…',
+  disabled = false,
+  hasError = false,
+  searchPlaceholder = 'Buscar…',
+}: SearchSelectFieldProps) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filtered = options.filter(
+    o =>
+      o.label.toLowerCase().includes(query.toLowerCase()) ||
+      o.value.toLowerCase().includes(query.toLowerCase()),
+  )
+  const selected = options.find(o => o.value === value)
+
+  if (disabled) {
+    return (
+      <div className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md text-[#6B7280] cursor-not-allowed select-none">
+        <span className="truncate">{selected?.label ?? placeholder}</span>
+        <ChevronDown size={14} className="text-[#E5E7EB] flex-shrink-0" />
+      </div>
+    )
+  }
+
+  const triggerBorder = hasError
+    ? 'border-red-400'
+    : 'border-[#E5E7EB] hover:border-[#009574]/50 focus-within:ring-2 focus-within:ring-[#009574]/30 focus-within:border-[#009574]'
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => { setOpen(o => !o); setQuery('') }}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${triggerBorder}`}
+      >
+        <span className={`truncate ${selected ? 'text-[#333333]' : 'text-[#6B7280]'}`}>
+          {selected?.label ?? placeholder}
+        </span>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {value && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={e => { e.stopPropagation(); onChange('') }}
+              onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), onChange(''))}
+              className="text-[#6B7280] hover:text-[#333333] p-0.5 rounded"
+            >
+              <X size={12} />
+            </span>
+          )}
+          <ChevronDown size={14} className={`text-[#6B7280] transition-transform ${open ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden">
+          <div className="p-2 border-b border-[#E5E7EB]">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:border-[#009574]"
+              />
+            </div>
+          </div>
+          <ul className="max-h-52 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-[12px] text-[#6B7280] text-center">Sin resultados</li>
+            ) : (
+              filtered.map(o => (
+                <li key={o.value}>
+                  <button
+                    type="button"
+                    onClick={() => { onChange(o.value); setOpen(false) }}
+                    className={`w-full text-left px-3 py-2 text-[13px] transition-colors flex items-center justify-between ${
+                      o.value === value
+                        ? 'bg-[#e6f5f1] text-[#009574] font-medium'
+                        : 'text-[#333333] hover:bg-[#F8F9FA]'
+                    }`}
+                  >
+                    {o.label}
+                    {o.value === value && <Check size={13} className="flex-shrink-0" />}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
         </div>
       )}
     </div>
