@@ -59,3 +59,42 @@ or initiating processes. They communicate interactivity and should have clear, a
   * Visual Style : Text-only with no border, using primary color
   * Usage : For actions that should be available but not emphasized
 -->
+
+# Responsive layout guidelines
+
+These conventions were established while retrofitting existing screens (Planes, Divisiones, Programas, AppLayout, Login) to be responsive. Apply them to every new view and to any correction of an already-built view. Breakpoints used across the codebase: `sm:` (640px) for form/filter density, `md:` (768px) for the major layout switch (sidebar/table vs. drawer/cards).
+
+## Page containers
+* Container padding: `px-4 sm:px-8 py-6 sm:py-8` — tighter on mobile, expands at `sm:`.
+* Breadcrumbs: always `flex flex-wrap items-center` so they wrap instead of overflowing on narrow screens.
+* Page header (title + primary action): `flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4` — stacked on mobile, row from `sm:` up.
+* Primary action button in that header: `flex items-center justify-center w-full sm:w-auto sm:whitespace-nowrap sm:self-start`.
+
+## Form grids (12-column)
+* Every `col-span-N` used for desktop must become `col-span-12 sm:col-span-N` — fields go full-width on mobile and only split into columns at `sm:` or larger.
+
+## Form footer actions
+* `flex flex-col-reverse sm:flex-row sm:justify-end gap-3` — the primary submit button ends up on top on mobile because of `flex-col-reverse`.
+* Each button also gets `w-full sm:w-auto justify-center`.
+
+## List filters (search/select bars)
+* Filter bar container: `flex flex-col sm:flex-row sm:items-center gap-3`.
+* Individual filter inputs/selects: `w-full sm:w-64` (or the equivalent fixed desktop width) instead of a bare fixed width.
+* Non-essential text like a results counter: `hidden sm:inline` to save space on mobile.
+
+## Table → card pattern (the most reused one)
+* Wrap the desktop `<table>` in `hidden md:block`.
+* Add a sibling `md:hidden space-y-3` block that renders one card per row: `bg-white border border-[#E5E7EB] rounded-lg p-4`, with a status badge, a title, metadata separated by `·`, and row actions as `flex-1` buttons under a `border-t`.
+* Extract repeated bits (e.g. status badges) into a shared component (`EstadoBadge`) so the table and card renderers don't duplicate JSX.
+* Duplicate pagination for both modes: the desktop pager stays inside the table container; add a `flex flex-col items-center gap-3` mobile pager with the same Anterior/Siguiente actions.
+
+## App shell (sidebar / navbar)
+* Desktop sidebar: `hidden md:flex`, fixed width (`w-[240px]` expanded / `w-[60px]` collapsed).
+* Mobile: a `Menu` icon button (`md:hidden`) opens a full-screen drawer (`fixed inset-0 z-50`, sliding via `-translate-x-full` → `translate-x-0`) with a `bg-black/40` backdrop.
+* Main content offset must match the sidebar mode: no `ml-` offset on mobile, `md:ml-[60px]`/`md:ml-[240px]` on desktop.
+* Formal requirements for this pattern live in `openspec/specs/app-shell.md` (breakpoint `md` = 768px, drawer/accordion behavior) — check that spec before changing the shell.
+
+## Auth screens (Login-style layouts)
+* Decorative/branding side panel: `hidden lg:flex lg:w-1/2`.
+* Form panel padding scales down on mobile: `px-5 sm:px-8 py-10 sm:py-12`.
+* Headline sizes scale down on mobile: e.g. `text-[22px] sm:text-[26px]`.
