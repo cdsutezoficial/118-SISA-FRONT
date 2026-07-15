@@ -1,161 +1,95 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  ChevronRight, Pencil, History, Layers, BookMarked, Hash,
-  GraduationCap, ChevronDown, ChevronUp, ArrowLeft, CheckCircle2, ClipboardList,
-  MinusCircle, Plus,
+  ChevronRight, Pencil, Layers, BookMarked, Hash,
+  GraduationCap, ChevronDown, ChevronUp, ArrowLeft, ClipboardList, AlertCircle, Loader2,
 } from 'lucide-react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { usePendingToast } from '../shared/hooks'
+import { Toast } from '../shared/ui'
+import { apiGet } from '../shared/apiClient'
+import type { ApiError } from '../shared/apiClient'
 
-type TabKey = 'niveles' | 'historial' | 'escalas'
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-interface Materia {
-  nombre: string
-  clave: string
-  creditos: number
-  clasificacion: string
+type TabKey = 'niveles' | 'escalas'
+type PlanLevelType = 'REGULAR' | 'INTERNSHIP'
+type PlanStatus = 'ACTIVE' | 'INACTIVE'
+
+const LEVEL_TYPE_LABELS: Record<PlanLevelType, string> = {
+  REGULAR: 'Clases regulares',
+  INTERNSHIP: 'Estadías',
 }
 
-interface Nivel {
+const LEVEL_TYPE_STYLE: Record<PlanLevelType, string> = {
+  REGULAR: 'bg-blue-50 text-blue-700 border border-blue-200',
+  INTERNSHIP: 'bg-amber-50 text-amber-700 border border-amber-200',
+}
+
+interface ProgramSummary {
   id: string
-  nombre: string
-  tipo: 'TSU' | 'Ingeniería'
-  materias: Materia[]
+  name: string
+  code: string
 }
 
-const clasificacionStyle: Record<string, string> = {
-  'Básica': 'bg-blue-50 text-blue-700 border border-blue-200',
-  'Ciencias Básicas': 'bg-violet-50 text-violet-700 border border-violet-200',
-  'Lengua Extranjera': 'bg-amber-50 text-amber-700 border border-amber-200',
-  'Especialidad': 'bg-teal-50 text-teal-700 border border-teal-200',
-  'Transversal': 'bg-gray-100 text-gray-600 border border-gray-200',
-  'Matemáticas': 'bg-rose-50 text-rose-700 border border-rose-200',
+interface ProgramsPageResponse {
+  items: ProgramSummary[]
 }
 
-const niveles: Nivel[] = [
-  {
-    id: 'n1', nombre: '1er Cuatrimestre TSU', tipo: 'TSU',
-    materias: [
-      { nombre: 'Fundamentos de Programación', clave: 'FP-101', creditos: 6, clasificacion: 'Básica' },
-      { nombre: 'Cálculo Diferencial', clave: 'CAL-101', creditos: 8, clasificacion: 'Ciencias Básicas' },
-      { nombre: 'Álgebra Lineal', clave: 'ALG-101', creditos: 6, clasificacion: 'Matemáticas' },
-      { nombre: 'Inglés I', clave: 'ING-101', creditos: 4, clasificacion: 'Lengua Extranjera' },
-    ],
-  },
-  {
-    id: 'n2', nombre: '2do Cuatrimestre TSU', tipo: 'TSU',
-    materias: [
-      { nombre: 'Programación Orientada a Objetos', clave: 'POO-201', creditos: 8, clasificacion: 'Básica' },
-      { nombre: 'Cálculo Integral', clave: 'CAL-201', creditos: 8, clasificacion: 'Ciencias Básicas' },
-      { nombre: 'Bases de Datos I', clave: 'BD-201', creditos: 6, clasificacion: 'Especialidad' },
-      { nombre: 'Inglés II', clave: 'ING-201', creditos: 4, clasificacion: 'Lengua Extranjera' },
-    ],
-  },
-  {
-    id: 'n3', nombre: '3er Cuatrimestre TSU', tipo: 'TSU',
-    materias: [
-      { nombre: 'Estructuras de Datos', clave: 'ED-301', creditos: 8, clasificacion: 'Básica' },
-      { nombre: 'Bases de Datos II', clave: 'BD-301', creditos: 6, clasificacion: 'Especialidad' },
-      { nombre: 'Desarrollo Web Frontend', clave: 'DW-301', creditos: 6, clasificacion: 'Especialidad' },
-      { nombre: 'Inglés III', clave: 'ING-301', creditos: 4, clasificacion: 'Lengua Extranjera' },
-    ],
-  },
-  {
-    id: 'n4', nombre: '4to Cuatrimestre TSU', tipo: 'TSU',
-    materias: [
-      { nombre: 'Algoritmos Avanzados', clave: 'ALG-401', creditos: 8, clasificacion: 'Básica' },
-      { nombre: 'Desarrollo de Software en Equipo', clave: 'DSE-401', creditos: 8, clasificacion: 'Especialidad' },
-      { nombre: 'Redes de Computadoras', clave: 'RC-401', creditos: 6, clasificacion: 'Básica' },
-    ],
-  },
-  {
-    id: 'n5', nombre: '5to Cuatrimestre TSU', tipo: 'TSU',
-    materias: [
-      { nombre: 'Seguridad en Aplicaciones', clave: 'SA-501', creditos: 6, clasificacion: 'Especialidad' },
-      { nombre: 'Gestión de Proyectos', clave: 'GP-501', creditos: 6, clasificacion: 'Transversal' },
-      { nombre: 'Estadística', clave: 'EST-501', creditos: 6, clasificacion: 'Matemáticas' },
-    ],
-  },
-  {
-    id: 'n6', nombre: '6to Cuatrimestre TSU', tipo: 'TSU',
-    materias: [
-      { nombre: 'Residencia Profesional TSU', clave: 'RP-601', creditos: 12, clasificacion: 'Transversal' },
-      { nombre: 'Desarrollo de Habilidades', clave: 'DH-601', creditos: 4, clasificacion: 'Transversal' },
-    ],
-  },
-  {
-    id: 'n7', nombre: '7mo Cuatrimestre — Continuidad Ing.', tipo: 'Ingeniería',
-    materias: [
-      { nombre: 'Diseño de Sistemas', clave: 'DS-701', creditos: 8, clasificacion: 'Especialidad' },
-      { nombre: 'Arquitectura de Software', clave: 'AS-701', creditos: 8, clasificacion: 'Especialidad' },
-      { nombre: 'Emprendimiento e Innovación', clave: 'EI-701', creditos: 4, clasificacion: 'Transversal' },
-    ],
-  },
-  {
-    id: 'n8', nombre: '8vo Cuatrimestre — Continuidad Ing.', tipo: 'Ingeniería',
-    materias: [
-      { nombre: 'Inteligencia Artificial', clave: 'IA-801', creditos: 8, clasificacion: 'Especialidad' },
-      { nombre: 'Cloud Computing', clave: 'CC-801', creditos: 6, clasificacion: 'Especialidad' },
-    ],
-  },
-  {
-    id: 'n9', nombre: '9no Cuatrimestre — Continuidad Ing.', tipo: 'Ingeniería',
-    materias: [
-      { nombre: 'Gestión de Calidad de Software', clave: 'GCS-901', creditos: 6, clasificacion: 'Especialidad' },
-      { nombre: 'Ética Profesional', clave: 'EP-901', creditos: 4, clasificacion: 'Transversal' },
-    ],
-  },
-  {
-    id: 'n10', nombre: '10mo Cuatrimestre — Continuidad Ing.', tipo: 'Ingeniería',
-    materias: [
-      { nombre: 'Seminario de Titulación', clave: 'ST-1001', creditos: 6, clasificacion: 'Transversal' },
-      { nombre: 'Optativa I', clave: 'OPT-1001', creditos: 6, clasificacion: 'Especialidad' },
-    ],
-  },
-  {
-    id: 'n11', nombre: '11vo Cuatrimestre — Continuidad Ing.', tipo: 'Ingeniería',
-    materias: [
-      { nombre: 'Residencia Profesional Ing.', clave: 'RP-1101', creditos: 12, clasificacion: 'Transversal' },
-    ],
-  },
-]
-
-const historial = [
-  { fecha: '28/06/2026', hora: '11:42', usuario: 'M. González', cambio: "Asignó materia 'Cloud Computing' al 8vo cuatrimestre." },
-  { fecha: '15/03/2026', hora: '09:15', usuario: 'A. Ramírez', cambio: "Actualizó créditos de 'Cálculo Diferencial' de 7 a 8." },
-  { fecha: '10/01/2025', hora: '16:30', usuario: 'M. González', cambio: 'Creó el plan IDGS-2022 con 10 niveles iniciales.' },
-  { fecha: '05/08/2024', hora: '10:00', usuario: 'L. Hernández', cambio: 'Agregó el nivel 11 (Residencia Profesional Ing.).' },
-]
-
-const totalMaterias = niveles.reduce((acc, n) => acc + n.materias.length, 0)
-const totalCreditos = niveles.reduce((acc, n) => acc + n.materias.reduce((a, m) => a + m.creditos, 0), 0)
-
-function QuitarBtn() {
-  const [show, setShow] = useState(false)
-  return (
-    <div className="relative inline-flex">
-      <button
-        type="button"
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        className="p-1 rounded-md text-[#6B7280] hover:bg-red-50 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-      >
-        <MinusCircle size={14} />
-      </button>
-      {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-[#333333] text-white text-[11px] rounded whitespace-nowrap pointer-events-none z-50">
-          Quitar materia del nivel
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#333333]" />
-        </div>
-      )}
-    </div>
-  )
+// `subjects` mirrors AcademicPlanResponse.levels[].subjects[] (SubjectResponse).
+// Materias assignment is out of scope (blocked — no SubjectClassification
+// catalog in 118-SISA-BACK yet), this screen only reads whatever exists.
+interface SubjectDetail {
+  id: string
+  code: string
+  name: string
+  credits: number
+  weeklyHours: number
+  evaluationUnits: number
+  displayOrder: number
+  type: 'CORE' | 'ELECTIVE' | 'INTERNSHIP'
+  isRetakeable: boolean
+  classificationId: string
 }
 
-function NivelRow({ nivel, index, defaultOpen }: { nivel: Nivel; index: number; defaultOpen?: boolean }) {
-  const navigate = useNavigate()
+interface PlanLevelDetail {
+  id: string
+  levelNumber: number
+  type: PlanLevelType
+  description: string | null
+  subjects: SubjectDetail[]
+}
+
+interface AcademicPlanDetail {
+  id: string
+  programId: string
+  version: string
+  validityPeriod: string
+  titulationKey: string
+  effectiveFrom: string
+  totalLevels: number
+  minPassingGrade: number
+  maxExtraordinaryExamsPerPeriod: number
+  requiresSocialService: boolean
+  socialServiceMinLevelId: string | null
+  status: PlanStatus
+  levels: PlanLevelDetail[]
+}
+
+function formatDate(iso: string): string {
+  // Date-only ISO strings parse as UTC midnight; build a local date to avoid
+  // showing the previous day in timezones west of UTC.
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = y && m && d ? new Date(y, m - 1, d) : new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// ─── Nivel row (expandable) ─────────────────────────────────────────────────────
+
+function NivelRow({ nivel, index, defaultOpen }: { nivel: PlanLevelDetail; index: number; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen ?? false)
-  const creditosNivel = nivel.materias.reduce((a, m) => a + m.creditos, 0)
+  const creditosNivel = nivel.subjects.reduce((a, s) => a + s.credits, 0)
+
   return (
     <div className="border border-[#E5E7EB] rounded-lg overflow-hidden">
       <button
@@ -164,75 +98,85 @@ function NivelRow({ nivel, index, defaultOpen }: { nivel: Nivel; index: number; 
         className={`w-full flex items-center justify-between px-5 py-3.5 transition-colors ${open ? 'bg-[#e6f5f1]' : 'bg-white hover:bg-[#F8F9FA]'}`}
       >
         <div className="flex items-center gap-3">
-          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${nivel.tipo === 'TSU' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'}`}>
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${nivel.type === 'INTERNSHIP' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
             {index + 1}
           </div>
           <div className="text-left">
-            <p className={`text-[13px] font-semibold ${open ? 'text-[#009574]' : 'text-[#333333]'}`}>{nivel.nombre}</p>
+            <p className={`text-[13px] font-semibold ${open ? 'text-[#009574]' : 'text-[#333333]'}`}>
+              Nivel {nivel.levelNumber}{nivel.description ? ` — ${nivel.description}` : ''}
+            </p>
             <p className="text-[11px] text-[#6B7280] mt-0.5">
-              {nivel.materias.length} materia{nivel.materias.length !== 1 ? 's' : ''}
+              {nivel.subjects.length} materia{nivel.subjects.length !== 1 ? 's' : ''}
               <span className="mx-1.5 text-[#E5E7EB]">·</span>
               {creditosNivel} créditos
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${nivel.tipo === 'TSU' ? 'bg-violet-50 text-violet-700 border border-violet-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
-            {nivel.tipo}
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${LEVEL_TYPE_STYLE[nivel.type]}`}>
+            {LEVEL_TYPE_LABELS[nivel.type]}
           </span>
           {open ? <ChevronUp size={15} className="text-[#009574]" /> : <ChevronDown size={15} className="text-[#6B7280]" />}
         </div>
       </button>
       {open && (
         <div className="border-t border-[#E5E7EB]">
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="bg-[#F8F9FA] border-b border-[#E5E7EB]">
-                <th className="text-left px-5 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">Materia</th>
-                <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Clave</th>
-                <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Clasificación</th>
-                <th className="text-right px-5 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Créditos</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {nivel.materias.map((m, mi) => (
-                <tr key={mi} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#FAFAFA] transition-colors group">
-                  <td className="px-5 py-2.5 font-medium text-[#333333]">{m.nombre}</td>
-                  <td className="px-3 py-2.5">
-                    <span className="font-mono text-[11px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{m.clave}</span>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${clasificacionStyle[m.clasificacion] ?? 'bg-gray-100 text-gray-600'}`}>{m.clasificacion}</span>
-                  </td>
-                  <td className="px-5 py-2.5 text-right tabular-nums font-medium text-[#333333]">
-                    {m.creditos}<span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span>
-                  </td>
-                  <td className="px-2 py-2.5">
-                    <QuitarBtn />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-[#F8F9FA] border-t border-[#E5E7EB]">
-                <td colSpan={3} className="px-5 py-2 text-[11px] text-[#6B7280]">Subtotal del nivel</td>
-                <td className="px-5 py-2 text-right text-[12px] font-bold text-[#333333] tabular-nums">
-                  {creditosNivel}<span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span>
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-          {/* Asignar materia */}
+          {nivel.subjects.length === 0 ? (
+            <div className="px-5 py-6 text-center">
+              <p className="text-[12px] text-[#6B7280]">Sin materias asignadas.</p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block">
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="bg-[#F8F9FA] border-b border-[#E5E7EB]">
+                      <th className="text-left px-5 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">Materia</th>
+                      <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Clave</th>
+                      <th className="text-right px-5 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Créditos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nivel.subjects.map(s => (
+                      <tr key={s.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#FAFAFA] transition-colors">
+                        <td className="px-5 py-2.5 font-medium text-[#333333]">{s.name}</td>
+                        <td className="px-3 py-2.5">
+                          <span className="font-mono text-[11px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{s.code}</span>
+                        </td>
+                        <td className="px-5 py-2.5 text-right tabular-nums font-medium text-[#333333]">
+                          {s.credits}<span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-[#F8F9FA] border-t border-[#E5E7EB]">
+                      <td colSpan={2} className="px-5 py-2 text-[11px] text-[#6B7280]">Subtotal del nivel</td>
+                      <td className="px-5 py-2 text-right text-[12px] font-bold text-[#333333] tabular-nums">
+                        {creditosNivel}<span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-[#E5E7EB]">
+                {nivel.subjects.map(s => (
+                  <div key={s.id} className="px-5 py-3 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[12px] font-medium text-[#333333]">{s.name}</p>
+                      <span className="font-mono text-[10px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{s.code}</span>
+                    </div>
+                    <span className="text-[12px] font-semibold text-[#333333] tabular-nums flex-shrink-0">{s.credits} cr.</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {/* Assign/edit subject — blocked: SubjectClassification not implemented in 118-SISA-BACK. */}
           <div className="border-t border-[#E5E7EB] px-5 py-2.5">
-            <button
-              type="button"
-              onClick={() => navigate('/planes/asignar-materia')}
-              className="flex items-center gap-1.5 text-[12px] font-medium text-[#009574] hover:text-[#007a5e] transition-colors"
-            >
-              <Plus size={13} />Asignar Materia
-            </button>
+            <p className="text-[11px] text-[#6B7280]">Asignación de materias pendiente de integración con backend.</p>
           </div>
         </div>
       )}
@@ -240,25 +184,84 @@ function NivelRow({ nivel, index, defaultOpen }: { nivel: Nivel; index: number; 
   )
 }
 
+// ─── Page ──────────────────────────────────────────────────────────────────────
+
 export default function PlanDetalle() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const id = searchParams.get('id')
   const pendingToast = usePendingToast()
-  const [activeTab, setActiveTab] = useState<TabKey>('niveles')
   const [toast, setToast] = useState(pendingToast ?? '')
-  const tsuNiveles = niveles.filter(n => n.tipo === 'TSU')
-  const ingNiveles = niveles.filter(n => n.tipo === 'Ingeniería')
+  const [activeTab, setActiveTab] = useState<TabKey>('niveles')
+
+  const [plan, setPlan] = useState<AcademicPlanDetail | null>(null)
+  const [programs, setPrograms] = useState<ProgramSummary[]>([])
+  const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
+  const [loadErrorMsg, setLoadErrorMsg] = useState('')
+
+  // Program catalog for the header label — same pattern as PlanesList.programLabel().
+  useEffect(() => {
+    apiGet<ProgramsPageResponse>('/programs', { size: 100 })
+      .then(data => setPrograms(data.items))
+      .catch(() => {/* non-critical — programLabel() falls back to '—' */})
+  }, [])
+
+  // GET /plans/{id} is the only endpoint returning the full levels[].subjects[] tree.
+  useEffect(() => {
+    if (!id) {
+      setLoadStatus('error')
+      setLoadErrorMsg('No se especificó un plan de estudios a consultar.')
+      return
+    }
+    let cancelled = false
+    setLoadStatus('loading')
+    setLoadErrorMsg('')
+    apiGet<AcademicPlanDetail>(`/plans/${id}`)
+      .then(data => {
+        if (cancelled) return
+        setPlan(data)
+        setLoadStatus('idle')
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setLoadStatus('error')
+        const apiErr = err as Partial<ApiError>
+        if (apiErr.status === 404) {
+          setLoadErrorMsg('No se encontró el plan de estudios solicitado.')
+        } else if (apiErr.status === 401) {
+          setLoadErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
+        } else if (apiErr.status === 403) {
+          setLoadErrorMsg('No tienes permiso para consultar este plan de estudios.')
+        } else {
+          setLoadErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+        }
+      })
+    return () => { cancelled = true }
+  }, [id])
+
+  function programLabel(programId: string): string {
+    const p = programs.find(p => p.id === programId)
+    return p ? `${p.code} — ${p.name}` : '—'
+  }
+
+  function levelLabel(levelId: string): string {
+    const l = plan?.levels.find(l => l.id === levelId)
+    if (!l) return '—'
+    return `Nivel ${l.levelNumber}${l.description ? ` — ${l.description}` : ''}`
+  }
+
+  const levels = plan ? plan.levels.slice().sort((a, b) => a.levelNumber - b.levelNumber) : []
+  const totalMaterias = levels.reduce((acc, n) => acc + n.subjects.length, 0)
+  const totalCreditos = levels.reduce((acc, n) => acc + n.subjects.reduce((a, s) => a + s.credits, 0), 0)
+  const regularLevels = levels.filter(n => n.type === 'REGULAR')
+  const internshipLevels = levels.filter(n => n.type === 'INTERNSHIP')
 
   return (
-    <div className="max-w-[1100px] mx-auto px-8 py-8">
-      {toast && (
-        <div className="fixed top-5 right-5 z-[100] flex items-center gap-3 bg-white border border-emerald-200 shadow-lg rounded-lg px-4 py-3">
-          <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
-          <span className="text-[13px] font-medium text-[#333333]">{toast}</span>
-          <button onClick={() => setToast('')} className="ml-2 text-[#6B7280] hover:text-[#333333]">✕</button>
-        </div>
-      )}
+    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
+      {toast && <Toast message={toast} onClose={() => setToast('')} />}
+
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
+      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
         <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
         <ChevronRight size={13} />
         <span className="text-[#6B7280]">Configuración Académica</span>
@@ -270,175 +273,184 @@ export default function PlanDetalle() {
 
       {/* Title */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Plan de Estudios — IDGS 2022</h1>
+        <h1 className="text-2xl font-semibold text-[#333333]">
+          {plan ? `Plan de Estudios — ${plan.version}` : 'Plan de Estudios'}
+        </h1>
         <p className="text-[14px] text-[#6B7280] mt-1">Visualiza la estructura completa del plan, sus niveles y materias asignadas.</p>
       </div>
 
-      {/* Summary card */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          <div>
-            <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Programa</p>
-            <p className="text-[13px] font-medium text-[#333333]">Ing. en Desarrollo y Gestión de Software</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Clave del Plan</p>
-            <span className="font-mono text-[13px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">IDGS-2022</span>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Año de Vigencia</p>
-            <p className="text-[13px] font-medium text-[#333333]">2022</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Estado</p>
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Activo
-            </span>
-          </div>
-        </div>
-
-        <hr className="border-[#E5E7EB] my-4" />
-
-        <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-[#e6f5f1]"><Layers size={14} className="text-[#009574]" /></div>
-            <div>
-              <p className="text-[20px] font-bold text-[#333333] leading-none">{niveles.length}</p>
-              <p className="text-[11px] text-[#6B7280]">niveles</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-[#e6f5f1]"><BookMarked size={14} className="text-[#009574]" /></div>
-            <div>
-              <p className="text-[20px] font-bold text-[#333333] leading-none">{totalMaterias}</p>
-              <p className="text-[11px] text-[#6B7280]">materias</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-[#e6f5f1]"><Hash size={14} className="text-[#009574]" /></div>
-            <div>
-              <p className="text-[20px] font-bold text-[#333333] leading-none">{totalCreditos}</p>
-              <p className="text-[11px] text-[#6B7280]">créditos totales</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-violet-50"><GraduationCap size={14} className="text-violet-600" /></div>
-            <div>
-              <p className="text-[13px] font-semibold text-[#333333]">{tsuNiveles.length} TSU</p>
-              <p className="text-[11px] text-[#6B7280]">{ingNiveles.length} Ingeniería</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[#E5E7EB] mb-6">
-        {([
-          { key: 'niveles' as TabKey, label: 'Niveles y Materias', icon: <Layers size={14} /> },
-          { key: 'historial' as TabKey, label: 'Historial de cambios', icon: <History size={14} /> },
-          { key: 'escalas' as TabKey, label: 'Escalas de Calificación', icon: <ClipboardList size={14} /> },
-        ]).map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === tab.key
-                ? 'border-[#009574] text-[#009574]'
-                : 'border-transparent text-[#6B7280] hover:text-[#333333] hover:border-[#E5E7EB]'
-            }`}
-          >
-            {tab.icon}{tab.label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'niveles' && (
-        <div>
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-[11px] font-bold text-violet-700 bg-violet-50 border border-violet-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">TSU</span>
-              <span className="text-[12px] text-[#6B7280]">{tsuNiveles.length} cuatrimestres · {tsuNiveles.reduce((a, n) => a + n.materias.length, 0)} materias</span>
-              <div className="flex-1 h-px bg-[#E5E7EB]" />
-            </div>
-            <div className="space-y-2">
-              {tsuNiveles.map((n, i) => <NivelRow key={n.id} nivel={n} index={i} defaultOpen={i === 0} />)}
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Ingeniería</span>
-              <span className="text-[12px] text-[#6B7280]">{ingNiveles.length} cuatrimestres · {ingNiveles.reduce((a, n) => a + n.materias.length, 0)} materias</span>
-              <div className="flex-1 h-px bg-[#E5E7EB]" />
-            </div>
-            <div className="space-y-2">
-              {ingNiveles.map((n, i) => <NivelRow key={n.id} nivel={n} index={tsuNiveles.length + i} />)}
-            </div>
-          </div>
+      {/* Load error banner */}
+      {loadStatus === 'error' && loadErrorMsg && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
+          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+          {loadErrorMsg}
         </div>
       )}
 
-      {activeTab === 'historial' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-36">Fecha</th>
-                <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-36">Usuario</th>
-                <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Cambio realizado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historial.map((h, i) => (
-                <tr key={i} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                  <td className="px-4 py-3 text-[#6B7280]">
-                    <span className="font-medium text-[#333333]">{h.fecha}</span>
-                    <span className="ml-2 text-[#6B7280]">{h.hora}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-[#e6f5f1] text-[#009574] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                        {h.usuario.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                      </div>
-                      <span className="text-[#333333] font-medium">{h.usuario}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-[#333333]">{h.cambio}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {activeTab === 'escalas' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg p-8 flex flex-col items-center gap-4 text-center">
-          <div className="p-3 rounded-full bg-[#e6f5f1]">
-            <ClipboardList size={22} className="text-[#009574]" />
+      {loadStatus === 'loading' ? (
+        <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
+          <div className="flex flex-col items-center gap-3 text-[#6B7280]">
+            <Loader2 size={24} className="animate-spin text-[#009574]" />
+            <p className="text-[13px] font-medium">Cargando plan de estudios...</p>
           </div>
-          <div>
-            <p className="text-[14px] font-semibold text-[#333333] mb-1">Escalas de Calificación</p>
-            <p className="text-[13px] text-[#6B7280] max-w-md">
-              Configura los rangos numéricos y su equivalencia en letra por clasificación de materia para este plan.
-            </p>
-          </div>
-          <button
-            onClick={() => navigate('/escalas')}
-            className="flex items-center gap-2 bg-[#009574] hover:bg-[#007a5e] text-white text-[13px] font-semibold px-4 py-2 rounded-md transition-colors"
-          >
-            <ClipboardList size={14} />Administrar escalas de calificación
-          </button>
         </div>
-      )}
+      ) : plan ? (
+        <>
+          {/* Summary card */}
+          <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div>
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Programa</p>
+                <p className="text-[13px] font-medium text-[#333333]">{programLabel(plan.programId)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Versión</p>
+                <span className="font-mono text-[13px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">{plan.version}</span>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Clave de Titulación</p>
+                <p className="text-[13px] font-medium text-[#333333]">{plan.titulationKey}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Estado</p>
+                {plan.status === 'ACTIVE' ? (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Activo
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />Inactivo
+                  </span>
+                )}
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Periodo de Vigencia</p>
+                <p className="text-[13px] font-medium text-[#333333]">{plan.validityPeriod}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Vigente Desde</p>
+                <p className="text-[13px] font-medium text-[#333333] tabular-nums">{formatDate(plan.effectiveFrom)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Calificación Mínima Aprobatoria</p>
+                <p className="text-[13px] font-medium text-[#333333] tabular-nums">{plan.minPassingGrade.toFixed(1)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Extraordinarios Máx. por Periodo</p>
+                <p className="text-[13px] font-medium text-[#333333] tabular-nums">{plan.maxExtraordinaryExamsPerPeriod}</p>
+              </div>
+              <div className="col-span-2 md:col-span-4">
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Servicio Social</p>
+                <p className="text-[13px] font-medium text-[#333333]">
+                  {plan.requiresSocialService
+                    ? `Requerido — nivel mínimo: ${plan.socialServiceMinLevelId ? levelLabel(plan.socialServiceMinLevelId) : 'sin definir'}`
+                    : 'No requerido'}
+                </p>
+              </div>
+            </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-end gap-3 mt-8">
-        <button onClick={() => navigate('/planes')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
-          <ArrowLeft size={14} />Regresar
-        </button>
-        <button onClick={() => navigate('/planes/form?mode=edit')} className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
-          <Pencil size={14} />Editar Plan
-        </button>
-      </div>
+            <hr className="border-[#E5E7EB] my-4" />
+
+            <div className="flex flex-wrap items-center gap-6 sm:gap-8">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-[#e6f5f1]"><Layers size={14} className="text-[#009574]" /></div>
+                <div>
+                  <p className="text-[20px] font-bold text-[#333333] leading-none">{levels.length}</p>
+                  <p className="text-[11px] text-[#6B7280]">de {plan.totalLevels} niveles</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-[#e6f5f1]"><BookMarked size={14} className="text-[#009574]" /></div>
+                <div>
+                  <p className="text-[20px] font-bold text-[#333333] leading-none">{totalMaterias}</p>
+                  <p className="text-[11px] text-[#6B7280]">materias</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-[#e6f5f1]"><Hash size={14} className="text-[#009574]" /></div>
+                <div>
+                  <p className="text-[20px] font-bold text-[#333333] leading-none">{totalCreditos}</p>
+                  <p className="text-[11px] text-[#6B7280]">créditos totales</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-violet-50"><GraduationCap size={14} className="text-violet-600" /></div>
+                <div>
+                  <p className="text-[13px] font-semibold text-[#333333]">{regularLevels.length} regulares</p>
+                  <p className="text-[11px] text-[#6B7280]">{internshipLevels.length} estadías</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex items-center gap-1 border-b border-[#E5E7EB] mb-6 overflow-x-auto">
+            {([
+              { key: 'niveles' as TabKey, label: 'Niveles y Materias', icon: <Layers size={14} /> },
+              { key: 'escalas' as TabKey, label: 'Escalas de Calificación', icon: <ClipboardList size={14} /> },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
+                  activeTab === tab.key
+                    ? 'border-[#009574] text-[#009574]'
+                    : 'border-transparent text-[#6B7280] hover:text-[#333333] hover:border-[#E5E7EB]'
+                }`}
+              >
+                {tab.icon}{tab.label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'niveles' && (
+            <div>
+              {levels.length === 0 ? (
+                <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-12 text-center">
+                  <p className="text-[13px] text-[#6B7280]">Este plan todavía no tiene niveles registrados.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {levels.map((n, i) => <NivelRow key={n.id} nivel={n} index={i} defaultOpen={i === 0} />)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Escalas de Calificación — blocked: GradeScale/GradeScaleEntry not implemented in
+              118-SISA-BACK (see plan doc "Bloqueado / fases futuras"). No navigation to the
+              unrelated mock /escalas module — it isn't wired to this plan's real data. */}
+          {activeTab === 'escalas' && (
+            <div className="bg-white border border-[#E5E7EB] rounded-lg p-8 flex flex-col items-center gap-4 text-center">
+              <div className="p-3 rounded-full bg-[#F8F9FA]">
+                <ClipboardList size={22} className="text-[#6B7280]" />
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-[#333333] mb-1">Escalas de Calificación</p>
+                <p className="text-[13px] text-[#6B7280] max-w-md">
+                  Esta sección está pendiente de integración con backend: el modelo de escalas de calificación aún no está implementado en 118-SISA-BACK.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-8">
+            <button
+              onClick={() => navigate('/planes')}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
+            >
+              <ArrowLeft size={14} />Regresar
+            </button>
+            <button
+              onClick={() => navigate(`/planes/form?mode=edit&id=${plan.id}`)}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
+            >
+              <Pencil size={14} />Editar Plan
+            </button>
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }

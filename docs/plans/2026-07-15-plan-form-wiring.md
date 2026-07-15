@@ -107,6 +107,17 @@ Seguir `ProgramasForm.tsx` (patrón ya establecido) para: `useFormMode()`, carga
 - `PlanStatus` real del backend: `ACTIVE` / `INACTIVE` (el doc de dominio dice `DEPRECATED` — desalineación registrada en 118-SISA-CLAUDE, usar lo del backend).
 - El nivel tiene `levelNumber` (1..`totalLevels`, validado por el backend), `type` (`REGULAR` / `INTERNSHIP` — puede haber más de un nivel de estadías) y `description` opcional.
 
+## Fase 1b — Detalle del plan con datos reales (aprobada por el PO 2026-07-15)
+
+`PlanDetalle.tsx` muestra hoy datos 100% mock junto a un formulario ya real — confuso. Se cablea la parte NO bloqueada:
+
+1. **Carga real**: `GET /plans/{id}` (mismo endpoint que usa el form en edición) + resolución del nombre del programa vía `GET /programs`. Patrón `loadStatus` de `ProgramasForm.tsx`, con id tomado de la URL.
+2. **Encabezado del plan**: programa, versión, periodo de vigencia, clave de titulación, vigente desde, total de niveles, mínima aprobatoria, extraordinarios máximos, servicio social (y su nivel mínimo), estatus real (`ACTIVE`/`INACTIVE`).
+3. **Niveles**: lista real desde `levels[]` (`levelNumber`, tipo REGULAR/INTERNSHIP, descripción) con sus materias (`subjects[]`) si existieran — hoy normalmente vacías, con estado vacío honesto.
+4. **Secciones bloqueadas por backend**: asignar/editar materias y pestaña Escalas de Calificación se muestran como "pendiente de backend" (sin datos inventados). El historial mock se elimina o se marca igual.
+5. Sin cambios en `AsignarMateria.tsx` (sigue bloqueado).
+6. Patrón responsivo obligatorio (CHANGELOG [2026-07-09]).
+
 ## Bloqueado / fases futuras (NO en esta fase)
 
 | Tema | Bloqueo |

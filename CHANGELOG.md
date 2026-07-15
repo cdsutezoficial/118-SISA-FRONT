@@ -4,6 +4,19 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-07-15] Conexión con backend real — Detalle del Plan de Estudios (Fase 1b)
+
+`PlanDetalle.tsx` reescrito de mock a datos reales:
+
+- Carga `GET /plans/{id}` (id vía query param, patrón `loadStatus` con mensajes 404/401/403) + nombre de programa desde `GET /programs`.
+- Encabezado real completo: escalares, badge `ACTIVE`/`INACTIVE`, servicio social con nivel mínimo resuelto.
+- Niveles reales con badges Clases regulares/Estadías y materias (`subjects[]`) con estado vacío honesto; tabla → tarjetas en móvil.
+- Secciones bloqueadas por backend sin datos inventados: "Asignar Materia" es texto informativo, pestaña Escalas solo informativa (ya no navega al mock `/escalas`), pestaña Historial eliminada (no existe endpoint de auditoría).
+- Fix: "Editar Plan" ahora navega con `id` (antes abría el formulario sin plan).
+- Fix compartido con `PlanesList.tsx`: `formatDate` parseaba fechas ISO date-only como medianoche UTC y mostraba el día anterior en husos al oeste de UTC (p. ej. America/Mexico_City); ahora construye la fecha en horario local.
+
+---
+
 ## [2026-07-15] Conexión con backend real — Formulario de Planes de Estudio
 
 `PlanForm.tsx` reescrito de mock a backend real (plan de implementación en `docs/plans/2026-07-15-plan-form-wiring.md`):
