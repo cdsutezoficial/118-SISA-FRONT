@@ -1,7 +1,7 @@
 # Plan de implementación — Conectar formulario de Planes de Estudio al backend real
 
 **Fecha**: 2026-07-15
-**Estado**: APROBADO por el PO (2026-07-15) con las decisiones de la sección "Decisiones del PO"
+**Estado**: FASES 1 Y 1B COMPLETADAS, VERIFICADAS Y COMMITEADAS (2026-07-15) — ver "Registro de ejecución" al final
 **Repos involucrados**: `118-SISA-FRONT` (implementación) · `118-SISA-CLAUDE` (registro de desalineaciones, ver `docs/design/pendientes/2026-07-15-planes-form-wiring.md`)
 **Análisis previo**: documentación (`docs/requirements/01-PROGRAMACION.md`, `docs/design/dominio/02-config-academica.md`) comparada contra el backend real (`AcademicPlanController` en `118-SISA-BACK`, referencia en `SISAv2/docs/api/academic-config.md`) y el estado actual del frontend.
 
@@ -137,3 +137,32 @@ Dos observaciones SUGGESTION del revisor independiente, aceptadas como deuda men
 
 - `pnpm typecheck` (verificación primaria del repo, no hay test runner).
 - Prueba manual contra backend real: crear plan con 2+ niveles (uno INTERNSHIP), editar escalares, agregar/renombrar/eliminar nivel, provocar 409 de nivel duplicado, activar servicio social con nivel mínimo.
+
+## Registro de ejecución (2026-07-15)
+
+### Commits en `main` (118-SISA-FRONT)
+
+| Commit | Contenido |
+|---|---|
+| `6f3da36` | Fase 1: `PlanForm.tsx` reescrito contra backend real (escalares + CRUD de niveles con ordenamiento topológico de `levelNumber`), `apiDelete` nuevo en `shared/apiClient.ts` |
+| `9d9f15f` | Fase 1b: `PlanDetalle.tsx` reescrito con datos reales; secciones bloqueadas como placeholders honestos; fix de navegación "Editar Plan" sin `id`; pestaña Historial eliminada |
+| `7347c36` | Fix compartido: `formatDate` parseaba fechas date-only como UTC y mostraba el día anterior en husos al oeste de UTC (`PlanesList.tsx` + `PlanDetalle.tsx`) |
+
+En `118-SISA-CLAUDE` (master): `183fe85` — documento de pendientes y desalineaciones (`docs/design/pendientes/2026-07-15-planes-form-wiring.md`).
+
+### Ciclo de calidad aplicado
+
+Cada fase pasó por: implementación → revisión adversarial con contexto fresco → corrección de hallazgos → re-revisión → typecheck → commit.
+
+- **Fase 1**: la revisión encontró 2 CRITICAL en el diffing de niveles (referencia obsoleta a `socialServiceMinLevelId` al eliminar su nivel; intercambios de `levelNumber` imposibles de guardar secuencialmente). Ambos corregidos: limpieza automática con aviso, y ordenamiento topológico con bloqueo pre-submit de ciclos puros. Re-revisión: APROBADA.
+- **Fase 1b**: revisión APROBADA con 1 WARNING (bug de zona horaria en `formatDate`, heredado de `PlanesList.tsx` ya commiteado) — corregido en ambos archivos antes del commit. `minPassingGrade` ahora se muestra con un decimal.
+
+### Deuda técnica registrada (para Fase 2)
+
+1. `formatDate`, badge de estatus y resolución de nombre de programa duplicados entre `PlanesList.tsx` y `PlanDetalle.tsx` — extraer a `shared/`.
+2. `socialServiceClearedHint` no se resetea en `applyPlanDetail` tras re-sync que restaura un nivel.
+3. `resyncFromServer` tras fallo parcial descarta filas nuevas aún no aplicadas.
+
+### Verificación pendiente del PO
+
+Prueba manual de UI contra backend real (crear/editar/detalle, escenarios 409, responsividad móvil) — José la realiza personalmente.
