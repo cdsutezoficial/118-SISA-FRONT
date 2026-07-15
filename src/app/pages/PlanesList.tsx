@@ -56,9 +56,12 @@ function EstadoBadge({ status }: { status: PlanStatus }) {
 }
 
 function formatDate(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })
+  // Date-only ISO strings parse as UTC midnight; build a local date to avoid
+  // showing the previous day in timezones west of UTC.
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = y && m && d ? new Date(y, m - 1, d) : new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
