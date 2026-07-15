@@ -139,3 +139,11 @@ export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   })
   return handleResponse<T>(res)
 }
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method: 'DELETE',
+    headers: buildHeaders(),
+  })
+  return handleResponse<T>(res)
+}
