@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Building2, GraduationCap, BookOpen, BookMarked,
   CalendarRange, Users, CreditCard, ClipboardList, IdCard, UserPlus,
   ClipboardCheck, ChevronLeft, ChevronRight, ChevronDown,
-  HelpCircle, LogOut, UserCog, Menu, X, Settings, Layers,
+  HelpCircle, LogOut, UserCog, Menu, X, Settings, Layers, Tags,
 } from 'lucide-react'
 import { useRole } from '../shared/RoleContext'
 import type { Role } from '../shared/RoleContext'
@@ -58,6 +58,7 @@ const NAV: NavEntry[] = [
       { icon: <GraduationCap size={18} />, label: 'Programas Educativos',    base: 'programas',  path: '/programas',  roles: STAFF_ROLES },
       { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: STAFF_ROLES },
       { icon: <BookMarked size={18} />,    label: 'Materias',                base: 'materias',   path: '/materias',   roles: STAFF_ROLES },
+      { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: STAFF_ROLES },
       { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: STAFF_ROLES },
       { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: STAFF_ROLES },
       { icon: <CreditCard size={18} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: STAFF_ROLES },

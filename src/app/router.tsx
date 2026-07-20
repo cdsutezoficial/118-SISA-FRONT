@@ -46,6 +46,10 @@ import ExpedienteRecibidos from './pages/inscripciones/ExpedienteRecibidos'
 import DivisionesList from './pages/DivisionesList'
 import DivisionesForm from './pages/DivisionesForm'
 
+// Clasificaciones de Materias
+import ClasificacionesList from './pages/ClasificacionesList'
+import ClasificacionesForm from './pages/ClasificacionesForm'
+
 // Programas
 import ProgramasList from './pages/ProgramasList'
 import ProgramasForm from './pages/ProgramasForm'
@@ -256,6 +260,21 @@ const router = createBrowserRouter([
       },
       { path: 'divisiones/new',  element: <DivisionesForm /> },
       { path: 'divisiones/form', element: <DivisionesForm /> },
+
+      // Clasificaciones de Materias
+      //
+      // Role guard: only the list route is wrapped here, mirroring the
+      // `divisiones` precedent — every `/subject-classifications` verb is
+      // enforced server-side to ADMIN/SERVICIOS_ESCOLARES, so wrapping the
+      // list gives a clean redirect instead of a raw 403/blank state for any
+      // other role. `clasificaciones/new`/`clasificaciones/form` are
+      // untouched — out of scope for this change.
+      {
+        path: 'clasificaciones',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><ClasificacionesList /></RequireRole>,
+      },
+      { path: 'clasificaciones/new',  element: <ClasificacionesForm /> },
+      { path: 'clasificaciones/form', element: <ClasificacionesForm /> },
 
       // Programas
       { path: 'programas',      element: <ProgramasList /> },
