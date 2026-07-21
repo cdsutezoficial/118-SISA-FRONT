@@ -62,6 +62,10 @@ import MateriasForm from './pages/MateriasForm'
 import PeriodosList from './pages/PeriodosList'
 import PeriodosForm from './pages/PeriodosForm'
 
+// Generaciones
+import GeneracionesList from './pages/GeneracionesList'
+import GeneracionesForm from './pages/GeneracionesForm'
+
 // Grupos
 import GruposList from './pages/GruposList'
 import GruposForm from './pages/GruposForm'
@@ -301,6 +305,21 @@ const router = createBrowserRouter([
       },
       { path: 'periodos/new',  element: <PeriodosForm /> },
       { path: 'periodos/form', element: <PeriodosForm /> },
+
+      // Generaciones
+      //
+      // Role guard: only the list route is wrapped here, mirroring the
+      // `divisiones`/`clasificaciones`/`periodos` precedent — every
+      // `/generations` verb is enforced server-side to ADMIN/SERVICIOS_
+      // ESCOLARES, so wrapping the list gives a clean redirect instead of a
+      // raw 403/blank state for any other role. `generaciones/new`/
+      // `generaciones/form` are untouched — out of scope for this change.
+      {
+        path: 'generaciones',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><GeneracionesList /></RequireRole>,
+      },
+      { path: 'generaciones/new',  element: <GeneracionesForm /> },
+      { path: 'generaciones/form', element: <GeneracionesForm /> },
 
       // Grupos
       { path: 'grupos',      element: <GruposList /> },

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Building2, GraduationCap, BookOpen, BookMarked,
   CalendarRange, Users, CreditCard, ClipboardList, IdCard, UserPlus,
   ClipboardCheck, ChevronLeft, ChevronRight, ChevronDown,
-  HelpCircle, LogOut, UserCog, Menu, X, Settings, Layers, Tags,
+  HelpCircle, LogOut, UserCog, Menu, X, Settings, Layers, Tags, Users2,
 } from 'lucide-react'
 import { useRole } from '../shared/RoleContext'
 import type { Role } from '../shared/RoleContext'
@@ -60,6 +60,7 @@ const NAV: NavEntry[] = [
       { icon: <BookMarked size={18} />,    label: 'Materias',                base: 'materias',   path: '/materias',   roles: STAFF_ROLES },
       { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: STAFF_ROLES },
       { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: STAFF_ROLES },
+      { icon: <Users2 size={18} />,        label: 'Generaciones',            base: 'generaciones', path: '/generaciones', roles: STAFF_ROLES },
       { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: STAFF_ROLES },
       { icon: <CreditCard size={18} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: STAFF_ROLES },
       { icon: <ClipboardList size={18} />, label: 'Escalas de Calificación', base: 'escalas',    path: '/escalas',    roles: STAFF_ROLES },
