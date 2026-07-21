@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
-  ChevronRight, Pencil, Layers, BookMarked, Hash,
+  ChevronRight, Pencil, Layers, BookMarked, Hash, Plus, Trash2,
   GraduationCap, ChevronDown, ChevronUp, ArrowLeft, ClipboardList, AlertCircle, Loader2,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { usePendingToast } from '../shared/hooks'
-import { Toast } from '../shared/ui'
-import { apiGet } from '../shared/apiClient'
+import { ActionBtn, Toast } from '../shared/ui'
+import { apiDelete, apiGet } from '../shared/apiClient'
 import type { ApiError } from '../shared/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -36,8 +36,6 @@ interface ProgramsPageResponse {
 }
 
 // `subjects` mirrors AcademicPlanResponse.levels[].subjects[] (SubjectResponse).
-// Materias assignment is out of scope (blocked — no SubjectClassification
-// catalog in 118-SISA-BACK yet), this screen only reads whatever exists.
 interface SubjectDetail {
   id: string
   code: string
@@ -86,9 +84,38 @@ function formatDate(iso: string): string {
 
 // ─── Nivel row (expandable) ─────────────────────────────────────────────────────
 
-function NivelRow({ nivel, index, defaultOpen }: { nivel: PlanLevelDetail; index: number; defaultOpen?: boolean }) {
+function NivelRow({ nivel, index, defaultOpen, planId, onChanged }: {
+  nivel: PlanLevelDetail
+  index: number
+  defaultOpen?: boolean
+  planId: string
+  onChanged: () => void
+}) {
+  const navigate = useNavigate()
   const [open, setOpen] = useState(defaultOpen ?? false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const creditosNivel = nivel.subjects.reduce((a, s) => a + s.credits, 0)
+
+  function goRegister() {
+    navigate(`/planes/materia/form?planId=${planId}&levelId=${nivel.id}`)
+  }
+
+  function goEdit(subjectId: string) {
+    navigate(`/planes/materia/form?planId=${planId}&levelId=${nivel.id}&mode=edit&subjectId=${subjectId}`)
+  }
+
+  async function handleDelete(subject: SubjectDetail) {
+    if (!window.confirm(`¿Eliminar la materia "${subject.name}" de este nivel? Esta acción no se puede deshacer.`)) return
+    setDeletingId(subject.id)
+    try {
+      await apiDelete(`/plans/${planId}/levels/${nivel.id}/subjects/${subject.id}`)
+      onChanged()
+    } catch {
+      window.alert('No se pudo eliminar la materia. Intenta de nuevo más tarde.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div className="border border-[#E5E7EB] rounded-lg overflow-hidden">
@@ -135,6 +162,7 @@ function NivelRow({ nivel, index, defaultOpen }: { nivel: PlanLevelDetail; index
                       <th className="text-left px-5 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">Materia</th>
                       <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Clave</th>
                       <th className="text-right px-5 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Créditos</th>
+                      <th className="px-3 py-2 w-20" />
                     </tr>
                   </thead>
                   <tbody>
@@ -147,6 +175,12 @@ function NivelRow({ nivel, index, defaultOpen }: { nivel: PlanLevelDetail; index
                         <td className="px-5 py-2.5 text-right tabular-nums font-medium text-[#333333]">
                           {s.credits}<span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span>
                         </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center justify-end gap-1">
+                            <ActionBtn icon={<Pencil size={14} />} tooltip="Editar" onClick={() => goEdit(s.id)} disabled={deletingId === s.id} />
+                            <ActionBtn icon={<Trash2 size={14} />} tooltip="Eliminar" danger onClick={() => handleDelete(s)} disabled={deletingId === s.id} />
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -156,6 +190,7 @@ function NivelRow({ nivel, index, defaultOpen }: { nivel: PlanLevelDetail; index
                       <td className="px-5 py-2 text-right text-[12px] font-bold text-[#333333] tabular-nums">
                         {creditosNivel}<span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span>
                       </td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>
@@ -168,15 +203,26 @@ function NivelRow({ nivel, index, defaultOpen }: { nivel: PlanLevelDetail; index
                       <p className="text-[12px] font-medium text-[#333333]">{s.name}</p>
                       <span className="font-mono text-[10px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{s.code}</span>
                     </div>
-                    <span className="text-[12px] font-semibold text-[#333333] tabular-nums flex-shrink-0">{s.credits} cr.</span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[12px] font-semibold text-[#333333] tabular-nums">{s.credits} cr.</span>
+                      <div className="flex items-center gap-0.5">
+                        <ActionBtn icon={<Pencil size={13} />} tooltip="Editar" onClick={() => goEdit(s.id)} disabled={deletingId === s.id} />
+                        <ActionBtn icon={<Trash2 size={13} />} tooltip="Eliminar" danger onClick={() => handleDelete(s)} disabled={deletingId === s.id} />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
             </>
           )}
-          {/* Assign/edit subject — blocked: SubjectClassification not implemented in 118-SISA-BACK. */}
           <div className="border-t border-[#E5E7EB] px-5 py-2.5">
-            <p className="text-[11px] text-[#6B7280]">Asignación de materias pendiente de integración con backend.</p>
+            <button
+              type="button"
+              onClick={goRegister}
+              className="flex items-center gap-1.5 text-[12px] font-semibold text-[#009574] hover:text-[#007a5e] transition-colors"
+            >
+              <Plus size={14} />Registrar Materia
+            </button>
           </div>
         </div>
       )}
@@ -207,14 +253,17 @@ export default function PlanDetalle() {
   }, [])
 
   // GET /plans/{id} is the only endpoint returning the full levels[].subjects[] tree.
-  useEffect(() => {
+  // Extracted as a callback (not just an effect body) so NivelRow can trigger a
+  // refetch after add/edit/delete — refetching the whole tree is simpler and
+  // more consistent with the rest of this screen than mutating local state.
+  const loadPlan = useCallback((opts?: { silent?: boolean }) => {
     if (!id) {
       setLoadStatus('error')
       setLoadErrorMsg('No se especificó un plan de estudios a consultar.')
-      return
+      return () => {}
     }
     let cancelled = false
-    setLoadStatus('loading')
+    if (!opts?.silent) setLoadStatus('loading')
     setLoadErrorMsg('')
     apiGet<AcademicPlanDetail>(`/plans/${id}`)
       .then(data => {
@@ -237,7 +286,12 @@ export default function PlanDetalle() {
         }
       })
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  useEffect(() => {
+    return loadPlan()
+  }, [id, loadPlan])
 
   function programLabel(programId: string): string {
     const p = programs.find(p => p.id === programId)
@@ -411,7 +465,16 @@ export default function PlanDetalle() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {levels.map((n, i) => <NivelRow key={n.id} nivel={n} index={i} defaultOpen={i === 0} />)}
+                  {levels.map((n, i) => (
+                    <NivelRow
+                      key={n.id}
+                      nivel={n}
+                      index={i}
+                      defaultOpen={i === 0}
+                      planId={plan.id}
+                      onChanged={() => loadPlan({ silent: true })}
+                    />
+                  ))}
                 </div>
               )}
             </div>
