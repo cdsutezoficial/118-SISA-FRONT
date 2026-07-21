@@ -75,6 +75,7 @@ import PlanesList from './pages/PlanesList'
 import PlanForm from './pages/PlanForm'
 import PlanDetalle from './pages/PlanDetalle'
 import PlanMateriaForm from './pages/PlanMateriaForm'
+import PlanEscalaForm from './pages/PlanEscalaForm'
 
 // Escalas
 import EscalasList from './pages/EscalasList'
@@ -301,20 +302,25 @@ const router = createBrowserRouter([
       { path: 'conceptos/new',  element: <ConceptosForm /> },
       { path: 'conceptos/form', element: <ConceptosForm /> },
 
-      // Planes (includes extras: detalle + materia)
+      // Planes (includes extras: detalle + materia + escala)
       //
       // `planes/materia/form` (register + edit, via ?mode=) replaces the old
       // `planes/asignar-materia` mock screen — that one assumed a global
       // subject catalog, which the PO confirmed (2026-07-20) doesn't exist in
-      // the domain; subjects are registered directly into a plan level. No
-      // `RequireRole` here — none of the `/planes/**` routes are guarded yet
-      // (unlike `divisiones`/`clasificaciones`/`usuarios`), so this mirrors
-      // the existing pattern rather than introducing a new one.
+      // the domain; subjects are registered directly into a plan level.
+      // `planes/escala/form` (register + edit, same ?mode= convention) follows
+      // the exact same route pattern for GradeScale — full-screen route via
+      // useSearchParams, no standalone GET-by-id, edit mode locates the record
+      // inside the parent plan's response. No `RequireRole` here — none of the
+      // `/planes/**` routes are guarded yet (unlike
+      // `divisiones`/`clasificaciones`/`usuarios`), so this mirrors the
+      // existing pattern rather than introducing a new one.
       { path: 'planes',              element: <PlanesList /> },
       { path: 'planes/new',          element: <PlanForm /> },
       { path: 'planes/form',         element: <PlanForm /> },
       { path: 'planes/detalle',      element: <PlanDetalle /> },
       { path: 'planes/materia/form', element: <PlanMateriaForm /> },
+      { path: 'planes/escala/form',  element: <PlanEscalaForm /> },
 
       // Escalas
       { path: 'escalas',      element: <EscalasList /> },

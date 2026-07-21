@@ -9,6 +9,35 @@ import { ActionBtn, Toast } from '../shared/ui'
 import { apiDelete, apiGet } from '../shared/apiClient'
 import type { ApiError } from '../shared/apiClient'
 
+// `gradeScales` mirrors AcademicPlanResponse.gradeScales[] (GradeScaleResponse) —
+// it travels embedded in GET /plans/{id}, no separate fetch needed.
+interface GradeScaleEntry {
+  id: string
+  fromValue: number
+  toValue: number
+  letter: string
+  description: string
+  passed: boolean
+}
+
+interface GradeScaleDetail {
+  id: string
+  classificationId: string
+  numericMin: number
+  numericMax: number
+  entries: GradeScaleEntry[]
+}
+
+interface ClassificationSummary {
+  id: string
+  name: string
+  code: string
+}
+
+interface ClassificationsPageResponse {
+  items: ClassificationSummary[]
+}
+
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 type TabKey = 'niveles' | 'escalas'
@@ -71,6 +100,7 @@ interface AcademicPlanDetail {
   socialServiceMinLevelId: string | null
   status: PlanStatus
   levels: PlanLevelDetail[]
+  gradeScales: GradeScaleDetail[]
 }
 
 function formatDate(iso: string): string {
@@ -238,18 +268,30 @@ export default function PlanDetalle() {
   const id = searchParams.get('id')
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
-  const [activeTab, setActiveTab] = useState<TabKey>('niveles')
+  // `tab` query param lets PlanEscalaForm land back on the Escalas tab after
+  // register/edit — falls back to 'niveles' (the default) otherwise.
+  const [activeTab, setActiveTab] = useState<TabKey>(searchParams.get('tab') === 'escalas' ? 'escalas' : 'niveles')
 
   const [plan, setPlan] = useState<AcademicPlanDetail | null>(null)
   const [programs, setPrograms] = useState<ProgramSummary[]>([])
+  const [classifications, setClassifications] = useState<ClassificationSummary[]>([])
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
+  const [deletingScaleId, setDeletingScaleId] = useState<string | null>(null)
 
   // Program catalog for the header label — same pattern as PlanesList.programLabel().
   useEffect(() => {
     apiGet<ProgramsPageResponse>('/programs', { size: 100 })
       .then(data => setPrograms(data.items))
       .catch(() => {/* non-critical — programLabel() falls back to '—' */})
+  }, [])
+
+  // Classification catalog to resolve gradeScales[].classificationId labels —
+  // same pattern as the programs fetch above.
+  useEffect(() => {
+    apiGet<ClassificationsPageResponse>('/subject-classifications', { size: 100 })
+      .then(data => setClassifications(data.items))
+      .catch(() => {/* non-critical — classificationLabel() falls back to '—' */})
   }, [])
 
   // GET /plans/{id} is the only endpoint returning the full levels[].subjects[] tree.
@@ -296,6 +338,25 @@ export default function PlanDetalle() {
   function programLabel(programId: string): string {
     const p = programs.find(p => p.id === programId)
     return p ? `${p.code} — ${p.name}` : '—'
+  }
+
+  function classificationLabel(classificationId: string): string {
+    const c = classifications.find(c => c.id === classificationId)
+    return c ? `${c.code} — ${c.name}` : '—'
+  }
+
+  async function handleDeleteScale(scale: GradeScaleDetail) {
+    if (!plan) return
+    if (!window.confirm(`¿Eliminar la escala de calificación "${classificationLabel(scale.classificationId)}"? Esta acción no se puede deshacer.`)) return
+    setDeletingScaleId(scale.id)
+    try {
+      await apiDelete(`/plans/${plan.id}/grade-scales/${scale.id}`)
+      loadPlan({ silent: true })
+    } catch {
+      window.alert('No se pudo eliminar la escala de calificación. Intenta de nuevo más tarde.')
+    } finally {
+      setDeletingScaleId(null)
+    }
   }
 
   function levelLabel(levelId: string): string {
@@ -480,20 +541,100 @@ export default function PlanDetalle() {
             </div>
           )}
 
-          {/* Escalas de Calificación — blocked: GradeScale/GradeScaleEntry not implemented in
-              118-SISA-BACK (see plan doc "Bloqueado / fases futuras"). No navigation to the
-              unrelated mock /escalas module — it isn't wired to this plan's real data. */}
           {activeTab === 'escalas' && (
-            <div className="bg-white border border-[#E5E7EB] rounded-lg p-8 flex flex-col items-center gap-4 text-center">
-              <div className="p-3 rounded-full bg-[#F8F9FA]">
-                <ClipboardList size={22} className="text-[#6B7280]" />
-              </div>
-              <div>
-                <p className="text-[14px] font-semibold text-[#333333] mb-1">Escalas de Calificación</p>
-                <p className="text-[13px] text-[#6B7280] max-w-md">
-                  Esta sección está pendiente de integración con backend: el modelo de escalas de calificación aún no está implementado en 118-SISA-BACK.
-                </p>
-              </div>
+            <div>
+              {plan.gradeScales.length === 0 ? (
+                <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-12 text-center">
+                  <p className="text-[13px] text-[#6B7280] mb-4">Este plan todavía no tiene escalas de calificación registradas.</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/planes/escala/form?planId=${plan.id}`)}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
+                  >
+                    <Plus size={14} />Agregar Escala
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-end mb-3">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/planes/escala/form?planId=${plan.id}`)}
+                      className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
+                    >
+                      <Plus size={14} />Agregar Escala
+                    </button>
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden md:block bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
+                    <table className="w-full text-[13px]">
+                      <thead>
+                        <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
+                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Clasificación</th>
+                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-40">Rango Numérico</th>
+                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-40">Rangos Configurados</th>
+                          <th className="px-4 py-3 w-24" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {plan.gradeScales.map(scale => (
+                          <tr key={scale.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
+                            <td className="px-4 py-3 font-medium text-[#333333]">{classificationLabel(scale.classificationId)}</td>
+                            <td className="px-4 py-3 tabular-nums text-[#333333]">{scale.numericMin.toFixed(1)}–{scale.numericMax.toFixed(1)}</td>
+                            <td className="px-4 py-3 tabular-nums text-[#333333]">
+                              {scale.entries.length} rango{scale.entries.length !== 1 ? 's' : ''}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-1">
+                                <ActionBtn
+                                  icon={<Pencil size={14} />} tooltip="Editar"
+                                  onClick={() => navigate(`/planes/escala/form?planId=${plan.id}&mode=edit&scaleId=${scale.id}`)}
+                                  disabled={deletingScaleId === scale.id}
+                                />
+                                <ActionBtn
+                                  icon={<Trash2 size={14} />} tooltip="Eliminar" danger
+                                  onClick={() => handleDeleteScale(scale)}
+                                  disabled={deletingScaleId === scale.id}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile cards */}
+                  <div className="md:hidden space-y-3">
+                    {plan.gradeScales.map(scale => (
+                      <div key={scale.id} className="bg-white border border-[#E5E7EB] rounded-lg p-4">
+                        <p className="text-[13px] font-medium text-[#333333] mb-2 leading-snug">{classificationLabel(scale.classificationId)}</p>
+                        <div className="flex items-center justify-between text-[12px] text-[#6B7280] mb-3">
+                          <span className="tabular-nums">{scale.numericMin.toFixed(1)}–{scale.numericMax.toFixed(1)}</span>
+                          <span className="tabular-nums">{scale.entries.length} rango{scale.entries.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+                          <button
+                            onClick={() => navigate(`/planes/escala/form?planId=${plan.id}&mode=edit&scaleId=${scale.id}`)}
+                            disabled={deletingScaleId === scale.id}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors disabled:opacity-50"
+                          >
+                            <Pencil size={13} />Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteScale(scale)}
+                            disabled={deletingScaleId === scale.id}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-red-500 border border-red-200 rounded-md hover:bg-red-50 transition-colors disabled:opacity-50"
+                          >
+                            <Trash2 size={13} />Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
