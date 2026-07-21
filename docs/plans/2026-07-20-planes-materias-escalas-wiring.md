@@ -1,7 +1,7 @@
 # Plan de implementación — Cerrar el proceso de Planes de Estudio: Materias + Escalas de Calificación
 
 **Fecha**: 2026-07-20
-**Estado**: PARCIAL — Parte A (Registrar Materia en el Nivel) completa; Parte B (Escalas de Calificación) pendiente
+**Estado**: COMPLETO — Parte A (Registrar Materia en el Nivel) y Parte B (Escalas de Calificación) completas
 **Repos involucrados**: `118-SISA-FRONT` (implementación) · `118-SISA-CLAUDE` (pendientes ya resueltos, ver `docs/design/pendientes/2026-07-15-planes-form-wiring.md`, puntos 3-5)
 **Continúa de**: `docs/plans/2026-07-15-plan-form-wiring.md` (Fase 1 — crear/editar plan + niveles, ya cerrado)
 
@@ -99,3 +99,18 @@ Pantalla 19 actual dice "Materia (8 cols) — Select con buscador... busca por n
 **Verificación:** `pnpm typecheck` (`tsc --noEmit`) → 0 errores. `pnpm build` → build exitoso (`✓ built in 29.64s`), sin errores; queda el warning preexistente de chunk >500kB (no introducido por este cambio, es el tamaño general del bundle de la app).
 
 **Nota de entorno:** en esta ejecución, `pnpm` vía `nvm use` resultó intermitente en el sandbox (el symlink de nvm4w no se creaba de forma consistente en subprocesos en background). Se verificó typecheck/build invocando directamente los binarios locales (`node_modules/typescript/bin/tsc`, `node_modules/vite/bin/vite.js`) con el Node 24 instalado en `AppData/Local/nvm/v24.13.0/node.exe`. Resultado equivalente a `pnpm typecheck`/`pnpm build`.
+
+### Parte B — Escalas de Calificación (2026-07-20)
+
+**Estado:** ✅ Completo. Commit independiente, sin tocar nada de lo hecho en Parte A.
+
+**Archivos creados:**
+- `src/app/pages/PlanEscalaForm.tsx` — registro/edición de una escala de calificación (con su sub-tabla de rangos) dentro de un plan. Ruta `?planId=&mode=&scaleId=` vía `useSearchParams`, mismo patrón que `PlanMateriaForm.tsx`. En modo edición carga el plan completo (`GET /plans/{planId}`) y busca la escala dentro de `gradeScales[]` — no existe `GET /plans/{id}/grade-scales/{scaleId}` independiente. Clasificación vía `SearchSelectField` contra `GET /subject-classifications`, excluyendo las clasificaciones que el plan ya tiene una escala registrada (comparando contra `gradeScales[].classificationId`, dejando pasar la propia escala en edición) — evita el 409 de duplicado sin replicar lógica de negocio compleja. Rangos: tabla editable (agregar/quitar filas) con Desde/Hasta (decimal, `step="0.1"`), Clave (texto, máx. 4), Descripción, ¿Aprueba? (switch); la validación de cobertura/huecos/traslapes es 100% del backend (400 `InvalidGradeScaleEntriesException`), el cliente solo valida campos no vacíos y `numericMin < numericMax`.
+
+**Archivos modificados:**
+- `src/app/pages/PlanDetalle.tsx` — reemplaza el placeholder bloqueado del tab "Escalas de Calificación" por una tabla (desktop) + tarjetas (mobile) listando `plan.gradeScales` (columnas: Clasificación, Rango Numérico, Rangos Configurados, Acciones), botón "+ Agregar Escala", acciones Editar/Eliminar (`window.confirm` antes de eliminar, mismo criterio que Parte A). Se agrega un fetch de `/subject-classifications` (igual patrón que el fetch de `/programs` ya existente) y un helper `classificationLabel()` gemelo de `programLabel()`. Eliminar llama `apiDelete('/plans/{id}/grade-scales/{scaleId}')` y refresca con el `loadPlan()` ya existente (de Parte A) — sin duplicar lógica de fetch. Además, `activeTab` ahora lee el query param `tab` al inicializar el estado (`?tab=escalas`), así `PlanEscalaForm` puede navegar de regreso aterrizando directo en el tab de Escalas tras guardar — no requirió más cambios, el estado del tab ya era local (`useState`), solo se cambió su valor inicial.
+- `src/app/router.tsx` — nueva ruta `planes/escala/form` → `PlanEscalaForm`, mismo nivel de guarda (ninguno) que `planes/materia/form`.
+
+**Desviación del plan:** ninguna — Pantalla 17 y 18 del prompt de Figma se confirmaron sin cambios necesarios (`118-SISA-CLAUDE/docs/design/figma/prompts/01-config-academica.md` líneas 802-885), tal como el plan anticipaba. El "aterrizar en el tab de Escalas tras guardar" sí resultó straightforward: bastó con leer `searchParams.get('tab')` al inicializar `useState`, no fue necesario ningún manejo adicional de sincronización URL↔estado.
+
+**Verificación:** typecheck (`tsc --noEmit` vía Node 24 directo) → 0 errores. Build (`vite build` vía Node 24 directo) → build exitoso (`✓ built in 5.71s`), sin errores; mismo warning preexistente de chunk >500kB (no introducido por este cambio).
