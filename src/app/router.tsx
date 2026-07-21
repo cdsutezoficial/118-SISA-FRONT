@@ -287,8 +287,18 @@ const router = createBrowserRouter([
       { path: 'materias/new',  element: <MateriasForm /> },
       { path: 'materias/form', element: <MateriasForm /> },
 
-      // Periodos
-      { path: 'periodos',      element: <PeriodosList /> },
+      // Periodos Académicos
+      //
+      // Role guard: only the list route is wrapped here, mirroring the
+      // `divisiones`/`clasificaciones` precedent — every `/periods` verb is
+      // enforced server-side to ADMIN/SERVICIOS_ESCOLARES, so wrapping the
+      // list gives a clean redirect instead of a raw 403/blank state for any
+      // other role. `periodos/new`/`periodos/form` are untouched — out of
+      // scope for this change.
+      {
+        path: 'periodos',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><PeriodosList /></RequireRole>,
+      },
       { path: 'periodos/new',  element: <PeriodosForm /> },
       { path: 'periodos/form', element: <PeriodosForm /> },
 
