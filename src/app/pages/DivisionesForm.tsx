@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { ChevronRight, Pencil, Save, X, ArrowLeft, Loader2, AlertCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronRight, Pencil, Save, X, ArrowLeft, Loader2, AlertCircle, Search, UserX, Info } from 'lucide-react'
 import { FieldLabel, FieldHelp, inputCls, ModeSwitcher } from '../shared/ui'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '../shared/hooks'
@@ -24,6 +24,136 @@ interface DivisionFormPayload {
   code: string
   description: string
   directorPersonId: string | null
+}
+
+// Only the users search needs — `GET /users?role=DIRECTOR_DIVISION&divisionId=`
+// (added 2026-07-28, plan `118-SISA-BACK/docs/plans/2026-07-28-director-division-role-filter.md`)
+// resolves candidates who already hold that role scoped to THIS division. There
+// is no `GET /persons/{id}` to resolve a stale `directorPersonId` whose role was
+// later revoked — if the currently-saved director no longer appears in this
+// list, we show the raw id with an explanatory note instead of a name (see
+// `DirectorField` below).
+interface DirectorCandidate {
+  userId: string
+  personId: string
+  fullName: string
+  username: string
+}
+
+interface UsersPageResponse {
+  items: DirectorCandidate[]
+}
+
+// ─── DirectorField ──────────────────────────────────────────────────────────────
+// Edit-mode-only picker: shows ONLY persons who already hold `DIRECTOR_DIVISION`
+// scoped to this division (José, 2026-07-28) — never a free person search, and
+// never shown in Registrar mode, since the role cannot be assigned before the
+// division exists (chicken-and-egg: `UserRole.divisionId` needs a real division).
+
+function DirectorField({ divisionId, value, onChange, disabled }: {
+  divisionId: string
+  value: string
+  onChange: (personId: string) => void
+  disabled: boolean
+}) {
+  const [candidates, setCandidates] = useState<DirectorCandidate[]>([])
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('loading')
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setStatus('loading')
+    apiGet<UsersPageResponse>('/users', { role: 'DIRECTOR_DIVISION', divisionId, status: 'ACTIVE', size: 100 })
+      .then(data => { if (!cancelled) { setCandidates(data.items); setStatus('idle') } })
+      .catch(() => { if (!cancelled) setStatus('error') })
+    return () => { cancelled = true }
+  }, [divisionId])
+
+  useEffect(() => {
+    function outside(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', outside)
+    return () => document.removeEventListener('mousedown', outside)
+  }, [])
+
+  const selected = candidates.find(c => c.personId === value)
+  // The saved directorPersonId may belong to someone whose DIRECTOR_DIVISION
+  // role was revoked after being set as director — they won't be in
+  // `candidates` anymore, and there's no `GET /persons/{id}` to resolve their
+  // name from just the id.
+  const isStaleDirector = !!value && !selected
+
+  if (disabled) {
+    return (
+      <input value={selected ? `${selected.fullName} — ${selected.username}` : (value || '')} disabled readOnly className={inputCls(true, false)} />
+    )
+  }
+
+  return (
+    <div ref={ref} className="relative w-full">
+      {selected ? (
+        <div className="flex items-center justify-between gap-3 px-3 py-2 bg-[#e6f5f1] border border-[#009574]/30 rounded-md">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-[#333333] truncate">{selected.fullName}</p>
+            <p className="text-[12px] text-[#6B7280] font-mono truncate">{selected.username}</p>
+          </div>
+          <button type="button" onClick={() => onChange('')} className="text-[#6B7280] hover:text-[#333333] p-1 rounded flex-shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+            <input
+              type="text"
+              readOnly
+              onFocus={() => setOpen(true)}
+              placeholder="Selecciona el director…"
+              className="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition"
+            />
+          </div>
+          {open && (
+            <div className="absolute top-full mt-1 left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden">
+              <ul className="max-h-56 overflow-y-auto py-1">
+                {status === 'loading' ? (
+                  <li className="px-3 py-3 text-center text-[12px] text-[#6B7280] flex items-center justify-center gap-2">
+                    <Loader2 size={13} className="animate-spin" />Cargando…
+                  </li>
+                ) : status === 'error' ? (
+                  <li className="px-3 py-3 text-center text-[12px] text-red-600">No se pudo consultar. Intenta de nuevo.</li>
+                ) : candidates.length === 0 ? (
+                  <li className="px-3 py-4 text-center text-[12px] text-[#6B7280] flex flex-col items-center gap-1.5">
+                    <UserX size={20} className="text-[#E5E7EB]" />
+                    Ningún usuario tiene el rol de Director asignado a esta división todavía.
+                  </li>
+                ) : (
+                  candidates.map(c => (
+                    <li key={c.userId}>
+                      <button
+                        type="button"
+                        onClick={() => { onChange(c.personId); setOpen(false) }}
+                        className="w-full text-left px-3 py-2 text-[13px] hover:bg-[#F8F9FA] transition-colors"
+                      >
+                        <div className="font-medium text-[#333333] truncate">{c.fullName}</div>
+                        <div className="font-mono text-[11px] text-[#6B7280] truncate">{c.username}</div>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+      {isStaleDirector && (
+        <div className="flex items-start gap-2 mt-2 text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+          <Info size={13} className="flex-shrink-0 mt-0.5" />
+          <span>El director guardado (id: <span className="font-mono">{value}</span>) ya no tiene el rol de Director activo para esta división. Selecciona uno nuevo o vuelve a asignárselo desde Usuarios.</span>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
@@ -211,21 +341,20 @@ export default function DivisionesForm() {
                 placeholder="Descripción breve de la división y su enfoque académico."
               />
             </div>
-            {/* Director (persona) — raw UUID input: no person-search/picker exists yet in the system. */}
-            <div className="col-span-12">
-              <FieldLabel>Director de División (id de persona)</FieldLabel>
-              <input
-                value={directorPersonId}
-                onChange={e => setDirectorPersonId(e.target.value)}
-                disabled={disabled}
-                className={inputCls(disabled, false) + ' font-mono'}
-                placeholder="Ej. 3f2a9c1e-4b8d-4e2a-9c0a-7f1d5e6b2a3c"
-              />
-              <FieldHelp>
-                Identificador (UUID) de la persona que dirige la división. Opcional. No existe aún un buscador de
-                personas en el sistema — este campo es un valor temporal mientras esa capacidad se construye.
-              </FieldHelp>
-            </div>
+            {/* Director (persona) — only in Ver/Editar: the DIRECTOR_DIVISION role
+                requires a real divisionId, so it can never be assigned before
+                the division exists (José, 2026-07-28) — the field has nothing
+                to search in Registrar mode. */}
+            {!isRegister && (
+              <div className="col-span-12">
+                <FieldLabel>Director de División</FieldLabel>
+                {id && <DirectorField divisionId={id} value={directorPersonId} onChange={setDirectorPersonId} disabled={disabled} />}
+                <FieldHelp>
+                  Solo se pueden elegir personas que ya tienen el rol de Director asignado para esta división
+                  (pantalla Usuarios → Asignar Rol). Si aún no existe, asígnalo primero desde ahí.
+                </FieldHelp>
+              </div>
+            )}
           </div>
         )}
       </div>

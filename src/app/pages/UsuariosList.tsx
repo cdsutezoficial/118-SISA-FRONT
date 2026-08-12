@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import {
-  ChevronRight, Search, Eye, Pencil, ToggleLeft, KeyRound, LockKeyholeOpen,
+  ChevronRight, Search, Eye, ToggleLeft, KeyRound, LockKeyholeOpen,
   Plus, ChevronLeft, ChevronRight as ChevRight, X, ChevronDown,
   Clock, CheckCircle2, Info, Loader2, AlertCircle,
 } from 'lucide-react'
@@ -629,7 +629,6 @@ export default function UsuariosList() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-0.5">
                         <ActionBtn icon={<Eye size={15} />} tooltip="Ver detalle" onClick={() => navigate(`/usuarios/detalle?id=${row.id}`)} />
-                        <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/usuarios/form?mode=edit&id=${row.id}`)} />
                         <ActionBtn icon={<ToggleLeft size={15} />} tooltip="Cambiar estado" danger />
                         <ActionBtn icon={<KeyRound size={15} />} tooltip="Restablecer contraseña" danger onClick={() => setResetTarget(row)} />
                         {row.estado === 'Bloqueada' && (

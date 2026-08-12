@@ -1,0 +1,29 @@
+context: |
+  React 18 + TypeScript + Vite functional prototype (SISAv2 frontend).
+  Fully mocked, no backend — data in memory/sessionStorage.
+  See project.md for structure, conventions, and role-guard pattern.
+
+strict_tdd: false
+
+testing:
+  test_runner: none
+  test_layers:
+    unit: false
+    integration: false
+    e2e: false
+  coverage: false
+  quality_tools:
+    linter: none
+    type_checker: "tsc --noEmit"
+    formatter: none
+  build_command: "vite build"
+  dev_command: "vite"
+
+phases:
+  proposal: required
+  spec: required
+  design: optional
+  tasks: required
+  apply: required
+  verify: required (typecheck + build only — no automated test suite)
+  archive: required

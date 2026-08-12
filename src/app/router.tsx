@@ -54,10 +54,6 @@ import ClasificacionesForm from './pages/ClasificacionesForm'
 import ProgramasList from './pages/ProgramasList'
 import ProgramasForm from './pages/ProgramasForm'
 
-// Materias
-import MateriasList from './pages/MateriasList'
-import MateriasForm from './pages/MateriasForm'
-
 // Periodos
 import PeriodosList from './pages/PeriodosList'
 import PeriodosForm from './pages/PeriodosForm'
@@ -70,9 +66,14 @@ import GeneracionesForm from './pages/GeneracionesForm'
 import GruposList from './pages/GruposList'
 import GruposForm from './pages/GruposForm'
 
+// Configuración de Admisión
+import ConfiguracionAdmisionList from './pages/ConfiguracionAdmisionList'
+import ConfiguracionAdmisionForm from './pages/ConfiguracionAdmisionForm'
+
 // Conceptos
 import ConceptosList from './pages/ConceptosList'
 import ConceptosForm from './pages/ConceptosForm'
+import ConceptosTarifaForm from './pages/ConceptosTarifaForm'
 
 // Planes
 import PlanesList from './pages/PlanesList'
@@ -80,10 +81,6 @@ import PlanForm from './pages/PlanForm'
 import PlanDetalle from './pages/PlanDetalle'
 import PlanMateriaForm from './pages/PlanMateriaForm'
 import PlanEscalaForm from './pages/PlanEscalaForm'
-
-// Escalas
-import EscalasList from './pages/EscalasList'
-import EscalaForm from './pages/EscalaForm'
 
 // Usuarios
 import UsuariosList from './pages/UsuariosList'
@@ -286,11 +283,6 @@ const router = createBrowserRouter([
       { path: 'programas/new',  element: <ProgramasForm /> },
       { path: 'programas/form', element: <ProgramasForm /> },
 
-      // Materias
-      { path: 'materias',      element: <MateriasList /> },
-      { path: 'materias/new',  element: <MateriasForm /> },
-      { path: 'materias/form', element: <MateriasForm /> },
-
       // Periodos Académicos
       //
       // Role guard: only the list route is wrapped here, mirroring the
@@ -326,10 +318,34 @@ const router = createBrowserRouter([
       { path: 'grupos/new',  element: <GruposForm /> },
       { path: 'grupos/form', element: <GruposForm /> },
 
-      // Conceptos
-      { path: 'conceptos',      element: <ConceptosList /> },
-      { path: 'conceptos/new',  element: <ConceptosForm /> },
-      { path: 'conceptos/form', element: <ConceptosForm /> },
+      // Configuración de Admisión
+      //
+      // Role guard: only the list route is wrapped here, mirroring the
+      // `divisiones`/`clasificaciones`/`periodos`/`generaciones` precedent —
+      // every `/program-admission-configs` verb is enforced server-side to
+      // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
+      // redirect instead of a raw 403/blank state for any other role.
+      // `configuracion-admision/new`/`configuracion-admision/form` are
+      // untouched — out of scope for this change.
+      {
+        path: 'configuracion-admision',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><ConfiguracionAdmisionList /></RequireRole>,
+      },
+      { path: 'configuracion-admision/new',  element: <ConfiguracionAdmisionForm /> },
+      { path: 'configuracion-admision/form', element: <ConfiguracionAdmisionForm /> },
+
+      // Conceptos (includes extra: tarifa/form)
+      //
+      // `conceptos/tarifa/form` follows the exact route pattern established by
+      // `planes/materia/form`/`planes/escala/form` — a SEPARATE screen (not a
+      // modal) to add a new child record, taking the parent id via
+      // `?conceptId=`. Unlike those two, there is no `?mode=` here: `PaymentRate`
+      // is an append-only history with no edit, so this route is ALWAYS
+      // registration (2026-07-28 wiring plan, Fase 4 of 4).
+      { path: 'conceptos',            element: <ConceptosList /> },
+      { path: 'conceptos/new',        element: <ConceptosForm /> },
+      { path: 'conceptos/form',       element: <ConceptosForm /> },
+      { path: 'conceptos/tarifa/form', element: <ConceptosTarifaForm /> },
 
       // Planes (includes extras: detalle + materia + escala)
       //
@@ -351,11 +367,6 @@ const router = createBrowserRouter([
       { path: 'planes/materia/form', element: <PlanMateriaForm /> },
       { path: 'planes/escala/form',  element: <PlanEscalaForm /> },
 
-      // Escalas
-      { path: 'escalas',      element: <EscalasList /> },
-      { path: 'escalas/new',  element: <EscalaForm /> },
-      { path: 'escalas/form', element: <EscalaForm /> },
-
       // Usuarios (includes extras: detalle + asignar-rol + cambiar-password)
       //
       // Role guard: only the list route is wrapped here — `GET /users` is now
@@ -367,8 +378,11 @@ const router = createBrowserRouter([
         path: 'usuarios',
         element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><UsuariosList /></RequireRole>,
       },
+      // `usuarios/form` (register+edit+view via ?mode=) is REMOVED — the
+      // 2026-07-28 wiring plan drops "edit" entirely (no `PUT /users/{id}`
+      // exists on purpose, nothing about a `User` is editable that way).
+      // `usuarios/new` is now the sole registration route, a 2-step Wizard.
       { path: 'usuarios/new',                element: <UsuariosForm /> },
-      { path: 'usuarios/form',               element: <UsuariosForm /> },
       { path: 'usuarios/detalle',            element: <UsuarioDetalle /> },
       { path: 'usuarios/asignar-rol',        element: <AsignarRol /> },
       { path: 'usuarios/cambiar-password',   element: <CambiarPassword /> },

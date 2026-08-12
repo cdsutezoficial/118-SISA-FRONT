@@ -1,10 +1,10 @@
 import { useState, useEffect, type ReactElement } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router'
 import {
-  LayoutDashboard, Building2, GraduationCap, BookOpen, BookMarked,
-  CalendarRange, Users, CreditCard, ClipboardList, IdCard, UserPlus,
+  LayoutDashboard, Building2, GraduationCap, BookOpen,
+  CalendarRange, Users, CreditCard, IdCard, UserPlus,
   ClipboardCheck, ChevronLeft, ChevronRight, ChevronDown,
-  HelpCircle, LogOut, UserCog, Menu, X, Settings, Layers, Tags, Users2,
+  HelpCircle, LogOut, UserCog, Menu, X, Settings, Layers, Tags, Users2, Ticket,
 } from 'lucide-react'
 import { useRole } from '../shared/RoleContext'
 import type { Role } from '../shared/RoleContext'
@@ -57,13 +57,12 @@ const NAV: NavEntry[] = [
       { icon: <Building2 size={18} />,     label: 'Divisiones Académicas',   base: 'divisiones', path: '/divisiones', roles: STAFF_ROLES },
       { icon: <GraduationCap size={18} />, label: 'Programas Educativos',    base: 'programas',  path: '/programas',  roles: STAFF_ROLES },
       { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: STAFF_ROLES },
-      { icon: <BookMarked size={18} />,    label: 'Materias',                base: 'materias',   path: '/materias',   roles: STAFF_ROLES },
       { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: STAFF_ROLES },
       { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: STAFF_ROLES },
       { icon: <Users2 size={18} />,        label: 'Generaciones',            base: 'generaciones', path: '/generaciones', roles: STAFF_ROLES },
       { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: STAFF_ROLES },
+      { icon: <Ticket size={18} />,        label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: STAFF_ROLES },
       { icon: <CreditCard size={18} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: STAFF_ROLES },
-      { icon: <ClipboardList size={18} />, label: 'Escalas de Calificación', base: 'escalas',    path: '/escalas',    roles: STAFF_ROLES },
     ],
   },
   {
