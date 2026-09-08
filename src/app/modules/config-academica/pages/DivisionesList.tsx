@@ -14,12 +14,13 @@ import {
   FilterSelect,
   ResultCount,
   ErrorBanner,
-  LoadingState,
-  EmptyState,
   Pagination,
   MobilePagination,
   StatusBadge,
   ViewEditActions,
+  DataTable,
+  MobileCards,
+  type ColumnDef,
 } from '@app/core/components/list'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -43,6 +44,17 @@ interface DivisionsPageResponse {
   page: number
   size: number
 }
+
+// ─── Columnas de la tabla desktop ──────────────────────────────────────────────
+
+const columns: ColumnDef[] = [
+  { header: 'División' },
+  { header: 'Clave', className: 'w-24' },
+  { header: 'Descripción' },
+  { header: 'Programas', className: 'w-28' },
+  { header: 'Estado', className: 'w-24' },
+  { header: '', actionCell: true },
+]
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
@@ -163,123 +175,91 @@ export default function DivisionesList() {
       </FilterBar>
 
       {/* ── Desktop table (md+) ─────────────────────────────────────────────── */}
-      <div className="hidden md:block bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">División</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Clave</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Descripción</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Programas</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Estado</th>
-              <th className="px-4 py-3 w-24" />
-            </tr>
-          </thead>
-          <tbody>
-            {loadStatus === 'loading' ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-16 text-center">
-                  <LoadingState label="Cargando divisiones..." />
-                </td>
-              </tr>
-            ) : divisions.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-16 text-center">
-                  <EmptyState
-                    title="No se encontraron divisiones"
-                    hint={loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
-                  />
-                </td>
-              </tr>
-            ) : (
-              divisions.map(row => (
-                <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                  <td className="px-4 py-3 font-medium text-[#333333]">{row.name}</td>
-                  <td className="px-4 py-3">
-                    <span className="font-mono text-[11px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{row.code}</span>
-                  </td>
-                  <td className="px-4 py-3 text-[#6B7280]">{row.description}</td>
-                  <td className="px-4 py-3 text-[#333333]">{row.programCount}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={row.status === 'ACTIVE'}
-                        disabled={togglingId === row.id}
-                        onChange={() => handleToggleStatus(row)}
-                      />
-                      <StatusBadge active={row.status === 'ACTIVE'} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <ViewEditActions
-                      onView={() => navigate(`/divisiones/form?mode=view&id=${row.id}`)}
-                      onEdit={() => navigate(`/divisiones/form?mode=edit&id=${row.id}`)}
-                    />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        <Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />
-      </div>
+      <DataTable
+        columns={columns}
+        status={loadStatus}
+        items={divisions}
+        keyFor={row => row.id}
+        renderRow={row => (
+          <>
+            <td className="px-4 py-3 font-medium text-[#333333]">{row.name}</td>
+            <td className="px-4 py-3">
+              <span className="font-mono text-[11px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{row.code}</span>
+            </td>
+            <td className="px-4 py-3 text-[#6B7280]">{row.description}</td>
+            <td className="px-4 py-3 text-[#333333]">{row.programCount}</td>
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={row.status === 'ACTIVE'}
+                  disabled={togglingId === row.id}
+                  onChange={() => handleToggleStatus(row)}
+                />
+                <StatusBadge active={row.status === 'ACTIVE'} />
+              </div>
+            </td>
+            <td className="px-4 py-3">
+              <ViewEditActions
+                onView={() => navigate(`/divisiones/form?mode=view&id=${row.id}`)}
+                onEdit={() => navigate(`/divisiones/form?mode=edit&id=${row.id}`)}
+              />
+            </td>
+          </>
+        )}
+        loadingLabel="Cargando divisiones..."
+        emptyTitle="No se encontraron divisiones"
+        emptyHint={loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+      />
 
       {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
-      <div className="md:hidden space-y-3">
-        {loadStatus === 'loading' ? (
-          <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
-            <LoadingState label="Cargando divisiones..." />
-          </div>
-        ) : divisions.length === 0 ? (
-          <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
-            <EmptyState
-              title="No se encontraron divisiones"
-              hint={loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
-            />
-          </div>
-        ) : (
-          divisions.map(row => (
-            <div key={row.id} className="bg-white border border-[#E5E7EB] rounded-lg p-4">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
-                  {row.code}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={row.status === 'ACTIVE'}
-                    disabled={togglingId === row.id}
-                    onChange={() => handleToggleStatus(row)}
-                  />
-                  <StatusBadge active={row.status === 'ACTIVE'} />
-                </div>
-              </div>
-              <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{row.name}</p>
-              {row.description && (
-                <p className="text-[12px] text-[#6B7280] mb-2 leading-snug line-clamp-2">{row.description}</p>
-              )}
-              <p className="text-[12px] text-[#6B7280] mb-3">
-                <span className="font-semibold text-[#333333]">{row.programCount}</span> programa{row.programCount !== 1 ? 's' : ''}
-              </p>
-              <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
-                <button
-                  onClick={() => navigate(`/divisiones/form?mode=view&id=${row.id}`)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#6B7280] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
-                >
-                  <Eye size={14} />Ver
-                </button>
-                <button
-                  onClick={() => navigate(`/divisiones/form?mode=edit&id=${row.id}`)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
-                >
-                  <Pencil size={14} />Editar
-                </button>
+      <MobileCards
+        status={loadStatus}
+        items={divisions}
+        keyFor={row => row.id}
+        renderItem={row => (
+          <>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
+                {row.code}
+              </span>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={row.status === 'ACTIVE'}
+                  disabled={togglingId === row.id}
+                  onChange={() => handleToggleStatus(row)}
+                />
+                <StatusBadge active={row.status === 'ACTIVE'} />
               </div>
             </div>
-          ))
+            <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{row.name}</p>
+            {row.description && (
+              <p className="text-[12px] text-[#6B7280] mb-2 leading-snug line-clamp-2">{row.description}</p>
+            )}
+            <p className="text-[12px] text-[#6B7280] mb-3">
+              <span className="font-semibold text-[#333333]">{row.programCount}</span> programa{row.programCount !== 1 ? 's' : ''}
+            </p>
+            <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+              <button
+                onClick={() => navigate(`/divisiones/form?mode=view&id=${row.id}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#6B7280] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
+              >
+                <Eye size={14} />Ver
+              </button>
+              <button
+                onClick={() => navigate(`/divisiones/form?mode=edit&id=${row.id}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
+              >
+                <Pencil size={14} />Editar
+              </button>
+            </div>
+          </>
         )}
-
-        <MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />
-      </div>
+        loadingLabel="Cargando divisiones..."
+        emptyTitle="No se encontraron divisiones"
+        emptyHint={loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+      />
     </PageContainer>
   )
 }

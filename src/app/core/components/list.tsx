@@ -280,3 +280,120 @@ export function ViewEditActions({ onView, onEdit, viewTooltip = 'Ver', editToolt
 export function newAction(label: string, onClick: () => void): PageHeaderAction {
   return { label, onClick, icon: <Plus size={15} /> }
 }
+
+// ─── DataTable ─────────────────────────────────────────────────────────────────
+// Esqueleto de la tabla desktop (md+) usado en todas las listas CRUD.
+// Encapsula el contenedor, thead declarativo, estados loading/empty y el footer
+// (paginación). El cuerpo de cada fila se delega a `renderRow` (debe devolver
+// un <tr> completo para un item). Cubre el patrón del Módulo 01 sin cambios
+// visuales.
+export interface ColumnDef {
+  /** Texto del header ('' para una columna de acciones sin encabezado texto). */
+  header: string
+  /** Clases extra del <th>, p.ej. 'w-24' para fijar ancho. */
+  className?: string
+  /** true → <th> de acciones: sin estilos de texto (solo padding + ancho). */
+  actionCell?: boolean
+}
+
+interface DataTableProps<T> {
+  columns: ColumnDef[]
+  status: 'idle' | 'loading' | 'error' | string
+  items: T[]
+  renderRow: (item: T) => ReactNode
+  keyFor: (item: T) => string
+  loadingLabel: string
+  emptyTitle: string
+  emptyHint: string
+  footer?: ReactNode
+}
+
+export function DataTable<T>({
+  columns,
+  status,
+  items,
+  renderRow,
+  keyFor,
+  loadingLabel,
+  emptyTitle,
+  emptyHint,
+  footer,
+}: DataTableProps<T>) {
+  const colSpan = columns.length
+  return (
+    <div className="hidden md:block bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
+            {columns.map((col, i) => (
+              <th
+                key={i}
+                className={
+                  col.actionCell
+                    ? `px-4 py-3 ${col.className ?? 'w-24'}`
+                    : `text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider ${col.className ?? ''}`
+                }
+              >
+                {col.header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {status === 'loading' ? (
+            <tr>
+              <td colSpan={colSpan} className="px-4 py-16 text-center">
+                <LoadingState label={loadingLabel} />
+              </td>
+            </tr>
+          ) : items.length === 0 ? (
+            <tr>
+              <td colSpan={colSpan} className="px-4 py-16 text-center">
+                <EmptyState title={emptyTitle} hint={emptyHint} />
+              </td>
+            </tr>
+          ) : (
+            items.map(item => <tr key={keyFor(item)} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">{renderRow(item)}</tr>)
+          )}
+        </tbody>
+      </table>
+      {footer && footer}
+    </div>
+  )
+}
+
+// ─── MobileCards ───────────────────────────────────────────────────────────────
+// Vista mobile (< md) en tarjetas usada en todas las listas CRUD. Encapsula los
+// estados loading/empty y la paginación mobile; el contenido de cada tarjeta se
+// delega a `renderItem` (debe devolver el <div> interior de la card).
+export function MobileCards<T>({ status, items, renderItem, keyFor, loadingLabel, emptyTitle, emptyHint, pagination }: {
+  status: 'idle' | 'loading' | 'error' | string
+  items: T[]
+  renderItem: (item: T) => ReactNode
+  keyFor: (item: T) => string
+  loadingLabel: string
+  emptyTitle: string
+  emptyHint: string
+  pagination?: ReactNode
+}) {
+  return (
+    <div className="md:hidden space-y-3">
+      {status === 'loading' ? (
+        <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
+          <LoadingState label={loadingLabel} />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
+          <EmptyState title={emptyTitle} hint={emptyHint} />
+        </div>
+      ) : (
+        items.map(item => (
+          <div key={keyFor(item)} className="bg-white border border-[#E5E7EB] rounded-lg p-4">
+            {renderItem(item)}
+          </div>
+        ))
+      )}
+      {pagination && pagination}
+    </div>
+  )
+}
