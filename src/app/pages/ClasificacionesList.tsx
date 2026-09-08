@@ -113,7 +113,7 @@ export default function ClasificacionesList() {
   }
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
+    <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
       {/* Breadcrumb */}

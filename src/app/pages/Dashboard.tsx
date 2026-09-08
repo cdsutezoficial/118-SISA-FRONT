@@ -42,7 +42,7 @@ export default function Dashboard() {
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
   return (
-    <div className="max-w-[1100px] mx-auto px-8 py-8">
+    <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
       {toast && (
         <div className="fixed top-5 right-5 z-[100] flex items-center gap-3 bg-white border border-emerald-200 shadow-lg rounded-lg px-4 py-3">
           <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
