@@ -1,93 +1,93 @@
 import { createBrowserRouter, Navigate } from 'react-router'
-import AuthLayout from './layouts/AuthLayout'
-import AppLayout from './layouts/AppLayout'
-import { RequireRole } from './shared/RequireRole'
-import { RequireAuth } from './shared/RequireAuth'
+import AuthLayout from '@app/core/layout/AuthLayout'
+import AppLayout from '@app/core/layout/AppLayout'
+import { RequireRole } from '@app/core/infra/RequireRole'
+import { RequireAuth } from '@app/core/infra/RequireAuth'
 
 // Auth pages
-import Login from './pages/Login'
-import ResetPassword from './pages/ResetPassword'
-import ResetConfirm from './pages/ResetConfirm'
+import Login from '@app/core/pages/Login'
+import ResetPassword from '@app/core/pages/ResetPassword'
+import ResetConfirm from '@app/core/pages/ResetConfirm'
 
 // Authenticated pages
-import Dashboard from './pages/Dashboard'
+import Dashboard from '@app/core/pages/Dashboard'
 
 // Admisión
-import AdmisionDashboard from './pages/admision/AdmisionDashboard'
-import CanalesDifusion from './pages/admision/CanalesDifusion'
-import CandidatosList from './pages/admision/CandidatosList'
-import CandidatoDetalle from './pages/admision/CandidatoDetalle'
-import CandidatoRegistro from './pages/admision/CandidatoRegistro'
-import FichaConfirmacion from './pages/admision/FichaConfirmacion'
-import ConfirmarPagoFicha from './pages/admision/ConfirmarPagoFicha'
-import ConfirmarPagoInduccion from './pages/admision/ConfirmarPagoInduccion'
-import RegistroInduccion from './pages/admision/RegistroInduccion'
-import RegistroExamen from './pages/admision/RegistroExamen'
-import SeleccionCandidatos from './pages/admision/SeleccionCandidatos'
-import GenerarMatriculas from './pages/admision/GenerarMatriculas'
-import PublicarResultados from './pages/admision/PublicarResultados'
-import AplicarDescuento from './pages/admision/AplicarDescuento'
-import HabilitarInduccion from './pages/admision/HabilitarInduccion'
+import AdmisionDashboard from '@app/modules/admision/pages/AdmisionDashboard'
+import CanalesDifusion from '@app/modules/admision/pages/CanalesDifusion'
+import CandidatosList from '@app/modules/admision/pages/CandidatosList'
+import CandidatoDetalle from '@app/modules/admision/pages/CandidatoDetalle'
+import CandidatoRegistro from '@app/modules/admision/pages/CandidatoRegistro'
+import FichaConfirmacion from '@app/modules/admision/pages/FichaConfirmacion'
+import ConfirmarPagoFicha from '@app/modules/admision/pages/ConfirmarPagoFicha'
+import ConfirmarPagoInduccion from '@app/modules/admision/pages/ConfirmarPagoInduccion'
+import RegistroInduccion from '@app/modules/admision/pages/RegistroInduccion'
+import RegistroExamen from '@app/modules/admision/pages/RegistroExamen'
+import SeleccionCandidatos from '@app/modules/admision/pages/SeleccionCandidatos'
+import GenerarMatriculas from '@app/modules/admision/pages/GenerarMatriculas'
+import PublicarResultados from '@app/modules/admision/pages/PublicarResultados'
+import AplicarDescuento from '@app/modules/admision/pages/AplicarDescuento'
+import HabilitarInduccion from '@app/modules/admision/pages/HabilitarInduccion'
 
 // Portal (público — Screens 16/17)
-import PortalInduccion from './pages/portal/PortalInduccion'
-import PortalInduccionPago from './pages/portal/PortalInduccionPago'
+import PortalInduccion from '@app/portal/PortalInduccion'
+import PortalInduccionPago from '@app/portal/PortalInduccionPago'
 
 // Inscripciones — all 7 screens are real.
-import InscripcionesDashboard from './pages/inscripciones/InscripcionesDashboard'
-import EstudiantesList from './pages/inscripciones/EstudiantesList'
-import EstudianteDetalle from './pages/inscripciones/EstudianteDetalle'
-import NuevoIngresoWizard from './pages/inscripciones/NuevoIngresoWizard'
-import ReinscripcionWizard from './pages/inscripciones/ReinscripcionWizard'
-import DocumentosInstitucionales from './pages/inscripciones/DocumentosInstitucionales'
-import ExpedienteRecibidos from './pages/inscripciones/ExpedienteRecibidos'
+import InscripcionesDashboard from '@app/modules/inscripciones/pages/InscripcionesDashboard'
+import EstudiantesList from '@app/modules/inscripciones/pages/EstudiantesList'
+import EstudianteDetalle from '@app/modules/inscripciones/pages/EstudianteDetalle'
+import NuevoIngresoWizard from '@app/modules/inscripciones/pages/NuevoIngresoWizard'
+import ReinscripcionWizard from '@app/modules/inscripciones/pages/ReinscripcionWizard'
+import DocumentosInstitucionales from '@app/modules/inscripciones/pages/DocumentosInstitucionales'
+import ExpedienteRecibidos from '@app/modules/inscripciones/pages/ExpedienteRecibidos'
 
 // Divisiones
-import DivisionesList from './pages/DivisionesList'
-import DivisionesForm from './pages/DivisionesForm'
+import DivisionesList from '@app/modules/config-academica/pages/DivisionesList'
+import DivisionesForm from '@app/modules/config-academica/pages/DivisionesForm'
 
 // Clasificaciones de Materias
-import ClasificacionesList from './pages/ClasificacionesList'
-import ClasificacionesForm from './pages/ClasificacionesForm'
+import ClasificacionesList from '@app/modules/config-academica/pages/ClasificacionesList'
+import ClasificacionesForm from '@app/modules/config-academica/pages/ClasificacionesForm'
 
 // Programas
-import ProgramasList from './pages/ProgramasList'
-import ProgramasForm from './pages/ProgramasForm'
+import ProgramasList from '@app/modules/config-academica/pages/ProgramasList'
+import ProgramasForm from '@app/modules/config-academica/pages/ProgramasForm'
 
 // Periodos
-import PeriodosList from './pages/PeriodosList'
-import PeriodosForm from './pages/PeriodosForm'
+import PeriodosList from '@app/modules/config-academica/pages/PeriodosList'
+import PeriodosForm from '@app/modules/config-academica/pages/PeriodosForm'
 
 // Generaciones
-import GeneracionesList from './pages/GeneracionesList'
-import GeneracionesForm from './pages/GeneracionesForm'
+import GeneracionesList from '@app/modules/config-academica/pages/GeneracionesList'
+import GeneracionesForm from '@app/modules/config-academica/pages/GeneracionesForm'
 
 // Grupos
-import GruposList from './pages/GruposList'
-import GruposForm from './pages/GruposForm'
+import GruposList from '@app/modules/config-academica/pages/GruposList'
+import GruposForm from '@app/modules/config-academica/pages/GruposForm'
 
 // Configuración de Admisión
-import ConfiguracionAdmisionList from './pages/ConfiguracionAdmisionList'
-import ConfiguracionAdmisionForm from './pages/ConfiguracionAdmisionForm'
+import ConfiguracionAdmisionList from '@app/modules/config-academica/pages/ConfiguracionAdmisionList'
+import ConfiguracionAdmisionForm from '@app/modules/config-academica/pages/ConfiguracionAdmisionForm'
 
 // Conceptos
-import ConceptosList from './pages/ConceptosList'
-import ConceptosForm from './pages/ConceptosForm'
-import ConceptosTarifaForm from './pages/ConceptosTarifaForm'
+import ConceptosList from '@app/modules/config-academica/pages/ConceptosList'
+import ConceptosForm from '@app/modules/config-academica/pages/ConceptosForm'
+import ConceptosTarifaForm from '@app/modules/config-academica/pages/ConceptosTarifaForm'
 
 // Planes
-import PlanesList from './pages/PlanesList'
-import PlanForm from './pages/PlanForm'
-import PlanDetalle from './pages/PlanDetalle'
-import PlanMateriaForm from './pages/PlanMateriaForm'
-import PlanEscalaForm from './pages/PlanEscalaForm'
+import PlanesList from '@app/modules/config-academica/pages/PlanesList'
+import PlanForm from '@app/modules/config-academica/pages/PlanForm'
+import PlanDetalle from '@app/modules/config-academica/pages/PlanDetalle'
+import PlanMateriaForm from '@app/modules/config-academica/pages/PlanMateriaForm'
+import PlanEscalaForm from '@app/modules/config-academica/pages/PlanEscalaForm'
 
 // Usuarios
-import UsuariosList from './pages/UsuariosList'
-import UsuariosForm from './pages/UsuariosForm'
-import UsuarioDetalle from './pages/UsuarioDetalle'
-import AsignarRol from './pages/AsignarRol'
-import CambiarPassword from './pages/CambiarPassword'
+import UsuariosList from '@app/modules/identity/pages/UsuariosList'
+import UsuariosForm from '@app/modules/identity/pages/UsuariosForm'
+import UsuarioDetalle from '@app/modules/identity/pages/UsuarioDetalle'
+import AsignarRol from '@app/modules/identity/pages/AsignarRol'
+import CambiarPassword from '@app/modules/identity/pages/CambiarPassword'
 
 const router = createBrowserRouter([
   // Root redirect — goes to /login (no auth guard yet)
