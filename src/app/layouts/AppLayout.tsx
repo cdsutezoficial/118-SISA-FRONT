@@ -260,7 +260,7 @@ function Sidebar({
   // ─── Desktop sidebar (md+) ─────────────────────────────────────────────────
   return (
     <>
-      <aside className={`hidden md:flex fixed top-14 left-0 bottom-0 z-40 bg-white border-r border-[#E5E7EB] flex-col transition-all duration-200 ${collapsed ? 'w-[60px]' : 'w-[240px]'}`}>
+      <aside className={`hidden md:flex fixed top-14 left-0 bottom-0 z-40 bg-white border-r border-[#E5E7EB] flex-col transition-all duration-200 overflow-hidden ${collapsed ? 'w-[60px]' : 'w-[240px]'}`}>
         {/* User info */}
         {collapsed ? (
           <div className="px-3 py-4 border-b border-[#E5E7EB] flex justify-center">
@@ -279,7 +279,7 @@ function Sidebar({
         )}
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+        <nav className={`flex-1 py-2 px-2 space-y-0.5 ${collapsed ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           {collapsed ? (
             // Collapsed: flat icon list (tree flattened to leaves)
             allLeafsForRole(role).map(item => {
