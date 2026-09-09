@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  mapRole,
+  mapRoles,
   decodeJwtPayload,
   getStoredMustChangePassword,
   persistSession,
@@ -20,6 +20,7 @@ import { getAccessToken, getStoredAuthMode, setUnauthorizedHandler } from './api
  * already switched to moments earlier via the Navbar dropdown.
  */
 const ROLE_STORAGE_KEY = 'sisa.mockRole'
+const ACTIVE_ROLE_KEY = 'sisa.activeRole'
 
 function readStoredRole(): Role | null {
   try {
@@ -30,6 +31,23 @@ function readStoredRole(): Role | null {
     // sessionStorage unavailable (e.g. private browsing) — fall through to default.
   }
   return 'SERVICIOS_ESCOLARES'
+}
+
+/**
+ * Picks the persisted active role for a real session — only valid if it is
+ * one of the user's actual JWT-mapped roles (a stale choice from an edited
+ * role set falls back to the first candidate). `null` when the user has no
+ * mapped role at all.
+ */
+function readStoredActiveRole(candidates: Role[]): Role | null {
+  if (candidates.length === 0) return null
+  try {
+    const raw = sessionStorage.getItem(ACTIVE_ROLE_KEY)
+    if (raw && (candidates as string[]).includes(raw)) return raw as Role
+  } catch {
+    // sessionStorage unavailable — fall through to first candidate.
+  }
+  return candidates[0]
 }
 
 function writeStoredRole(role: Role | null) {
@@ -54,12 +72,15 @@ function writeStoredRole(role: Role | null) {
  * Dual-mode session (real login integration, see
  * `openspec/changes/real-login-integration/design.md`): **mock mode**
  * (`authMode === 'mock'`, the default on a fresh tab) keeps every behavior
- * above exactly as it was — local `useState`, manual switcher. **Real mode**
- * (`authMode === 'real'`, entered via `login()` after `POST /auth/login`
- * succeeds) derives `role` from the session's decoded JWT `roles` claim
- * instead, and the switcher stops applying. Only `ADMIN` has a seeded backend
- * user today, so mock mode stays available for every other in-progress
- * module's staff roles.
+ * above exactly as it was — local `useState`, manual switcher over the full
+ * staff catalog. **Real mode** (`authMode === 'real'`, entered via `login()`
+ * after `POST /auth/login` succeeds) derives the user's ACTUAL roles from the
+ * session's decoded JWT `roles` claim: `availableRoles` narrows to those, a
+ * multi-role account picks its entry role right after login, and the shell
+ * switcher keeps working to change role mid-session. The chosen role persists
+ * in `sisa.activeRole` so a reload restores it. Only `ADMIN` has a seeded
+ * backend user today, so mock mode stays available for every other
+ * in-progress module's staff roles.
  */
 export type Role =
   | 'ADMINISTRADOR'
@@ -77,9 +98,16 @@ export interface RoleUser {
 export interface RoleContextValue {
   /** `null` = anonymous visitor (pre-registration public flow). */
   role: Role | null
-  /** No-op in real mode — the switcher never overrides a JWT-derived role. */
+  /**
+   * Switches the active role. Mock mode: any of `availableRoles`/`null`.
+   * Real mode: only the session's own JWT-mapped roles (escalation/null are
+   * ignored); the selection persists in sessionStorage for reloads.
+   */
   setRole: (role: Role | null) => void
-  /** Staff dropdown source — never contains `null` or `CANDIDATO`. */
+  /**
+   * Switchable roles. Mock mode: the full staff catalog. Real mode: exactly
+   * the current account's JWT-mapped roles. Never contains `null`/`CANDIDATO`.
+   */
   availableRoles: Role[]
   /** `null` when anonymous (`role === null`). */
   user: RoleUser | null
@@ -129,14 +157,43 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     return token ? decodeJwtPayload(token) : null
   })
 
+  // Every real role the current session may activate (JWT-mapped). Re-derives
+  // from `claims` — set at login and lazily hydrated on reload alike — so it
+  // is never stale independently of them.
+  const realRoles: Role[] = claims ? mapRoles(claims.roles) : []
+
+  // The role actually in effect during a real session. Lazy initializer keeps
+  // a reload on a route gated per-role from flashing the wrong role first.
+  const [activeRole, setActiveRoleState] = useState<Role | null>(() => {
+    if (getStoredAuthMode() !== 'real') return null
+    const token = getAccessToken()
+    const decoded = token ? decodeJwtPayload(token) : null
+    return readStoredActiveRole(decoded ? mapRoles(decoded.roles) : [])
+  })
+
   function setRole(next: Role | null) {
+    if (authMode === 'real') {
+      // A real session may activate ONLY roles the account actually has —
+      // `null`/escalation attempts are ignored, never silently applied.
+      if (next !== null && realRoles.includes(next)) {
+        setActiveRoleState(next)
+        try {
+          sessionStorage.setItem(ACTIVE_ROLE_KEY, next)
+        } catch {
+          // sessionStorage unavailable — role just won't survive a reload.
+        }
+      }
+      return
+    }
     writeStoredRole(next)
     setMockRoleState(next)
   }
 
   function login(res: LoginResponse) {
     persistSession(res)
-    setClaims(decodeJwtPayload(res.accessToken))
+    const decoded = decodeJwtPayload(res.accessToken)
+    setClaims(decoded)
+    setActiveRoleState(readStoredActiveRole(decoded ? mapRoles(decoded.roles) : []))
     setAuthModeState('real')
     setMustChangePasswordState(res.mustChangePassword)
   }
@@ -144,6 +201,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   function logout() {
     clearSession()
     setClaims(null)
+    setActiveRoleState(null)
     setMustChangePasswordState(false)
     setAuthModeState('real') // stays 'real' — re-access must route to /login, not fall back to mock mode
   }
@@ -165,12 +223,15 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const role = authMode === 'real' ? mapRole(claims?.roles ?? []) : mockRole
+  const role = authMode === 'real' ? activeRole : mockRole
 
   const value: RoleContextValue = {
     role,
     setRole,
-    availableRoles: AVAILABLE_ROLES,
+    // Real mode: the account's actual JWT roles (single-role accounts get one
+    // entry; multi-role get the full list the switcher can move between).
+    // Mock mode: the full switchable staff catalog.
+    availableRoles: authMode === 'real' ? realRoles : AVAILABLE_ROLES,
     user: role === null ? null : MOCK_USER,
     authMode,
     mustChangePassword,

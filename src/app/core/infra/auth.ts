@@ -38,6 +38,25 @@ export function mapRole(roles: string[]): Role | null {
   return null
 }
 
+/**
+ * Maps EVERY backend role that has a frontend equivalent, preserving JWT
+ * order and de-duplicating. The result is the set of roles a real user can
+ * actually activate — a multi-role account yields 2+ entries, which drives the
+ * post-login role-selection step and the shell's role switcher.
+ */
+export function mapRoles(roles: string[]): Role[] {
+  const out: Role[] = []
+  const seen = new Set<Role>()
+  for (const backendRole of roles) {
+    const mapped = ROLE_MAP[backendRole]
+    if (mapped && !seen.has(mapped)) {
+      seen.add(mapped)
+      out.push(mapped)
+    }
+  }
+  return out
+}
+
 export interface JwtClaims {
   sub: string
   roles: string[]
