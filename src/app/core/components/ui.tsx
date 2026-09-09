@@ -596,30 +596,35 @@ export function ConfirmModal({ title, message, confirmLabel = 'Confirmar', onCon
 }
 
 // ─── ModeSwitcher ─────────────────────────────────────────────────────────────
-export function ModeSwitcher({ mode, registerUrl, formUrl }: {
+export function ModeSwitcher({ mode, registerUrl, formUrl, id }: {
   mode: 'register' | 'view' | 'edit'
   registerUrl: string
   formUrl: (mode: 'view' | 'edit') => string
+  id?: string | null
 }) {
   const navigate = useNavigate()
   const tabs = [
     { key: 'register' as const, label: 'Registrar', icon: <RotateCcw size={12} /> },
-    { key: 'view' as const, label: 'Ver', icon: <Eye size={12} /> },
-    { key: 'edit' as const, label: 'Editar', icon: <Pencil size={12} /> },
+    { key: 'view' as const, label: 'Ver', icon: <Eye size={12} />, requiresId: true },
+    { key: 'edit' as const, label: 'Editar', icon: <Pencil size={12} />, requiresId: true },
   ]
   return (
     <div className="inline-flex items-center border border-[#E5E7EB] rounded-lg overflow-hidden text-[12px]">
-      {tabs.map(t => (
-        <button
-          key={t.key}
-          type="button"
-          onClick={() => navigate(t.key === 'register' ? registerUrl : formUrl(t.key))}
-          className={`flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors
-            ${mode === t.key ? 'bg-[#009574] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F8F9FA]'}`}
-        >
-          {t.icon}{t.label}
-        </button>
-      ))}
+      {tabs.map(t => {
+        const disabled = !!(t.requiresId && !id)
+        return (
+          <button
+            key={t.key}
+            type="button"
+            disabled={disabled}
+            onClick={() => navigate(t.key === 'register' ? registerUrl : formUrl(t.key))}
+            className={`flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors
+              ${mode === t.key ? 'bg-[#009574] text-white' : disabled ? 'bg-[#F8F9FA] text-[#d1d5db] cursor-not-allowed' : 'bg-white text-[#6B7280] hover:bg-[#F8F9FA]'}`}
+          >
+            {t.icon}{t.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
