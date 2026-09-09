@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, Pencil, Save, X, ArrowLeft, Loader2, AlertCircle, Search, UserX, Info } from 'lucide-react'
+import { UserX, Info } from 'lucide-react'
 import { FieldLabel, FieldHelp, inputCls, ModeSwitcher } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField, TextAreaField, PickerInput, PickerPanel, PickerOption, PickerLoading, PickerError, PickerEmpty, SelectedItem } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
@@ -92,57 +94,29 @@ function DirectorField({ divisionId, value, onChange, disabled }: {
   return (
     <div ref={ref} className="relative w-full">
       {selected ? (
-        <div className="flex items-center justify-between gap-3 px-3 py-2 bg-[#e6f5f1] border border-[#009574]/30 rounded-md">
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-[#333333] truncate">{selected.fullName}</p>
-            <p className="text-[12px] text-[#6B7280] font-mono truncate">{selected.username}</p>
-          </div>
-          <button type="button" onClick={() => onChange('')} className="text-[#6B7280] hover:text-[#333333] p-1 rounded flex-shrink-0">
-            <X size={14} />
-          </button>
-        </div>
+        <SelectedItem title={selected.fullName} subtitle={selected.username} onClear={() => onChange('')} />
       ) : (
         <>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-            <input
-              type="text"
-              readOnly
-              onFocus={() => setOpen(true)}
-              placeholder="Selecciona el director…"
-              className="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition"
-            />
-          </div>
+          <PickerInput readOnly onFocus={() => setOpen(true)} placeholder="Selecciona el director…" />
           {open && (
-            <div className="absolute top-full mt-1 left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden">
+            <PickerPanel>
               <ul className="max-h-56 overflow-y-auto py-1">
                 {status === 'loading' ? (
-                  <li className="px-3 py-3 text-center text-[12px] text-[#6B7280] flex items-center justify-center gap-2">
-                    <Loader2 size={13} className="animate-spin" />Cargando…
-                  </li>
+                  <PickerLoading label="Cargando…" />
                 ) : status === 'error' ? (
-                  <li className="px-3 py-3 text-center text-[12px] text-red-600">No se pudo consultar. Intenta de nuevo.</li>
+                  <PickerError text="No se pudo consultar. Intenta de nuevo." />
                 ) : candidates.length === 0 ? (
-                  <li className="px-3 py-4 text-center text-[12px] text-[#6B7280] flex flex-col items-center gap-1.5">
-                    <UserX size={20} className="text-[#E5E7EB]" />
-                    Ningún usuario tiene el rol de Director asignado a esta división todavía.
-                  </li>
+                  <PickerEmpty icon={<UserX size={20} className="text-[#E5E7EB]" />} text="Ningún usuario tiene el rol de Director asignado a esta división todavía." />
                 ) : (
                   candidates.map(c => (
-                    <li key={c.userId}>
-                      <button
-                        type="button"
-                        onClick={() => { onChange(c.personId); setOpen(false) }}
-                        className="w-full text-left px-3 py-2 text-[13px] hover:bg-[#F8F9FA] transition-colors"
-                      >
-                        <div className="font-medium text-[#333333] truncate">{c.fullName}</div>
-                        <div className="font-mono text-[11px] text-[#6B7280] truncate">{c.username}</div>
-                      </button>
-                    </li>
+                    <PickerOption key={c.userId} onClick={() => { onChange(c.personId); setOpen(false) }}>
+                      <div className="font-medium text-[#333333] truncate">{c.fullName}</div>
+                      <div className="font-mono text-[11px] text-[#6B7280] truncate">{c.username}</div>
+                    </PickerOption>
                   ))
                 )}
               </ul>
-            </div>
+            </PickerPanel>
           )}
         </>
       )}
@@ -176,6 +150,19 @@ export default function DivisionesForm() {
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [submitErrorMsg, setSubmitErrorMsg] = useState('')
+
+  useEffect(() => {
+    setSubmitStatus('idle')
+    setSubmitErrorMsg('')
+    if (isRegister) {
+      setNombre('')
+      setClave('')
+      setDescripcion('')
+      setDirectorPersonId('')
+      setLoadStatus('idle')
+      setLoadErrorMsg('')
+    }
+  }, [mode, id])
 
   useEffect(() => {
     if (isRegister || !id) return
@@ -223,11 +210,11 @@ export default function DivisionesForm() {
     }
     try {
       if (isRegister) {
-        await apiPost<DivisionResponse>('/divisions', payload)
-        navigate('/divisiones', { state: { toast: 'División registrada exitosamente.' } })
+        const created = await apiPost<DivisionResponse>('/divisions', payload)
+        navigate(`/divisiones/form?mode=view&id=${created.id}`, { state: { toast: 'División registrada exitosamente.' } })
       } else if (id) {
         await apiPut<DivisionResponse>(`/divisions/${id}`, payload)
-        navigate('/divisiones', { state: { toast: 'División actualizada exitosamente.' } })
+        navigate(`/divisiones/form?mode=view&id=${id}`, { state: { toast: 'División actualizada exitosamente.' } })
       }
     } catch (err) {
       setSubmitStatus('error')
@@ -247,100 +234,67 @@ export default function DivisionesForm() {
   }
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/divisiones')} className="hover:text-[#009574] transition-colors">Divisiones Académicas</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">
-          {isRegister ? 'Registrar División' : isView ? 'Ver División' : 'Editar División'}
-        </span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Divisiones Académicas', to: '/divisiones' },
+          { label: isRegister ? 'Registrar División' : isView ? 'Ver División' : 'Editar División' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">
-            {isRegister ? 'Registrar División' : isView ? 'Ver División' : 'Editar División'}
-          </h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">
-            {isRegister ? 'Completa los campos para registrar una nueva división académica.' :
-             isView ? 'Información de la división académica.' :
-             'Modifica los datos de la división académica.'}
-          </p>
-        </div>
-        <ModeSwitcher
-          mode={mode}
-          registerUrl="/divisiones/new"
-          formUrl={m => `/divisiones/form?mode=${m}&id=${id}`}
-        />
-      </div>
+      <FormHeader
+        title={isRegister ? 'Registrar División' : isView ? 'Ver División' : 'Editar División'}
+        subtitle={isRegister ? 'Completa los campos para registrar una nueva división académica.' : isView ? 'Información de la división académica.' : 'Modifica los datos de la división académica.'}
+        right={
+          <ModeSwitcher
+            mode={mode}
+            id={id}
+            registerUrl="/divisiones/new"
+            formUrl={m => `/divisiones/form?mode=${m}&id=${id}`}
+          />
+        }
+      />
 
       {/* Load error banner (edit/view fetch failed) */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
 
       {/* Submit error banner */}
-      {submitStatus === 'error' && submitErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {submitErrorMsg}
-        </div>
-      )}
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {/* Form card */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
-        {loadStatus === 'loading' ? (
-          <div className="flex flex-col items-center gap-3 text-[#6B7280] py-12">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando división...</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-12 gap-4">
-            {/* Nombre */}
-            <div className="col-span-12 sm:col-span-8">
-              <FieldLabel required={!isView}>Nombre de la División</FieldLabel>
-              <input
-                value={nombre}
-                onChange={e => setNombre(e.target.value)}
-                disabled={disabled}
-                className={inputCls(disabled, false)}
-                placeholder="Ej. División de Tecnologías de la Información"
-              />
-              <FieldHelp>Nombre completo y oficial de la división académica.</FieldHelp>
-            </div>
-            {/* Clave */}
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required={!isView}>Clave</FieldLabel>
-              <input
-                value={clave}
-                onChange={e => setClave(e.target.value)}
-                disabled={disabled}
-                className={inputCls(disabled, false)}
-                placeholder="Ej. DTI"
-              />
-              <FieldHelp>Identificador corto único.</FieldHelp>
-            </div>
-            {/* Descripción */}
-            <div className="col-span-12">
-              <FieldLabel>Descripción</FieldLabel>
-              <textarea
-                value={descripcion}
-                onChange={e => setDescripcion(e.target.value)}
-                disabled={disabled}
-                rows={4}
-                className={inputCls(disabled, false) + ' resize-none'}
-                placeholder="Descripción breve de la división y su enfoque académico."
-              />
-            </div>
+      <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando división...">
+        <div className="grid grid-cols-12 gap-4">
+            <TextField
+              label="Nombre de la División"
+              required={!isView}
+              value={nombre}
+              onChange={setNombre}
+              disabled={disabled}
+              placeholder="Ej. División de Tecnologías de la Información"
+              help="Nombre completo y oficial de la división académica."
+              className="col-span-12 sm:col-span-8"
+            />
+            <TextField
+              label="Clave"
+              required={!isView}
+              value={clave}
+              onChange={setClave}
+              disabled={disabled}
+              placeholder="Ej. DTI"
+              help="Identificador corto único."
+              className="col-span-12 sm:col-span-4"
+            />
+            <TextAreaField
+              label="Descripción"
+              value={descripcion}
+              onChange={setDescripcion}
+              disabled={disabled}
+              rows={4}
+              placeholder="Descripción breve de la división y su enfoque académico."
+              className="col-span-12"
+            />
             {/* Director (persona) — only in Ver/Editar: the DIRECTOR_DIVISION role
                 requires a real divisionId, so it can never be assigned before
                 the division exists (José, 2026-07-28) — the field has nothing
@@ -356,48 +310,18 @@ export default function DivisionesForm() {
               </div>
             )}
           </div>
-        )}
-      </div>
+      </FormCard>
 
       {/* Actions */}
       {loadStatus !== 'loading' && (
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-          {isView ? (
-            <>
-              <button
-                onClick={() => navigate('/divisiones')}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-              >
-                <ArrowLeft size={14} />Regresar
-              </button>
-              <button
-                onClick={() => navigate(`/divisiones/form?mode=edit&id=${id}`)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-              >
-                <Pencil size={14} />Editar
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => navigate('/divisiones')}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <X size={14} />Cancelar
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {isRegister ? 'Registrar División' : 'Guardar Cambios'}
-              </button>
-            </>
-          )}
-        </div>
+        <FormActions
+          isView={isView}
+          onBack={() => navigate('/divisiones')}
+          onPrimary={isView ? () => navigate(`/divisiones/form?mode=edit&id=${id}`) : handleSubmit}
+          primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar División' : 'Guardar Cambios'}
+          isSubmitting={isSubmitting}
+        />
       )}
-    </div>
+    </FormPage>
   )
 }
