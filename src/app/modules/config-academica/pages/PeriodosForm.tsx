@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Pencil, Save, X, ArrowLeft, Loader2, AlertCircle } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, inputCls, ModeSwitcher } from '@app/core/components/ui'
+import { ModeSwitcher } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
@@ -75,6 +76,24 @@ export default function PeriodosForm() {
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [submitErrorMsg, setSubmitErrorMsg] = useState('')
+
+  useEffect(() => {
+    setSubmitStatus('idle')
+    setSubmitErrorMsg('')
+    setErrors({})
+    if (isRegister) {
+      setName('')
+      setYear('')
+      setPeriodNumber('')
+      setType('')
+      setStartDate('')
+      setEndDate('')
+      setEnrollmentStart('')
+      setEnrollmentEnd('')
+      setLoadStatus('idle')
+      setLoadErrorMsg('')
+    }
+  }, [mode, id])
 
   // ─── Load period (view / edit) ─────────────────────────────────────────────
   useEffect(() => {
@@ -167,11 +186,11 @@ export default function PeriodosForm() {
 
     try {
       if (isRegister) {
-        await apiPost<AcademicPeriodDetail>('/periods', payload)
-        navigate('/periodos', { state: { toast: 'Periodo registrado exitosamente.' } })
+        const created = await apiPost<AcademicPeriodDetail>('/periods', payload)
+        navigate(`/periodos/form?mode=view&id=${created.id}`, { state: { toast: 'Periodo registrado exitosamente.' } })
       } else if (id) {
         await apiPut<AcademicPeriodDetail>(`/periods/${id}`, payload)
-        navigate('/periodos', { state: { toast: 'Periodo actualizado exitosamente.' } })
+        navigate(`/periodos/form?mode=view&id=${id}`, { state: { toast: 'Periodo actualizado exitosamente.' } })
       }
     } catch (err) {
       setSubmitStatus('error')
@@ -193,222 +212,142 @@ export default function PeriodosForm() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/periodos')} className="hover:text-[#009574] transition-colors">Periodos Académicos</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">
-          {isRegister ? 'Registrar Periodo' : isView ? 'Ver Periodo' : 'Editar Periodo'}
-        </span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Periodos Académicos', to: '/periodos' },
+          { label: isRegister ? 'Registrar Periodo' : isView ? 'Ver Periodo' : 'Editar Periodo' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">
-            {isRegister ? 'Registrar Periodo' : isView ? 'Ver Periodo' : 'Editar Periodo'}
-          </h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">
-            {isRegister ? 'Completa los campos para registrar un nuevo periodo académico.' :
-             isView ? 'Información del periodo académico.' :
-             'Modifica los datos del periodo académico.'}
-          </p>
-        </div>
-        <ModeSwitcher
-          mode={mode}
-          registerUrl="/periodos/new"
-          formUrl={m => `/periodos/form?mode=${m}&id=${id}`}
-        />
-      </div>
+      <FormHeader
+        title={isRegister ? 'Registrar Periodo' : isView ? 'Ver Periodo' : 'Editar Periodo'}
+        subtitle={isRegister
+          ? 'Completa los campos para registrar un nuevo periodo académico.'
+          : isView
+          ? 'Información del periodo académico.'
+          : 'Modifica los datos del periodo académico.'}
+        right={
+          <ModeSwitcher
+            mode={mode}
+            id={id}
+            registerUrl="/periodos/new"
+            formUrl={m => `/periodos/form?mode=${m}&id=${id}`}
+          />
+        }
+      />
 
       {/* Load error banner */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
 
       {/* Submit error banner */}
-      {submitStatus === 'error' && submitErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {submitErrorMsg}
-        </div>
-      )}
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {/* Form card */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
-        {loadStatus === 'loading' ? (
-          <div className="flex flex-col items-center gap-3 text-[#6B7280] py-12">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando periodo...</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-12 gap-4">
-
-            {/* Nombre del periodo */}
-            <div className="col-span-12">
-              <FieldLabel required={!isView}>Nombre del Periodo</FieldLabel>
-              <input
-                value={name}
-                onChange={e => { setName(e.target.value); setErrors(prev => ({ ...prev, name: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.name)}
-                placeholder="Ej. Enero – Abril 2026"
-              />
-              {errors.name
-                ? <FieldError>{errors.name}</FieldError>
-                : <FieldHelp>Nombre descriptivo del periodo académico.</FieldHelp>}
-            </div>
-
-            {/* Año */}
-            <div className="col-span-6 sm:col-span-3">
-              <FieldLabel required={!isView}>Año</FieldLabel>
-              <input
-                type="number"
-                value={year}
-                onChange={e => { setYear(e.target.value); setErrors(prev => ({ ...prev, year: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.year)}
-                placeholder="Ej. 2026"
-              />
-              {errors.year && <FieldError>{errors.year}</FieldError>}
-            </div>
-
-            {/* Número de periodo */}
-            <div className="col-span-6 sm:col-span-3">
-              <FieldLabel required={!isView}>Número de Periodo</FieldLabel>
-              <input
-                type="number"
-                value={periodNumber}
-                onChange={e => { setPeriodNumber(e.target.value); setErrors(prev => ({ ...prev, periodNumber: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.periodNumber)}
-                placeholder="Ej. 1"
-              />
-              {errors.periodNumber
-                ? <FieldError>{errors.periodNumber}</FieldError>
-                : <FieldHelp>Normalmente 1, 2 o 3 dentro del año.</FieldHelp>}
-            </div>
-
-            {/* Tipo de periodo */}
-            <div className="col-span-12 sm:col-span-6">
-              <FieldLabel required={!isView}>Tipo de Periodo</FieldLabel>
-              <select
-                value={type}
-                onChange={e => { setType(e.target.value as PeriodType); setErrors(prev => ({ ...prev, type: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.type) + ' appearance-none'}
-              >
-                <option value="">Seleccionar tipo…</option>
-                {(Object.keys(TYPE_LABELS) as PeriodType[]).map(t => (
-                  <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-                ))}
-              </select>
-              {errors.type && <FieldError>{errors.type}</FieldError>}
-            </div>
-
-            {/* Fecha de inicio */}
-            <div className="col-span-6 sm:col-span-3">
-              <FieldLabel required={!isView}>Fecha de Inicio</FieldLabel>
-              <input
-                type="date"
-                value={startDate}
-                onChange={e => { setStartDate(e.target.value); setErrors(prev => ({ ...prev, startDate: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.startDate)}
-              />
-              {errors.startDate && <FieldError>{errors.startDate}</FieldError>}
-            </div>
-
-            {/* Fecha de fin */}
-            <div className="col-span-6 sm:col-span-3">
-              <FieldLabel required={!isView}>Fecha de Fin</FieldLabel>
-              <input
-                type="date"
-                value={endDate}
-                onChange={e => { setEndDate(e.target.value); setErrors(prev => ({ ...prev, endDate: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.endDate)}
-              />
-              {errors.endDate && <FieldError>{errors.endDate}</FieldError>}
-            </div>
-
-            {/* Inicio de inscripciones */}
-            <div className="col-span-6 sm:col-span-3">
-              <FieldLabel required={!isView}>Inicio de Inscripciones</FieldLabel>
-              <input
-                type="date"
-                value={enrollmentStart}
-                onChange={e => { setEnrollmentStart(e.target.value); setErrors(prev => ({ ...prev, enrollmentStart: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.enrollmentStart)}
-              />
-              {errors.enrollmentStart && <FieldError>{errors.enrollmentStart}</FieldError>}
-            </div>
-
-            {/* Fin de inscripciones */}
-            <div className="col-span-6 sm:col-span-3">
-              <FieldLabel required={!isView}>Fin de Inscripciones</FieldLabel>
-              <input
-                type="date"
-                value={enrollmentEnd}
-                onChange={e => { setEnrollmentEnd(e.target.value); setErrors(prev => ({ ...prev, enrollmentEnd: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.enrollmentEnd)}
-              />
-              {errors.enrollmentEnd && <FieldError>{errors.enrollmentEnd}</FieldError>}
-            </div>
-
-          </div>
-        )}
-      </div>
+      <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando periodo...">
+        <div className="grid grid-cols-12 gap-4">
+          <TextField
+            label="Nombre del Periodo"
+            required={!isView}
+            value={name}
+            onChange={v => { setName(v); setErrors(prev => ({ ...prev, name: undefined })) }}
+            disabled={disabled}
+            error={errors.name}
+            placeholder="Ej. Enero – Abril 2026"
+            help="Nombre descriptivo del periodo académico."
+            className="col-span-12"
+          />
+          <TextField
+            label="Año"
+            required={!isView}
+            type="number"
+            value={year}
+            onChange={v => { setYear(v); setErrors(prev => ({ ...prev, year: undefined })) }}
+            disabled={disabled}
+            error={errors.year}
+            numeric
+            placeholder="Ej. 2026"
+            className="col-span-6 sm:col-span-3"
+          />
+          <TextField
+            label="Número de Periodo"
+            required={!isView}
+            type="number"
+            value={periodNumber}
+            onChange={v => { setPeriodNumber(v); setErrors(prev => ({ ...prev, periodNumber: undefined })) }}
+            disabled={disabled}
+            error={errors.periodNumber}
+            numeric
+            placeholder="Ej. 1"
+            help="Normalmente 1, 2 o 3 dentro del año."
+            className="col-span-6 sm:col-span-3"
+          />
+          <SelectField
+            label="Tipo de Periodo"
+            required={!isView}
+            value={type}
+            onChange={v => { setType(v as PeriodType); setErrors(prev => ({ ...prev, type: undefined })) }}
+            disabled={disabled}
+            error={errors.type}
+            options={(Object.keys(TYPE_LABELS) as PeriodType[]).map(t => ({ value: t, label: TYPE_LABELS[t] }))}
+            placeholder="Seleccionar tipo…"
+            className="col-span-12 sm:col-span-6"
+          />
+          <TextField
+            label="Fecha de Inicio"
+            required={!isView}
+            type="date"
+            value={startDate}
+            onChange={v => { setStartDate(v); setErrors(prev => ({ ...prev, startDate: undefined })) }}
+            disabled={disabled}
+            error={errors.startDate}
+            className="col-span-6 sm:col-span-3"
+          />
+          <TextField
+            label="Fecha de Fin"
+            required={!isView}
+            type="date"
+            value={endDate}
+            onChange={v => { setEndDate(v); setErrors(prev => ({ ...prev, endDate: undefined })) }}
+            disabled={disabled}
+            error={errors.endDate}
+            className="col-span-6 sm:col-span-3"
+          />
+          <TextField
+            label="Inicio de Inscripciones"
+            required={!isView}
+            type="date"
+            value={enrollmentStart}
+            onChange={v => { setEnrollmentStart(v); setErrors(prev => ({ ...prev, enrollmentStart: undefined })) }}
+            disabled={disabled}
+            error={errors.enrollmentStart}
+            className="col-span-6 sm:col-span-3"
+          />
+          <TextField
+            label="Fin de Inscripciones"
+            required={!isView}
+            type="date"
+            value={enrollmentEnd}
+            onChange={v => { setEnrollmentEnd(v); setErrors(prev => ({ ...prev, enrollmentEnd: undefined })) }}
+            disabled={disabled}
+            error={errors.enrollmentEnd}
+            className="col-span-6 sm:col-span-3"
+          />
+        </div>
+      </FormCard>
 
       {/* Actions */}
       {loadStatus !== 'loading' && (
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-          {isView ? (
-            <>
-              <button
-                onClick={() => navigate('/periodos')}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-              >
-                <ArrowLeft size={14} />Regresar
-              </button>
-              <button
-                onClick={() => navigate(`/periodos/form?mode=edit&id=${id}`)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-              >
-                <Pencil size={14} />Editar
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => navigate('/periodos')}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <X size={14} />Cancelar
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {isRegister ? 'Registrar Periodo' : 'Guardar Cambios'}
-              </button>
-            </>
-          )}
-        </div>
+        <FormActions
+          isView={isView}
+          onBack={() => navigate('/periodos')}
+          onPrimary={isView ? () => navigate(`/periodos/form?mode=edit&id=${id}`) : handleSubmit}
+          primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Periodo' : 'Guardar Cambios'}
+          isSubmitting={isSubmitting}
+        />
       )}
-    </div>
+    </FormPage>
   )
 }
