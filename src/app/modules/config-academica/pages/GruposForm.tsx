@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Pencil, Save, X, Loader2, AlertCircle } from 'lucide-react'
-import { FieldLabel, FieldHelp, inputCls, ModeSwitcher, SearchSelectField } from '@app/core/components/ui'
+import { FieldLabel, FieldHelp, ModeSwitcher, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
@@ -119,6 +120,22 @@ export default function GruposForm() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [submitErrorMsg, setSubmitErrorMsg] = useState('')
 
+  useEffect(() => {
+    setSubmitStatus('idle')
+    setSubmitErrorMsg('')
+    if (isRegister) {
+      setProgramId('')
+      setGenerationId('')
+      setPeriodId('')
+      setPlanLevelId('')
+      setShift('')
+      setCode('')
+      setMaxCapacity('')
+      setLoadStatus('idle')
+      setLoadErrorMsg('')
+    }
+  }, [mode, id])
+
   // Programa/Generación/Periodo catalogs — fetched once, used to populate the
   // cascading selects (Programa → filters Generación) and to resolve the
   // Generación's `planId` for the Nivel select.
@@ -224,11 +241,11 @@ export default function GruposForm() {
     }
     try {
       if (isRegister) {
-        await apiPost<GroupResponse>('/groups', payload)
-        navigate('/grupos', { state: { toast: 'Grupo registrado exitosamente.' } })
+        const created = await apiPost<GroupResponse>('/groups', payload)
+        navigate(`/grupos/form?mode=view&id=${created.id}`, { state: { toast: 'Grupo registrado exitosamente.' } })
       } else if (id) {
         await apiPut<GroupResponse>(`/groups/${id}`, payload)
-        navigate('/grupos', { state: { toast: 'Grupo actualizado exitosamente.' } })
+        navigate(`/grupos/form?mode=view&id=${id}`, { state: { toast: 'Grupo actualizado exitosamente.' } })
       }
     } catch (err) {
       setSubmitStatus('error')
@@ -260,184 +277,128 @@ export default function GruposForm() {
       : 'Modifica los datos del grupo académico.'
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/grupos')} className="hover:text-[#009574] transition-colors">Grupos</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">{title}</span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Grupos', to: '/grupos' },
+          { label: title },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">{title}</h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">{description}</p>
-        </div>
-        {!isRegister && id && (
-          <ModeSwitcher mode={mode} registerUrl="/grupos/new" formUrl={m => `/grupos/form?mode=${m}&id=${id}`} />
-        )}
-      </div>
+      <FormHeader
+        title={title}
+        subtitle={description}
+        right={<ModeSwitcher mode={mode} id={id} registerUrl="/grupos/new" formUrl={m => `/grupos/form?mode=${m}&id=${id}`} />}
+      />
 
       {/* Load error banner (edit/view fetch failed) */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
 
       {/* Submit error banner */}
-      {submitStatus === 'error' && submitErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {submitErrorMsg}
-        </div>
-      )}
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {/* Form card */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
-        {loadStatus === 'loading' ? (
-          <div className="flex flex-col items-center gap-3 text-[#6B7280] py-12">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando grupo...</p>
+      <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando grupo...">
+        <div className="grid grid-cols-12 gap-4">
+          {/* Fila 1 */}
+          <div className="col-span-12 sm:col-span-4">
+            <FieldLabel required={!isView}>Programa Educativo</FieldLabel>
+            <SearchSelectField
+              options={programOptions}
+              value={programId}
+              onChange={handleProgramChange}
+              placeholder="Selecciona el programa"
+              disabled={disabled}
+              searchPlaceholder="Buscar programa…"
+            />
+            <FieldHelp>Filtra las generaciones disponibles.</FieldHelp>
           </div>
-        ) : (
-          <div className="grid grid-cols-12 gap-4">
-            {/* Fila 1 */}
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required={!isView}>Programa Educativo</FieldLabel>
-              <SearchSelectField
-                options={programOptions}
-                value={programId}
-                onChange={handleProgramChange}
-                placeholder="Selecciona el programa"
-                disabled={disabled}
-                searchPlaceholder="Buscar programa…"
-              />
-              <FieldHelp>Filtra las generaciones disponibles.</FieldHelp>
-            </div>
-            <div className="col-span-12 sm:col-span-8">
-              <FieldLabel required={!isView}>Generación</FieldLabel>
-              <SearchSelectField
-                options={generationOptions}
-                value={generationId}
-                onChange={handleGenerationChange}
-                placeholder="Selecciona la generación"
-                disabled={disabled || !programId}
-                searchPlaceholder="Buscar generación…"
-              />
-              <FieldHelp>Determina el plan de estudios del grupo (ej. &ldquo;2026-7&rdquo;).</FieldHelp>
-            </div>
-
-            {/* Fila 2 */}
-            <div className="col-span-12 sm:col-span-6">
-              <FieldLabel required={!isView}>Periodo Académico</FieldLabel>
-              <SearchSelectField
-                options={periodOptions}
-                value={periodId}
-                onChange={setPeriodId}
-                placeholder="Selecciona el periodo"
-                disabled={disabled}
-                searchPlaceholder="Buscar periodo…"
-              />
-            </div>
-            <div className="col-span-12 sm:col-span-6">
-              <FieldLabel required={!isView}>Nivel del Plan</FieldLabel>
-              <SearchSelectField
-                options={planLevelOptions}
-                value={planLevelId}
-                onChange={setPlanLevelId}
-                placeholder="Selecciona el nivel"
-                disabled={disabled || !generationId}
-                searchPlaceholder="Buscar nivel…"
-              />
-            </div>
-
-            {/* Fila 3 */}
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required={!isView}>Turno</FieldLabel>
-              <select
-                value={shift}
-                onChange={e => setShift(e.target.value as Shift)}
-                disabled={disabled}
-                className={inputCls(disabled, false)}
-              >
-                <option value="">Selecciona el turno</option>
-                {SHIFT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="col-span-6 sm:col-span-4">
-              <FieldLabel required={!isView}>Clave del Grupo</FieldLabel>
-              <input
-                value={code}
-                onChange={e => setCode(e.target.value.toUpperCase())}
-                disabled={disabled}
-                className={inputCls(disabled, false)}
-                placeholder="Ej. A"
-                maxLength={20}
-              />
-              <FieldHelp>Se generará como: IDGS-101-A.</FieldHelp>
-            </div>
-            <div className="col-span-6 sm:col-span-4">
-              <FieldLabel required={!isView}>Capacidad Máxima</FieldLabel>
-              <input
-                type="number"
-                min={1}
-                value={maxCapacity}
-                onChange={e => setMaxCapacity(e.target.value)}
-                disabled={disabled}
-                className={inputCls(disabled, false) + ' tabular-nums'}
-                placeholder="Ej. 30"
-              />
-            </div>
+          <div className="col-span-12 sm:col-span-8">
+            <FieldLabel required={!isView}>Generación</FieldLabel>
+            <SearchSelectField
+              options={generationOptions}
+              value={generationId}
+              onChange={handleGenerationChange}
+              placeholder="Selecciona la generación"
+              disabled={disabled || !programId}
+              searchPlaceholder="Buscar generación…"
+            />
+            <FieldHelp>Determina el plan de estudios del grupo (ej. &ldquo;2026-7&rdquo;).</FieldHelp>
           </div>
-        )}
-      </div>
+
+          {/* Fila 2 */}
+          <div className="col-span-12 sm:col-span-6">
+            <FieldLabel required={!isView}>Periodo Académico</FieldLabel>
+            <SearchSelectField
+              options={periodOptions}
+              value={periodId}
+              onChange={setPeriodId}
+              placeholder="Selecciona el periodo"
+              disabled={disabled}
+              searchPlaceholder="Buscar periodo…"
+            />
+          </div>
+          <div className="col-span-12 sm:col-span-6">
+            <FieldLabel required={!isView}>Nivel del Plan</FieldLabel>
+            <SearchSelectField
+              options={planLevelOptions}
+              value={planLevelId}
+              onChange={setPlanLevelId}
+              placeholder="Selecciona el nivel"
+              disabled={disabled || !generationId}
+              searchPlaceholder="Buscar nivel…"
+            />
+          </div>
+
+          {/* Fila 3 */}
+          <SelectField
+            label="Turno"
+            required={!isView}
+            value={shift}
+            onChange={v => setShift(v as Shift)}
+            disabled={disabled}
+            options={SHIFT_OPTIONS}
+            placeholder="Selecciona el turno"
+            className="col-span-12 sm:col-span-4"
+          />
+          <TextField
+            label="Clave del Grupo"
+            required={!isView}
+            value={code}
+            onChange={v => setCode(v.toUpperCase())}
+            disabled={disabled}
+            placeholder="Ej. A"
+            maxLength={20}
+            help="Se generará como: IDGS-101-A."
+            className="col-span-6 sm:col-span-4"
+          />
+          <TextField
+            label="Capacidad Máxima"
+            required={!isView}
+            type="number"
+            min={1}
+            value={maxCapacity}
+            onChange={setMaxCapacity}
+            disabled={disabled}
+            numeric
+            placeholder="Ej. 30"
+            className="col-span-6 sm:col-span-4"
+          />
+        </div>
+      </FormCard>
 
       {/* Actions */}
       {loadStatus !== 'loading' && (
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-          {isView ? (
-            <>
-              <button
-                onClick={() => navigate('/grupos')}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-              >
-                <X size={14} />Regresar
-              </button>
-              <button
-                onClick={() => navigate(`/grupos/form?mode=edit&id=${id}`)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-              >
-                <Pencil size={14} />Editar
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => navigate('/grupos')}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <X size={14} />Cancelar
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {isRegister ? 'Registrar Grupo' : 'Guardar Cambios'}
-              </button>
-            </>
-          )}
-        </div>
+        <FormActions
+          isView={isView}
+          onBack={() => navigate('/grupos')}
+          onPrimary={isView ? () => navigate(`/grupos/form?mode=edit&id=${id}`) : handleSubmit}
+          primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Grupo' : 'Guardar Cambios'}
+          isSubmitting={isSubmitting}
+        />
       )}
-    </div>
+    </FormPage>
   )
 }
