@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Pencil, Save, X, ArrowLeft, Loader2, AlertCircle, Plus, Trash2, Info } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, inputCls, ModeSwitcher, SearchSelectField, Switch } from '@app/core/components/ui'
+import { Plus, Trash2, Info, AlertCircle } from 'lucide-react'
+import { FieldLabel, FieldHelp, FieldError, ModeSwitcher, SearchSelectField, Switch } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut, apiDelete } from '@app/core/infra/apiClient'
@@ -232,9 +234,31 @@ export default function PlanForm() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [submitErrorMsg, setSubmitErrorMsg] = useState('')
   const [partialResult, setPartialResult] = useState<PartialSaveResult | null>(null)
-  // True right after removeLevel() auto-clears socialServiceMinLevelId because
-  // the level it pointed to was just removed from the working set.
   const [socialServiceClearedHint, setSocialServiceClearedHint] = useState(false)
+
+  useEffect(() => {
+    setSubmitStatus('idle')
+    setSubmitErrorMsg('')
+    setErrors({})
+    setPartialResult(null)
+    setSocialServiceClearedHint(false)
+    if (isRegister) {
+      setProgramId('')
+      setVersion('')
+      setValidityPeriod('')
+      setTitulationKey('')
+      setEffectiveFrom('')
+      setTotalLevels('')
+      setMinPassingGrade('')
+      setMaxExtraordinaryExamsPerPeriod('')
+      setRequiresSocialService(false)
+      setSocialServiceMinLevelId(null)
+      setLevels([newLevelRow(1)])
+      setOriginalLevels([])
+      setLoadStatus('idle')
+      setLoadErrorMsg('')
+    }
+  }, [mode, id])
 
   // ─── Load programs (dropdown) ──────────────────────────────────────────────
   useEffect(() => {
@@ -461,7 +485,7 @@ export default function PlanForm() {
     }
 
     if (failedLevels.length === 0) {
-      navigate('/planes', { state: { toast: 'Plan de estudios registrado exitosamente.' } })
+      navigate(`/planes/form?mode=view&id=${created.id}`, { state: { toast: 'Plan de estudios registrado exitosamente.' } })
       return
     }
 
@@ -544,7 +568,7 @@ export default function PlanForm() {
     }
 
     if (failedLevels.length === 0) {
-      navigate('/planes', { state: { toast: 'Plan de estudios actualizado exitosamente.' } })
+      navigate(`/planes/form?mode=view&id=${id}`, { state: { toast: 'Plan de estudios actualizado exitosamente.' } })
       return
     }
 
@@ -575,50 +599,37 @@ export default function PlanForm() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/planes')} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">
-          {isRegister ? 'Registrar Plan' : isView ? 'Ver Plan' : 'Editar Plan'}
-        </span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Planes de Estudio', to: '/planes' },
+          { label: isRegister ? 'Registrar Plan' : isView ? 'Ver Plan' : 'Editar Plan' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">
-            {isRegister ? 'Registrar Plan de Estudios' : isView ? 'Ver Plan de Estudios' : 'Editar Plan de Estudios'}
-          </h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">
-            {isRegister
-              ? 'Completa los campos para registrar un nuevo plan de estudios y sus niveles.'
-              : isView
-              ? 'Información del plan de estudios.'
-              : 'Modifica el plan de estudios y sus niveles.'}
-          </p>
-        </div>
-        <ModeSwitcher
-          mode={mode}
-          registerUrl="/planes/new"
-          formUrl={m => `/planes/form?mode=${m}&id=${id}`}
-        />
-      </div>
+      <FormHeader
+        title={isRegister ? 'Registrar Plan de Estudios' : isView ? 'Ver Plan de Estudios' : 'Editar Plan de Estudios'}
+        subtitle={isRegister
+          ? 'Completa los campos para registrar un nuevo plan de estudios y sus niveles.'
+          : isView
+          ? 'Información del plan de estudios.'
+          : 'Modifica el plan de estudios y sus niveles.'}
+        right={
+          <ModeSwitcher
+            mode={mode}
+            id={id}
+            registerUrl="/planes/new"
+            formUrl={m => `/planes/form?mode=${m}&id=${id}`}
+          />
+        }
+      />
 
       {/* Load error banner */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
 
-      {/* Submit error banner */}
+      {/* Submit error banner (rich — includes per-level failures) */}
       {submitStatus === 'error' && submitErrorMsg && (
         <div className="flex flex-col gap-2 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
           <div className="flex items-start gap-2.5">
@@ -645,14 +656,8 @@ export default function PlanForm() {
       )}
 
       {/* Form card */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
-        {loadStatus === 'loading' ? (
-          <div className="flex flex-col items-center gap-3 text-[#6B7280] py-12">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando plan de estudios...</p>
-          </div>
-        ) : (
-          <>
+      <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando plan de estudios...">
+      <>
             {/* ── Sección 1: Datos del Plan ── */}
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-4">Datos del Plan</p>
             <div className="grid grid-cols-12 gap-4 mb-6">
@@ -674,76 +679,69 @@ export default function PlanForm() {
                   : <FieldHelp>{isEdit ? 'El programa no se puede modificar una vez creado el plan.' : 'Programa educativo al que pertenece este plan.'}</FieldHelp>}
               </div>
 
-              {/* Versión */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required={!isView}>Versión</FieldLabel>
-                <input
-                  value={version}
-                  onChange={e => { setVersion(e.target.value); setErrors(prev => ({ ...prev, version: undefined })) }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.version)}
-                  placeholder="Ej. 2024-1"
-                />
-                {errors.version
-                  ? <FieldError>{errors.version}</FieldError>
-                  : <FieldHelp>Identifica el plan dentro del programa (único por programa).</FieldHelp>}
-              </div>
+              <TextField
+                label="Versión"
+                required={!isView}
+                value={version}
+                onChange={v => { setVersion(v); setErrors(prev => ({ ...prev, version: undefined })) }}
+                disabled={disabled}
+                error={errors.version}
+                placeholder="Ej. 2024-1"
+                help="Identifica el plan dentro del programa (único por programa)."
+                className="col-span-12 sm:col-span-4"
+              />
 
               {/* Periodo de vigencia */}
-              <div className="col-span-12 sm:col-span-6">
-                <FieldLabel required={!isView}>Periodo de Vigencia</FieldLabel>
-                <input
-                  value={validityPeriod}
-                  onChange={e => { setValidityPeriod(e.target.value); setErrors(prev => ({ ...prev, validityPeriod: undefined })) }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.validityPeriod)}
-                  placeholder="Ej. 2024-2028"
-                />
-                {errors.validityPeriod && <FieldError>{errors.validityPeriod}</FieldError>}
-              </div>
+              <TextField
+                label="Periodo de Vigencia"
+                required={!isView}
+                value={validityPeriod}
+                onChange={v => { setValidityPeriod(v); setErrors(prev => ({ ...prev, validityPeriod: undefined })) }}
+                disabled={disabled}
+                error={errors.validityPeriod}
+                placeholder="Ej. 2024-2028"
+                className="col-span-12 sm:col-span-6"
+              />
 
               {/* Clave de titulación */}
-              <div className="col-span-12 sm:col-span-6">
-                <FieldLabel required={!isView}>Clave de Titulación</FieldLabel>
-                <input
-                  value={titulationKey}
-                  onChange={e => { setTitulationKey(e.target.value); setErrors(prev => ({ ...prev, titulationKey: undefined })) }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.titulationKey)}
-                  placeholder="Ej. IDGS-TIT-2024"
-                />
-                {errors.titulationKey && <FieldError>{errors.titulationKey}</FieldError>}
-              </div>
+              <TextField
+                label="Clave de Titulación"
+                required={!isView}
+                value={titulationKey}
+                onChange={v => { setTitulationKey(v); setErrors(prev => ({ ...prev, titulationKey: undefined })) }}
+                disabled={disabled}
+                error={errors.titulationKey}
+                placeholder="Ej. IDGS-TIT-2024"
+                className="col-span-12 sm:col-span-6"
+              />
 
               {/* Vigente desde */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required={!isView}>Vigente Desde</FieldLabel>
-                <input
-                  type="date"
-                  value={effectiveFrom}
-                  onChange={e => { setEffectiveFrom(e.target.value); setErrors(prev => ({ ...prev, effectiveFrom: undefined })) }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.effectiveFrom)}
-                />
-                {errors.effectiveFrom && <FieldError>{errors.effectiveFrom}</FieldError>}
-              </div>
+              <TextField
+                label="Vigente Desde"
+                required={!isView}
+                type="date"
+                value={effectiveFrom}
+                onChange={v => { setEffectiveFrom(v); setErrors(prev => ({ ...prev, effectiveFrom: undefined })) }}
+                disabled={disabled}
+                error={errors.effectiveFrom}
+                className="col-span-12 sm:col-span-4"
+              />
 
               {/* Total de niveles */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required={!isView}>Total de Niveles</FieldLabel>
-                <input
-                  type="number"
-                  min={1}
-                  value={totalLevels}
-                  onChange={e => { setTotalLevels(e.target.value); setErrors(prev => ({ ...prev, totalLevels: undefined })) }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.totalLevels) + ' tabular-nums'}
-                  placeholder="Ej. 10"
-                />
-                {errors.totalLevels
-                  ? <FieldError>{errors.totalLevels}</FieldError>
-                  : <FieldHelp>Cantidad total de niveles que tendrá el plan.</FieldHelp>}
-              </div>
+              <TextField
+                label="Total de Niveles"
+                required={!isView}
+                type="number"
+                min={1}
+                value={totalLevels}
+                onChange={v => { setTotalLevels(v); setErrors(prev => ({ ...prev, totalLevels: undefined })) }}
+                disabled={disabled}
+                error={errors.totalLevels}
+                numeric
+                placeholder="Ej. 10"
+                help="Cantidad total de niveles que tendrá el plan."
+                className="col-span-12 sm:col-span-4"
+              />
             </div>
 
             {/* ── Sección 2: Parámetros de Evaluación ── */}
@@ -754,40 +752,38 @@ export default function PlanForm() {
 
             <div className="grid grid-cols-12 gap-4 mb-4">
               {/* Calificación mínima aprobatoria */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required={!isView}>Calificación Mínima Aprobatoria</FieldLabel>
-                <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  step="0.1"
-                  value={minPassingGrade}
-                  onChange={e => { setMinPassingGrade(e.target.value); setErrors(prev => ({ ...prev, minPassingGrade: undefined })) }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.minPassingGrade) + ' tabular-nums'}
-                  placeholder="Ej. 7.0"
-                />
-                {errors.minPassingGrade
-                  ? <FieldError>{errors.minPassingGrade}</FieldError>
-                  : <FieldHelp>Escala de 0 a 10.</FieldHelp>}
-              </div>
+              <TextField
+                label="Calificación Mínima Aprobatoria"
+                required={!isView}
+                type="number"
+                min={0}
+                max={10}
+                step="0.1"
+                value={minPassingGrade}
+                onChange={v => { setMinPassingGrade(v); setErrors(prev => ({ ...prev, minPassingGrade: undefined })) }}
+                disabled={disabled}
+                error={errors.minPassingGrade}
+                numeric
+                placeholder="Ej. 7.0"
+                help="Escala de 0 a 10."
+                className="col-span-12 sm:col-span-4"
+              />
 
               {/* Extraordinarios máximos por periodo */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required={!isView}>Extraordinarios Máx. por Periodo</FieldLabel>
-                <input
-                  type="number"
-                  min={0}
-                  value={maxExtraordinaryExamsPerPeriod}
-                  onChange={e => { setMaxExtraordinaryExamsPerPeriod(e.target.value); setErrors(prev => ({ ...prev, maxExtraordinaryExamsPerPeriod: undefined })) }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.maxExtraordinaryExamsPerPeriod) + ' tabular-nums'}
-                  placeholder="Ej. 2"
-                />
-                {errors.maxExtraordinaryExamsPerPeriod
-                  ? <FieldError>{errors.maxExtraordinaryExamsPerPeriod}</FieldError>
-                  : <FieldHelp>Número máximo de exámenes extraordinarios por periodo.</FieldHelp>}
-              </div>
+              <TextField
+                label="Extraordinarios Máx. por Periodo"
+                required={!isView}
+                type="number"
+                min={0}
+                value={maxExtraordinaryExamsPerPeriod}
+                onChange={v => { setMaxExtraordinaryExamsPerPeriod(v); setErrors(prev => ({ ...prev, maxExtraordinaryExamsPerPeriod: undefined })) }}
+                disabled={disabled}
+                error={errors.maxExtraordinaryExamsPerPeriod}
+                numeric
+                placeholder="Ej. 2"
+                help="Número máximo de exámenes extraordinarios por periodo."
+                className="col-span-12 sm:col-span-4"
+              />
 
               {/* Requiere servicio social */}
               <div className="col-span-12 sm:col-span-4">
@@ -958,38 +954,26 @@ export default function PlanForm() {
                       </>
                     ) : (
                       <div className="space-y-2">
-                        <div>
-                          <FieldLabel>Número de Nivel</FieldLabel>
-                          <input
-                            type="number"
-                            min={1}
-                            value={row.levelNumber}
-                            onChange={e => updateLevel(row.key, { levelNumber: Number(e.target.value) })}
-                            className={inputCls(false, false)}
-                          />
-                        </div>
-                        <div>
-                          <FieldLabel>Tipo</FieldLabel>
-                          <select
-                            value={row.type}
-                            onChange={e => updateLevel(row.key, { type: e.target.value as PlanLevelType })}
-                            className={inputCls(false, false) + ' appearance-none'}
-                          >
-                            {(Object.keys(LEVEL_TYPE_LABELS) as PlanLevelType[]).map(t => (
-                              <option key={t} value={t}>{LEVEL_TYPE_LABELS[t]}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <FieldLabel>Descripción</FieldLabel>
-                          <input
-                            type="text"
-                            placeholder="Opcional"
-                            value={row.description}
-                            onChange={e => updateLevel(row.key, { description: e.target.value })}
-                            className={inputCls(false, false)}
-                          />
-                        </div>
+                        <TextField
+                          label="Número de Nivel"
+                          type="number"
+                          min={1}
+                          value={String(row.levelNumber)}
+                          onChange={v => updateLevel(row.key, { levelNumber: Number(v) })}
+                          numeric
+                        />
+                        <SelectField
+                          label="Tipo"
+                          value={row.type}
+                          onChange={v => updateLevel(row.key, { type: v as PlanLevelType })}
+                          options={(Object.keys(LEVEL_TYPE_LABELS) as PlanLevelType[]).map(t => ({ value: t, label: LEVEL_TYPE_LABELS[t] }))}
+                        />
+                        <TextField
+                          label="Descripción"
+                          value={row.description}
+                          onChange={v => updateLevel(row.key, { description: v })}
+                          placeholder="Opcional"
+                        />
                       </div>
                     )}
                   </div>
@@ -1006,48 +990,18 @@ export default function PlanForm() {
               )}
             </div>
           </>
-        )}
-      </div>
+      </FormCard>
 
       {/* Actions */}
       {loadStatus !== 'loading' && (
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-          {isView ? (
-            <>
-              <button
-                onClick={() => navigate('/planes')}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-              >
-                <ArrowLeft size={14} />Regresar
-              </button>
-              <button
-                onClick={() => navigate(`/planes/form?mode=edit&id=${id}`)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-              >
-                <Pencil size={14} />Editar
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => navigate('/planes')}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <X size={14} />Cancelar
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {isRegister ? 'Registrar Plan' : 'Guardar Cambios'}
-              </button>
-            </>
-          )}
-        </div>
+        <FormActions
+          isView={isView}
+          onBack={() => navigate('/planes')}
+          onPrimary={isView ? () => navigate(`/planes/form?mode=edit&id=${id}`) : handleSubmit}
+          primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Plan' : 'Guardar Cambios'}
+          isSubmitting={isSubmitting}
+        />
       )}
-    </div>
+    </FormPage>
   )
 }
