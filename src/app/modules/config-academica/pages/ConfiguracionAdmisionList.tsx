@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react'
-import {
-  ChevronRight, Pencil, Plus, ChevronLeft, ChevronRight as ChevRight,
-  Loader2, AlertCircle, Ticket,
-} from 'lucide-react'
-import { Toast, ActionBtn, Switch, SearchSelectField } from '@app/core/components/ui'
+import { Pencil, Ticket, Plus as PlusIcon } from 'lucide-react'
+import { Toast, Switch, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { apiGet, apiPatch } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
+import {
+  PageContainer,
+  Breadcrumb,
+  PageHeader,
+  FilterBar,
+  FilterSelect,
+  ResultCount,
+  ErrorBanner,
+  Pagination,
+  MobilePagination,
+  DataTable,
+  MobileCards,
+  type ColumnDef,
+} from '@app/core/components/list'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // `ProgramAdmissionConfig` (RF-ADM-001) controls which programs are offered in
@@ -150,9 +161,6 @@ export default function ConfiguracionAdmisionList() {
     return () => { cancelled = true }
   }, [statusFilter, programFilter, page])
 
-  const startRow = totalElements === 0 ? 0 : (page - 1) * perPage + 1
-  const endRow = Math.min(page * perPage, totalElements)
-
   function programLabel(programId: string): string {
     const p = programs.find(p => p.id === programId)
     return p ? `${p.code} — ${p.name}` : '—'
@@ -195,43 +203,38 @@ export default function ConfiguracionAdmisionList() {
     }
   }
 
+  const emptyHint = loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'
+
+  const columns: ColumnDef<ConfigListItem>[] = [
+    { key: 'programId', header: 'Programa Educativo', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'periodId', header: 'Periodo Destino', type: 'muted', value: row => periodLabel(row.periodId) },
+    { key: 'targetGenerationId', header: 'Generación Destino', type: 'code', value: row => generationLabel(row.targetGenerationId), className: 'w-24' },
+    { key: 'maxCandidates', header: 'Cupo Máximo', type: 'count', className: 'w-24', cellClassName: 'tabular-nums' },
+    { key: 'saleWindow', header: 'Ventana de Venta', type: 'muted', value: row => `${formatDateTime(row.opensAt)} – ${formatDateTime(row.closesAt)}`, className: 'whitespace-nowrap' },
+    { key: 'status', header: 'Estado', type: 'status', activeLabel: 'Abierto', inactiveLabel: 'Cerrado', className: 'w-28' },
+  ]
+
   return (
-    <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
+    <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Configuración de Admisión</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Configuración de Admisión' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">Configuración de Admisión</h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">Configura qué programas se ofertan en cada proceso de admisión, su cupo y ventana de venta de fichas.</p>
-        </div>
-        <button
-          onClick={() => navigate('/configuracion-admision/new')}
-          className="flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors sm:whitespace-nowrap sm:self-start"
-        >
-          <Plus size={15} />Configurar Programa
-        </button>
-      </div>
+      <PageHeader
+        title="Configuración de Admisión"
+        subtitle="Configura qué programas se ofertan en cada proceso de admisión, su cupo y ventana de venta de fichas."
+        actions={[{ label: 'Configurar Programa', icon: <PlusIcon />, onClick: () => navigate('/configuracion-admision/new') }]}
+      />
 
-      {/* Error banner */}
-      {loadStatus === 'error' && errorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {errorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && errorMsg && <ErrorBanner message={errorMsg} />}
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+      <FilterBar>
         <div className="w-full sm:w-72">
           <SearchSelectField
             options={programOptions}
@@ -241,199 +244,89 @@ export default function ConfiguracionAdmisionList() {
             searchPlaceholder="Buscar programa…"
           />
         </div>
-        <select
+        <FilterSelect
           value={statusFilter}
-          onChange={e => { setStatusFilter(e.target.value as ConfigStatus | ''); setPage(1) }}
-          className="w-full sm:w-40 px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
-        >
-          <option value="">Todos</option>
-          <option value="OPEN">Abierto</option>
-          <option value="CLOSED">Cerrado</option>
-        </select>
-        <span className="text-[12px] text-[#6B7280] hidden sm:inline sm:ml-auto">
-          {totalElements} resultado{totalElements !== 1 ? 's' : ''}
-        </span>
-      </div>
+          onChange={v => { setStatusFilter(v as ConfigStatus | ''); setPage(1) }}
+          allLabel="Todos"
+          options={[
+            { value: 'OPEN', label: 'Abierto' },
+            { value: 'CLOSED', label: 'Cerrado' },
+          ]}
+        />
+        <ResultCount count={totalElements} />
+      </FilterBar>
 
       {/* ── Desktop table (md+) ─────────────────────────────────────────────── */}
-      <div className="hidden md:block bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-10">#</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Programa Educativo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Periodo Destino</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Generación Destino</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Cupo Máximo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Ventana de Venta</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Estado</th>
-              <th className="px-4 py-3 w-24" />
-            </tr>
-          </thead>
-          <tbody>
-            {loadStatus === 'loading' ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-                    <Loader2 size={24} className="animate-spin text-[#009574]" />
-                    <p className="text-[13px] font-medium">Cargando configuración de admisión...</p>
-                  </div>
-                </td>
-              </tr>
-            ) : configs.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-                    <Ticket size={36} className="text-[#E5E7EB]" />
-                    <p className="text-[13px] font-medium">No se encontraron configuraciones</p>
-                    <p className="text-[12px]">
-                      {loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              configs.map((row, i) => {
-                const rowNum = (page - 1) * perPage + i + 1
-                return (
-                  <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                    <td className="px-4 py-3 text-[#6B7280] font-medium">{rowNum}</td>
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-[#333333]">{programLabel(row.programId)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-[#6B7280]">{periodLabel(row.periodId)}</td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-[11px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{generationLabel(row.targetGenerationId)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-[#6B7280] tabular-nums">{row.maxCandidates}</td>
-                    <td className="px-4 py-3 text-[#6B7280] whitespace-nowrap">{formatDateTime(row.opensAt)} – {formatDateTime(row.closesAt)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={row.status === 'OPEN'}
-                          disabled={togglingId === row.id}
-                          onChange={() => handleToggleStatus(row)}
-                        />
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                          row.status === 'OPEN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
-                        }`}>
-                          {row.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/configuracion-admision/form?mode=edit&id=${row.id}`)} />
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-        {/* Pagination — desktop */}
-        <div className="px-4 py-3 border-t border-[#E5E7EB] flex items-center justify-between">
-          <span className="text-[12px] text-[#6B7280]">
-            {totalElements === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${totalElements}`}
-          </span>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="p-1.5 rounded border border-[#E5E7EB] text-[#6B7280] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-[#F8F9FA]">
-              <ChevronLeft size={14} />
-            </button>
-            <button className="px-3 py-1 rounded border border-[#009574] bg-[#009574] text-white text-[12px] font-semibold">{page}</button>
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0}
-              className="p-1.5 rounded border border-[#E5E7EB] text-[#6B7280] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-[#F8F9FA]">
-              <ChevRight size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
+      <DataTable
+        numbered
+        rowNumberOffset={(page - 1) * perPage}
+        columns={columns}
+        status={loadStatus}
+        items={configs}
+        keyFor={row => row.id}
+        loadingLabel="Cargando configuración de admisión..."
+        emptyTitle="No se encontraron configuraciones"
+        emptyHint={emptyHint}
+        emptyIcon={<Ticket size={36} className="text-[#E5E7EB]" />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        actions={{ edit: row => navigate(`/configuracion-admision/form?mode=edit&id=${row.id}`) }}
+        activeValue="OPEN"
+        onToggleStatus={handleToggleStatus}
+        togglingId={togglingId}
+      />
 
       {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
-      <div className="md:hidden space-y-3">
-        {loadStatus === 'loading' ? (
-          <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
-            <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-              <Loader2 size={24} className="animate-spin text-[#009574]" />
-              <p className="text-[13px] font-medium">Cargando configuración de admisión...</p>
-            </div>
-          </div>
-        ) : configs.length === 0 ? (
-          <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
-            <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-              <Ticket size={36} className="text-[#E5E7EB]" />
-              <p className="text-[13px] font-medium">No se encontraron configuraciones</p>
-              <p className="text-[12px]">Intenta ajustar los filtros de búsqueda</p>
-            </div>
-          </div>
-        ) : (
-          configs.map(row => (
-            <div key={row.id} className="bg-white border border-[#E5E7EB] rounded-lg p-4">
-              {/* Top row: generación + estado */}
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
-                  {generationLabel(row.targetGenerationId)}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={row.status === 'OPEN'}
-                    disabled={togglingId === row.id}
-                    onChange={() => handleToggleStatus(row)}
-                  />
-                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                    row.status === 'OPEN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
-                  }`}>
-                    {row.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
-                  </span>
-                </div>
-              </div>
-              {/* Program */}
-              <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{programLabel(row.programId)}</p>
-              {/* Periodo + cupo */}
-              <p className="text-[12px] text-[#6B7280] mb-1">
-                {periodLabel(row.periodId)} · Cupo {row.maxCandidates}
-              </p>
-              {/* Ventana de venta */}
-              <p className="text-[12px] text-[#6B7280] mb-3">
-                {formatDateTime(row.opensAt)} – {formatDateTime(row.closesAt)}
-              </p>
-              {/* Actions */}
-              <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
-                <button
-                  onClick={() => navigate(`/configuracion-admision/form?mode=edit&id=${row.id}`)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
-                >
-                  <Pencil size={14} />Editar
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-
-        {/* Pagination — mobile */}
-        {totalElements > 0 && (
-          <div className="flex flex-col items-center gap-3 pt-2">
-            <p className="text-[12px] text-[#6B7280]">
-              Mostrando {startRow}–{endRow} de {totalElements}
-            </p>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed">
-                <ChevronLeft size={13} />Anterior
-              </button>
-              <span className="px-3 py-1.5 text-[12px] font-semibold text-[#009574] border border-[#009574] rounded-md bg-white tabular-nums">
-                {page} / {totalPages || 1}
+      <MobileCards
+        status={loadStatus}
+        items={configs}
+        keyFor={row => row.id}
+        renderItem={row => (
+          <>
+            {/* Top row: generación + estado */}
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
+                {generationLabel(row.targetGenerationId)}
               </span>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0}
-                className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed">
-                Siguiente<ChevRight size={13} />
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={row.status === 'OPEN'}
+                  disabled={togglingId === row.id}
+                  onChange={() => handleToggleStatus(row)}
+                />
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  row.status === 'OPEN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
+                }`}>
+                  {row.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
+                </span>
+              </div>
+            </div>
+            {/* Program */}
+            <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{programLabel(row.programId)}</p>
+            {/* Periodo + cupo */}
+            <p className="text-[12px] text-[#6B7280] mb-1">
+              {periodLabel(row.periodId)} · Cupo {row.maxCandidates}
+            </p>
+            {/* Ventana de venta */}
+            <p className="text-[12px] text-[#6B7280] mb-3">
+              {formatDateTime(row.opensAt)} – {formatDateTime(row.closesAt)}
+            </p>
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+              <button
+                onClick={() => navigate(`/configuracion-admision/form?mode=edit&id=${row.id}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
+              >
+                <Pencil size={14} />Editar
               </button>
             </div>
-          </div>
+          </>
         )}
-      </div>
-    </div>
+        loadingLabel="Cargando configuración de admisión..."
+        emptyTitle="No se encontraron configuraciones"
+        emptyHint={emptyHint}
+        emptyIcon={<Ticket size={36} className="text-[#E5E7EB]" />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+      />
+    </PageContainer>
   )
 }
