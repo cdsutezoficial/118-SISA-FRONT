@@ -485,7 +485,7 @@ export default function PlanForm() {
     }
 
     if (failedLevels.length === 0) {
-      navigate(`/planes/form?mode=view&id=${created.id}`, { state: { toast: 'Plan de estudios registrado exitosamente.' } })
+      navigate(`/planes/detalle?id=${created.id}`, { state: { toast: 'Plan de estudios registrado exitosamente.' } })
       return
     }
 
@@ -568,7 +568,7 @@ export default function PlanForm() {
     }
 
     if (failedLevels.length === 0) {
-      navigate(`/planes/form?mode=view&id=${id}`, { state: { toast: 'Plan de estudios actualizado exitosamente.' } })
+      navigate(`/planes/detalle?id=${id}`, { state: { toast: 'Plan de estudios actualizado exitosamente.' } })
       return
     }
 
@@ -621,7 +621,7 @@ export default function PlanForm() {
             mode={mode}
             id={id}
             registerUrl="/planes/new"
-            formUrl={m => `/planes/form?mode=${m}&id=${id}`}
+            formUrl={m => m === 'view' ? `/planes/detalle?id=${id}` : `/planes/form?mode=edit&id=${id}`}
           />
         }
       />
