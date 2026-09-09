@@ -275,9 +275,9 @@ export default function PlanesList() {
         emptyIcon={<BookOpen size={36} className="text-[#E5E7EB]" />}
         footer={desktopFooter}
         actions={{
-          view: row => navigate(`/planes/detalle?id=${row.id}`),
+          view: row => navigate(`/planes/form?mode=view&id=${row.id}`),
           edit: row => navigate(`/planes/form?mode=edit&id=${row.id}`),
-          viewTooltip: 'Ver detalle',
+          viewTooltip: 'Ver',
         }}
         onToggleStatus={handleToggleStatus}
         togglingId={togglingId}
@@ -325,7 +325,7 @@ export default function PlanesList() {
             {/* Actions */}
             <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
               <button
-                onClick={() => navigate(`/planes/detalle?id=${row.id}`)}
+                onClick={() => navigate(`/planes/form?mode=view&id=${row.id}`)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#6B7280] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
               >
                 <Eye size={14} />Ver
