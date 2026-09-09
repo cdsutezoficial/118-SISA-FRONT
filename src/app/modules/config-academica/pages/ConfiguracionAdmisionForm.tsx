@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Save, X, Loader2, AlertCircle } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, inputCls, Switch, SearchSelectField } from '@app/core/components/ui'
+import { FieldLabel, FieldHelp, Switch, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
@@ -120,6 +121,23 @@ export default function ConfiguracionAdmisionForm() {
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [submitErrorMsg, setSubmitErrorMsg] = useState('')
+
+  useEffect(() => {
+    setSubmitStatus('idle')
+    setSubmitErrorMsg('')
+    setDateOrderError('')
+    if (isRegister) {
+      setProgramId('')
+      setTargetGenerationId('')
+      setPeriodId('')
+      setIsOffered(false)
+      setMaxCandidates('')
+      setOpensAt('')
+      setClosesAt('')
+      setLoadStatus('idle')
+      setLoadErrorMsg('')
+    }
+  }, [mode, id])
 
   // Programa/Generación/Periodo catalogs — fetched once, used to populate the
   // cascading selects (Programa → filters Generación) and, on edit, to
@@ -256,164 +274,127 @@ export default function ConfiguracionAdmisionForm() {
   }
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/configuracion-admision')} className="hover:text-[#009574] transition-colors">Configuración de Admisión</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">
-          {isRegister ? 'Configurar Programa' : 'Editar Configuración'}
-        </span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Configuración de Admisión', to: '/configuracion-admision' },
+          { label: isRegister ? 'Configurar Programa' : 'Editar Configuración' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">
-            {isRegister ? 'Configurar Programa para Admisión' : 'Editar Configuración de Admisión'}
-          </h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">
-            {isRegister
-              ? 'Define el cupo y la ventana de venta de fichas para un programa educativo.'
-              : 'Modifica el cupo y la ventana de venta de fichas.'}
-          </p>
-        </div>
-      </div>
+      <FormHeader
+        title={isRegister ? 'Configurar Programa para Admisión' : 'Editar Configuración de Admisión'}
+        subtitle={isRegister
+          ? 'Define el cupo y la ventana de venta de fichas para un programa educativo.'
+          : 'Modifica el cupo y la ventana de venta de fichas.'}
+      />
 
       {/* Load error banner (edit fetch failed) */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
 
       {/* Submit error banner */}
-      {submitStatus === 'error' && submitErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {submitErrorMsg}
-        </div>
-      )}
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {/* Form card */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
-        {loadStatus === 'loading' ? (
-          <div className="flex flex-col items-center gap-3 text-[#6B7280] py-12">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando configuración...</p>
+      <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando configuración...">
+        <div className="grid grid-cols-12 gap-4">
+          {/* Fila 1 */}
+          <div className="col-span-12 sm:col-span-6">
+            <FieldLabel required>Programa Educativo</FieldLabel>
+            <SearchSelectField
+              options={programOptions}
+              value={programId}
+              onChange={handleProgramChange}
+              placeholder="Selecciona el programa"
+              disabled={disabled}
+              searchPlaceholder="Buscar programa…"
+            />
           </div>
-        ) : (
-          <div className="grid grid-cols-12 gap-4">
-            {/* Fila 1 */}
-            <div className="col-span-12 sm:col-span-6">
-              <FieldLabel required>Programa Educativo</FieldLabel>
-              <SearchSelectField
-                options={programOptions}
-                value={programId}
-                onChange={handleProgramChange}
-                placeholder="Selecciona el programa"
-                disabled={disabled}
-                searchPlaceholder="Buscar programa…"
-              />
-            </div>
-            <div className="col-span-12 sm:col-span-6">
-              <FieldLabel required>Periodo Destino</FieldLabel>
-              <SearchSelectField
-                options={periodOptions}
-                value={periodId}
-                onChange={setPeriodId}
-                placeholder="Selecciona el periodo al que ingresarán los aceptados"
-                disabled={disabled}
-                searchPlaceholder="Buscar periodo…"
-              />
-            </div>
-
-            {/* Fila 2 */}
-            <div className="col-span-12 sm:col-span-8">
-              <FieldLabel required>Generación Destino</FieldLabel>
-              <SearchSelectField
-                options={generationOptions}
-                value={targetGenerationId}
-                onChange={setTargetGenerationId}
-                placeholder="Selecciona la generación"
-                disabled={disabled || !programId}
-                searchPlaceholder="Buscar generación…"
-              />
-              <FieldHelp>Generación que recibirá a los aceptados de este proceso.</FieldHelp>
-            </div>
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel>¿Está Ofertado?</FieldLabel>
-              <div className="flex items-center gap-2 py-2">
-                <Switch checked={isOffered} onChange={setIsOffered} disabled={disabled} />
-                <span className="text-[13px] text-[#333333]">{isOffered ? 'Sí' : 'No'}</span>
-              </div>
-              <FieldHelp>Equivalente a marcar el programa como disponible en este proceso.</FieldHelp>
-            </div>
-
-            {/* Fila 3 */}
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required>Cupo Máximo</FieldLabel>
-              <input
-                type="number"
-                min={1}
-                value={maxCandidates}
-                onChange={e => setMaxCandidates(e.target.value)}
-                disabled={disabled}
-                className={inputCls(disabled, false) + ' tabular-nums'}
-                placeholder="Ej. 120"
-              />
-              <FieldHelp>Máximo de fichas pagadas antes de que el programa deje de aparecer disponible.</FieldHelp>
-            </div>
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required>Apertura de Venta</FieldLabel>
-              <input
-                type="datetime-local"
-                value={opensAt}
-                onChange={e => handleOpensAtChange(e.target.value)}
-                disabled={disabled}
-                className={inputCls(disabled, !!dateOrderError)}
-              />
-            </div>
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required>Cierre de Venta</FieldLabel>
-              <input
-                type="datetime-local"
-                value={closesAt}
-                onChange={e => handleClosesAtChange(e.target.value)}
-                disabled={disabled}
-                className={inputCls(disabled, !!dateOrderError)}
-              />
-              {dateOrderError ? <FieldError>{dateOrderError}</FieldError> : <FieldHelp>Debe ser posterior a la Apertura de Venta.</FieldHelp>}
-            </div>
+          <div className="col-span-12 sm:col-span-6">
+            <FieldLabel required>Periodo Destino</FieldLabel>
+            <SearchSelectField
+              options={periodOptions}
+              value={periodId}
+              onChange={setPeriodId}
+              placeholder="Selecciona el periodo al que ingresarán los aceptados"
+              disabled={disabled}
+              searchPlaceholder="Buscar periodo…"
+            />
           </div>
-        )}
-      </div>
+
+          {/* Fila 2 */}
+          <div className="col-span-12 sm:col-span-8">
+            <FieldLabel required>Generación Destino</FieldLabel>
+            <SearchSelectField
+              options={generationOptions}
+              value={targetGenerationId}
+              onChange={setTargetGenerationId}
+              placeholder="Selecciona la generación"
+              disabled={disabled || !programId}
+              searchPlaceholder="Buscar generación…"
+            />
+            <FieldHelp>Generación que recibirá a los aceptados de este proceso.</FieldHelp>
+          </div>
+          <div className="col-span-12 sm:col-span-4">
+            <FieldLabel>¿Está Ofertado?</FieldLabel>
+            <div className="flex items-center gap-2 py-2">
+              <Switch checked={isOffered} onChange={setIsOffered} disabled={disabled} />
+              <span className="text-[13px] text-[#333333]">{isOffered ? 'Sí' : 'No'}</span>
+            </div>
+            <FieldHelp>Equivalente a marcar el programa como disponible en este proceso.</FieldHelp>
+          </div>
+
+          {/* Fila 3 */}
+          <TextField
+            label="Cupo Máximo"
+            required
+            type="number"
+            min={1}
+            value={maxCandidates}
+            onChange={setMaxCandidates}
+            disabled={disabled}
+            numeric
+            placeholder="Ej. 120"
+            help="Máximo de fichas pagadas antes de que el programa deje de aparecer disponible."
+            className="col-span-12 sm:col-span-4"
+          />
+          <TextField
+            label="Apertura de Venta"
+            required
+            type="datetime-local"
+            value={opensAt}
+            onChange={handleOpensAtChange}
+            disabled={disabled}
+            error={dateOrderError}
+            className="col-span-12 sm:col-span-4"
+          />
+          <TextField
+            label="Cierre de Venta"
+            required
+            type="datetime-local"
+            value={closesAt}
+            onChange={handleClosesAtChange}
+            disabled={disabled}
+            error={dateOrderError}
+            help="Debe ser posterior a la Apertura de Venta."
+            className="col-span-12 sm:col-span-4"
+          />
+        </div>
+      </FormCard>
 
       {/* Actions */}
       {loadStatus !== 'loading' && (
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-          <button
-            onClick={() => navigate('/configuracion-admision')}
-            disabled={isSubmitting}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <X size={14} />Cancelar
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting || !!dateOrderError}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            {isRegister ? 'Registrar Configuración' : 'Guardar Cambios'}
-          </button>
-        </div>
+        <FormActions
+          isView={false}
+          onBack={() => navigate('/configuracion-admision')}
+          onPrimary={handleSubmit}
+          primaryLabel={isRegister ? 'Registrar Configuración' : 'Guardar Cambios'}
+          isSubmitting={isSubmitting}
+          primaryDisabled={!!dateOrderError}
+        />
       )}
-    </div>
+    </FormPage>
   )
 }
