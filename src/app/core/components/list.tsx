@@ -290,8 +290,12 @@ export function BadgePill({ value, active, activeLabel, inactiveLabel, map }: {
 // ─── TableActions ──────────────────────────────────────────────────────────────
 // Contenedor de acciones de fila (ver/editar). Se combina con @app/core/components/ui
 // (ActionBtn, Switch) para renderizar las acciones del patrón CRUD.
+// Las acciones van SIEMPRE en una sola línea (sin wrap): el tooltip ya se
+// renderiza por portal a <body> (ver ActionBtn) así que ya no infla el
+// `scrollWidth` de la tabla. Si una columna tuviera demasiadas acciones, hay
+// que compactar los botones (ActionBtn) en lugar de partir la línea.
 export function TableActions({ children }: { children: ReactNode }) {
-  return <div className="flex items-center justify-end gap-1">{children}</div>
+  return <div className="flex items-center justify-end gap-0.5">{children}</div>
 }
 
 // ─── DefaultView/Edit actions (reutilizable) ───────────────────────────────────
@@ -424,7 +428,7 @@ export function DataTable<T>({
   const numberedColumn: ColumnDef<T> = {
     key: '__rowNum__',
     header: '#',
-    className: 'w-10',
+    className: 'w-8',
     render: (_, i) => <span className="text-[#6B7280] font-medium">{rowNumberOffset + i + 1}</span>,
   }
   const cols: ColumnDef<T>[] = numbered ? [numberedColumn, ...columns] : columns
@@ -509,7 +513,7 @@ export function DataTable<T>({
         </div>
       )}
       <div className="overflow-x-auto">
-      <table className={`w-full text-[13px]${showOnMobile ? ' min-w-[640px]' : ''}`}>
+      <table className={`w-full text-[13px]${showOnMobile ? ' min-w-[640px] md:min-w-0' : ''}`}>
         <thead>
           <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
             {allColumns.map(col => (
@@ -517,8 +521,8 @@ export function DataTable<T>({
                 key={col.key}
                 className={
                   col.actionCell
-                    ? `px-4 py-3 ${col.className ?? 'w-24'}`
-                    : `text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider ${col.className ?? ''}`
+                    ? `px-2.5 py-3 ${col.className ?? 'w-24'}`
+                    : `text-left px-2.5 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider ${col.className ?? ''}`
                 }
               >
                 {col.header}
@@ -536,14 +540,14 @@ export function DataTable<T>({
           ) : items.length === 0 ? (
             <tr>
               <td colSpan={colSpan} className="px-4 py-16 text-center">
-<EmptyState title={emptyTitle} hint={emptyHint} icon={emptyIcon} />
+                <EmptyState title={emptyTitle} hint={emptyHint} icon={emptyIcon} />
               </td>
             </tr>
           ) : (
             items.map((item, index) => (
               <tr key={keyFor(item)} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
                 {allColumns.map(col => (
-                  <td key={col.key} className={`px-4 py-3 ${col.cellClassName ?? ''}`}>
+                  <td key={col.key} className={`px-2.5 py-3 ${col.cellClassName ?? ''}`}>
                     {col.key === '__actions__' ? renderActions(item) : renderCell(col, item, index)}
                   </td>
                 ))}

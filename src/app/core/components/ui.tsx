@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router'
 import { ChevronDown, X, Check, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Pencil, Eye, RotateCcw, Search } from 'lucide-react'
 import { formatDate, MONTHS, DAYS } from '../infra/utils'
@@ -494,6 +495,13 @@ export function Switch({ checked, onChange, disabled = false }: { checked: boole
 }
 
 // ─── ActionBtn ────────────────────────────────────────────────────────────────
+// Botón de acción de fila (ver/editar/…). El tooltip se renderiza por PORTAL a
+// <body> (posicionado fixed) y NO en el flujo de la tabla: un tooltip absoluto
+// con `whitespace-nowrap` dentro de la celda (especialmente el último botón de
+// una fila) sobresale del borde derecho de la tabla e infla el `scrollWidth`
+// del contenedor `.overflow-x-auto` → barra de scroll horizontal fantasma en
+// las listas con muchas acciones (Candidatos, Estudiantes, Usuarios). Mismo
+// patrón que el tooltip del Sidebar colapsado (`createPortal` a body).
 export function ActionBtn({ icon, tooltip, onClick, danger = false, disabled = false }: {
   icon: React.ReactNode
   tooltip: string
@@ -501,21 +509,38 @@ export function ActionBtn({ icon, tooltip, onClick, danger = false, disabled = f
   danger?: boolean
   disabled?: boolean
 }) {
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [tip, setTip] = useState<{ left: number; top: number } | null>(null)
+
+  function showTip() {
+    const el = btnRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setTip({ left: r.left + r.width / 2, top: r.top - 6 })
+  }
+
   return (
-    <div className="relative group inline-block">
+    <div className="relative inline-block" onMouseEnter={showTip} onMouseLeave={() => setTip(null)}>
       <button
+        ref={btnRef}
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className={`p-1.5 rounded-md transition-colors
+        className={`p-1 rounded-md transition-colors
           ${danger ? 'text-red-400 hover:text-red-600 hover:bg-red-50' : 'text-[#6B7280] hover:text-[#009574] hover:bg-[#e6f5f1]'}
           ${disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
       >
         {icon}
       </button>
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-[#333333] text-white text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-        {tooltip}
-      </div>
+      {tip && createPortal(
+        <div
+          className="fixed z-[120] px-2 py-1 bg-[#333333] text-white text-[11px] rounded whitespace-nowrap pointer-events-none shadow-lg"
+          style={{ left: tip.left, top: tip.top, transform: 'translate(-50%, -100%)' }}
+        >
+          {tooltip}
+        </div>,
+        document.body,
+      )}
     </div>
   )
 }

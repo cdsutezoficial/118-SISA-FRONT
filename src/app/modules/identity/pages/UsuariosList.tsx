@@ -304,13 +304,15 @@ export default function UsuariosList() {
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${row.avatarColor}`}>
             {row.initials}
           </div>
-          <span className="font-medium text-[#333333]">{row.nombre}</span>
+          <span className="font-medium text-[#333333] min-w-0">{row.nombre}</span>
         </div>
       ),
     },
-    { key: 'usuario', header: 'Usuario', render: row => <span className="font-mono text-[12px] text-[#6B7280]">{row.usuario}</span>, className: 'w-56' },
-    { key: 'roles', header: 'Roles', render: row => <RolesCell roles={row.roles} />, className: 'w-52' },
-    { key: 'ultimoAcceso', header: 'Último Acceso', type: 'muted', icon: <Clock size={12} className="text-[#6B7280]" />, className: 'w-36' },
+    { key: 'usuario', header: 'Usuario', render: row => (
+      <span title={row.usuario} className="block font-mono text-[12px] text-[#6B7280] truncate max-w-[220px]">{row.usuario}</span>
+    ) },
+    { key: 'roles', header: 'Roles', render: row => <RolesCell roles={row.roles} /> },
+    { key: 'ultimoAcceso', header: 'Último Acceso', type: 'muted', icon: <Clock size={12} className="text-[#6B7280]" />, className: 'w-32' },
     { key: 'estado', header: 'Estado', type: 'badge', badge: ESTADO_BADGE_MAP, className: 'w-24' },
   ]
 
