@@ -17,7 +17,6 @@ import {
   Pagination,
   MobilePagination,
   StatusBadge,
-  ViewEditActions,
   DataTable,
   MobileCards,
   type ColumnDef,
@@ -44,17 +43,6 @@ interface DivisionsPageResponse {
   page: number
   size: number
 }
-
-// ─── Columnas de la tabla desktop ──────────────────────────────────────────────
-
-const columns: ColumnDef[] = [
-  { header: 'División' },
-  { header: 'Clave', className: 'w-24' },
-  { header: 'Descripción' },
-  { header: 'Programas', className: 'w-28' },
-  { header: 'Estado', className: 'w-24' },
-  { header: '', actionCell: true },
-]
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
@@ -136,6 +124,14 @@ export default function DivisionesList() {
     }
   }
 
+  const columns: ColumnDef<DivisionListItem>[] = [
+    { key: 'name', header: 'División', type: 'name' },
+    { key: 'code', header: 'Clave', type: 'code', className: 'w-24' },
+    { key: 'description', header: 'Descripción', type: 'muted' },
+    { key: 'programCount', header: 'Programas', type: 'count', className: 'w-28' },
+    { key: 'status', header: 'Estado', type: 'status', className: 'w-24' },
+  ]
+
   return (
     <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
@@ -180,36 +176,16 @@ export default function DivisionesList() {
         status={loadStatus}
         items={divisions}
         keyFor={row => row.id}
-        renderRow={row => (
-          <>
-            <td className="px-4 py-3 font-medium text-[#333333]">{row.name}</td>
-            <td className="px-4 py-3">
-              <span className="font-mono text-[11px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{row.code}</span>
-            </td>
-            <td className="px-4 py-3 text-[#6B7280]">{row.description}</td>
-            <td className="px-4 py-3 text-[#333333]">{row.programCount}</td>
-            <td className="px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={row.status === 'ACTIVE'}
-                  disabled={togglingId === row.id}
-                  onChange={() => handleToggleStatus(row)}
-                />
-                <StatusBadge active={row.status === 'ACTIVE'} />
-              </div>
-            </td>
-            <td className="px-4 py-3">
-              <ViewEditActions
-                onView={() => navigate(`/divisiones/form?mode=view&id=${row.id}`)}
-                onEdit={() => navigate(`/divisiones/form?mode=edit&id=${row.id}`)}
-              />
-            </td>
-          </>
-        )}
         loadingLabel="Cargando divisiones..."
         emptyTitle="No se encontraron divisiones"
         emptyHint={loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
         footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        actions={{
+          view: row => navigate(`/divisiones/form?mode=view&id=${row.id}`),
+          edit: row => navigate(`/divisiones/form?mode=edit&id=${row.id}`),
+        }}
+        onToggleStatus={handleToggleStatus}
+        togglingId={togglingId}
       />
 
       {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
