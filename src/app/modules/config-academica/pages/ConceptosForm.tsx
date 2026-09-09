@@ -149,6 +149,27 @@ export default function ConceptosForm() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [submitErrorMsg, setSubmitErrorMsg] = useState('')
 
+  useEffect(() => {
+    setSubmitStatus('idle')
+    setSubmitErrorMsg('')
+    if (isRegister) {
+      setNombre('')
+      setTipo('')
+      setDescripcion('')
+      setPoliticas('')
+      setIsTuition(false)
+      setIsStandalone(false)
+      setMaxPerStudent('')
+      setMaxPerPeriod('')
+      setRequiresValidation(false)
+      setAvailableFrom('')
+      setAvailableUntil('')
+      setRates([])
+      setLoadStatus('idle')
+      setLoadErrorMsg('')
+    }
+  }, [mode, id])
+
   // ─── Tarifas (Fase 4) ────────────────────────────────────────────────────
   // View/edit mode only — never in Registrar, since a real conceptId must
   // already exist (same reasoning as `DirectorField` in `DivisionesForm.tsx`).
@@ -262,11 +283,11 @@ export default function ConceptosForm() {
     }
     try {
       if (isRegister) {
-        await apiPost<PaymentConceptResponse>('/payment-concepts', payload)
-        navigate('/conceptos', { state: { toast: 'Concepto de pago registrado exitosamente.' } })
+        const created = await apiPost<PaymentConceptResponse>('/payment-concepts', payload)
+        navigate(`/conceptos/form?mode=view&id=${created.id}`, { state: { toast: 'Concepto de pago registrado exitosamente.' } })
       } else if (id) {
         await apiPut<PaymentConceptResponse>(`/payment-concepts/${id}`, payload)
-        navigate('/conceptos', { state: { toast: 'Concepto de pago actualizado exitosamente.' } })
+        navigate(`/conceptos/form?mode=view&id=${id}`, { state: { toast: 'Concepto de pago actualizado exitosamente.' } })
       }
     } catch (err) {
       setSubmitStatus('error')
@@ -315,6 +336,7 @@ export default function ConceptosForm() {
         </div>
         <ModeSwitcher
           mode={mode}
+          id={id}
           registerUrl="/conceptos/new"
           formUrl={m => `/conceptos/form?mode=${m}&id=${id}`}
         />
