@@ -125,24 +125,44 @@ const router = createBrowserRouter([
   {
     element: <RequireAuth><AppLayout /></RequireAuth>,
     children: [
-      { path: 'dashboard', element: <Dashboard /> },
+      {
+        path: 'dashboard',
+        element: (
+          // Panel de Control — su contenido (KPIs + accesos rápidos de la
+          // configuración académica) sólo aplica a los roles que operan esos
+          // módulos, igual que el ítem del sidebar. Los roles sin acceso se
+          // redirigen a SU vista principal (ROLE_DEFAULT_PATHS), nunca a un
+          // destino cross-module que pueda ciclar. Ver `RequireRole.tsx`.
+          <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectToRoleMain>
+            <Dashboard />
+          </RequireRole>
+        ),
+      },
 
       // Admisión
       //
       // Role guard: every screen below is wrapped in `RequireRole` per the
       // "Rol activo en sidebar" annotations in `03-admision.md`. The index
-      // route (`/admision`, the Dashboard) is the ONE deliberate exception —
-      // it is NEVER wrapped. It's the guard's own redirect target, so
-      // guarding it too (e.g. to SERVICIOS_ESCOLARES only) would send any
-      // other role/tier (FINANZAS, DIRECTOR_DIVISION, ADMINISTRADOR,
-      // GESTOR_ACADEMICO, or an anonymous/CANDIDATO session hitting a
-      // mismatched URL) into an infinite redirect loop back onto itself.
-      // The Dashboard's content is role-agnostic aggregate KPIs with no
-      // sensitive per-role data, so leaving it unguarded is safe.
+      // route (`/admision`, the Dashboard) is now guarded TOO, mirroring the
+      // module's sidebar roles — sidebar and URL stay in sync, so a role that
+      // can't see "Admisión" in the sidebar can't reach it by URL either.
+      // Its own redirect target is `/dashboard` (the role-agnostic shell
+      // home), and because the index is guarded, denied sub-screens cascade
+      // `/admision/… → /admision → /dashboard` instead of ever looping.
       {
         path: 'admision',
         children: [
-          { index: true, element: <AdmisionDashboard /> },
+          {
+            index: true,
+            element: (
+              <RequireRole
+                allowedRoles={['SERVICIOS_ESCOLARES', 'FINANZAS', 'DIRECTOR_DIVISION']}
+                redirectTo="/dashboard"
+              >
+                <AdmisionDashboard />
+              </RequireRole>
+            ),
+          },
           {
             path: 'canales',
             element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CanalesDifusion /></RequireRole>,
@@ -208,19 +228,28 @@ const router = createBrowserRouter([
       // Inscripción Nuevo Ingreso, Reinscripción, Documentos Institucionales,
       // Expediente — Documentos Recibidos) are real as of Screen 7 landing.
       //
-      // Role guard: mirrors Admisión's rule — the index route (`/inscripciones`,
-      // the Dashboard) is the ONE deliberate exception, NEVER wrapped in
-      // `RequireRole`, because it's the guard's own redirect target (see
-      // `RequireRole.tsx`). Its content is role-agnostic aggregate KPIs with no
-      // sensitive per-role data, so leaving it unguarded is safe. Per-screen
-      // roles below come from `figma/prompts/04-inscripciones.md`'s "Rol activo
-      // en sidebar" annotations (Gestor Académico for Screens 2-5, Administrador
+      // Role guard: mirrors Admisión's rule — the index route
+      // (`/inscripciones`, the Dashboard) is now guarded too, mirroring the
+      // module's sidebar roles (sidebar and URL stay in sync; its own
+      // redirect target is `/dashboard`, never itself). Per-screen roles
+      // below come from `figma/prompts/04-inscripciones.md`'s "Rol activo en
+      // sidebar" annotations (Gestor Académico for Screens 2-5, Administrador
       // for Screen 6, Servicios Escolares for Screen 7) — NOT Servicios
       // Escolares for every screen.
       {
         path: 'inscripciones',
         children: [
-          { index: true, element: <InscripcionesDashboard /> },
+          {
+            index: true,
+            element: (
+              <RequireRole
+                allowedRoles={['GESTOR_ACADEMICO', 'ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}
+                redirectTo="/dashboard"
+              >
+                <InscripcionesDashboard />
+              </RequireRole>
+            ),
+          },
           {
             path: 'estudiantes',
             element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><EstudiantesList /></RequireRole>,
@@ -258,7 +287,7 @@ const router = createBrowserRouter([
       // untouched — out of scope for this change.
       {
         path: 'divisiones',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><DivisionesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><DivisionesList /></RequireRole>,
       },
       { path: 'divisiones/new',  element: <DivisionesForm /> },
       { path: 'divisiones/form', element: <DivisionesForm /> },
@@ -273,13 +302,21 @@ const router = createBrowserRouter([
       // untouched — out of scope for this change.
       {
         path: 'clasificaciones',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><ClasificacionesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><ClasificacionesList /></RequireRole>,
       },
       { path: 'clasificaciones/new',  element: <ClasificacionesForm /> },
       { path: 'clasificaciones/form', element: <ClasificacionesForm /> },
 
       // Programas
-      { path: 'programas',      element: <ProgramasList /> },
+      //
+      // Role guard: the list route is wrapped here, mirroring the
+      // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`grupos`
+      // precedent — every `/programs` verb is enforced server-side to
+      // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
+      // redirect to `/dashboard` instead of a raw 403/blank state for any
+      // other role. `programas/new`/`programas/form` are untouched — out of
+      // scope for this change.
+      { path: 'programas', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><ProgramasList /></RequireRole> },
       { path: 'programas/new',  element: <ProgramasForm /> },
       { path: 'programas/form', element: <ProgramasForm /> },
 
@@ -293,7 +330,7 @@ const router = createBrowserRouter([
       // scope for this change.
       {
         path: 'periodos',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><PeriodosList /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><PeriodosList /></RequireRole>,
       },
       { path: 'periodos/new',  element: <PeriodosForm /> },
       { path: 'periodos/form', element: <PeriodosForm /> },
@@ -308,13 +345,21 @@ const router = createBrowserRouter([
       // `generaciones/form` are untouched — out of scope for this change.
       {
         path: 'generaciones',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><GeneracionesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><GeneracionesList /></RequireRole>,
       },
       { path: 'generaciones/new',  element: <GeneracionesForm /> },
       { path: 'generaciones/form', element: <GeneracionesForm /> },
 
       // Grupos
-      { path: 'grupos',      element: <GruposList /> },
+      //
+      // Role guard: the list route is wrapped here, mirroring the
+      // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`planes`
+      // precedent — every `/groups` verb is enforced server-side to
+      // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
+      // redirect to `/dashboard` instead of a raw 403/blank state for any
+      // other role. `grupos/new`/`grupos/form` are untouched — out of scope
+      // for this change.
+      { path: 'grupos', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><GruposList /></RequireRole> },
       { path: 'grupos/new',  element: <GruposForm /> },
       { path: 'grupos/form', element: <GruposForm /> },
 
@@ -329,12 +374,17 @@ const router = createBrowserRouter([
       // untouched — out of scope for this change.
       {
         path: 'configuracion-admision',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><ConfiguracionAdmisionList /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><ConfiguracionAdmisionList /></RequireRole>,
       },
       { path: 'configuracion-admision/new',  element: <ConfiguracionAdmisionForm /> },
       { path: 'configuracion-admision/form', element: <ConfiguracionAdmisionForm /> },
 
       // Conceptos (includes extra: tarifa/form)
+      //
+      // Role guard: the list route is wrapped here, mirroring the
+      // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`grupos`
+      // precedent — every `/concepts` verb is enforced server-side to
+      // ADMIN/SERVICIOS_ESCOLARES.
       //
       // `conceptos/tarifa/form` follows the exact route pattern established by
       // `planes/materia/form`/`planes/escala/form` — a SEPARATE screen (not a
@@ -342,7 +392,7 @@ const router = createBrowserRouter([
       // `?conceptId=`. Unlike those two, there is no `?mode=` here: `PaymentRate`
       // is an append-only history with no edit, so this route is ALWAYS
       // registration (2026-07-28 wiring plan, Fase 4 of 4).
-      { path: 'conceptos',            element: <ConceptosList /> },
+      { path: 'conceptos',            element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><ConceptosList /></RequireRole> },
       { path: 'conceptos/new',        element: <ConceptosForm /> },
       { path: 'conceptos/form',       element: <ConceptosForm /> },
       { path: 'conceptos/tarifa/form', element: <ConceptosTarifaForm /> },
@@ -356,11 +406,11 @@ const router = createBrowserRouter([
       // `planes/escala/form` (register + edit, same ?mode= convention) follows
       // the exact same route pattern for GradeScale — full-screen route via
       // useSearchParams, no standalone GET-by-id, edit mode locates the record
-      // inside the parent plan's response. No `RequireRole` here — none of the
-      // `/planes/**` routes are guarded yet (unlike
-      // `divisiones`/`clasificaciones`/`usuarios`), so this mirrors the
-      // existing pattern rather than introducing a new one.
-      { path: 'planes',              element: <PlanesList /> },
+      // inside the parent plan's response. Role guard: the list route is
+      // wrapped here, mirroring the `divisiones`/`clasificaciones`/`usuarios`
+      // precedent — every `/plans` verb is enforced server-side to
+      // ADMIN/SERVICIOS_ESCOLARES.
+      { path: 'planes', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><PlanesList /></RequireRole> },
       { path: 'planes/new',          element: <PlanForm /> },
       { path: 'planes/form',         element: <PlanForm /> },
       { path: 'planes/detalle',      element: <PlanDetalle /> },
@@ -376,7 +426,7 @@ const router = createBrowserRouter([
       // out of scope for this change.
       {
         path: 'usuarios',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><UsuariosList /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><UsuariosList /></RequireRole>,
       },
       // `usuarios/form` (register+edit+view via ?mode=) is REMOVED — the
       // 2026-07-28 wiring plan drops "edit" entirely (no `PUT /users/{id}`
