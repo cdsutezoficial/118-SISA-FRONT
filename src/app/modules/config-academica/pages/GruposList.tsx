@@ -1,14 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  ChevronRight, Search, Eye, Pencil, Plus, ChevronLeft, ChevronRight as ChevRight,
-  Loader2, AlertCircle, Users2,
-} from 'lucide-react'
-import { Toast, ActionBtn, Switch, SearchSelectField } from '@app/core/components/ui'
+import { Users2, Eye, Pencil, Plus as PlusIcon } from 'lucide-react'
+import { Toast, Switch, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { apiGet, apiPatch } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
+import {
+  PageContainer,
+  Breadcrumb,
+  PageHeader,
+  SearchInput,
+  FilterBar,
+  ResultCount,
+  ErrorBanner,
+  Pagination,
+  MobilePagination,
+  DataTable,
+  MobileCards,
+  type ColumnDef,
+  type BadgeStyle,
+} from '@app/core/components/list'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // `Group` (grupo) is a full standalone aggregate (backend: `GroupController`,
@@ -32,10 +44,10 @@ const SHIFT_LABELS: Record<Shift, string> = {
   MIXED: 'Mixto',
 }
 
-const SHIFT_BADGE: Record<Shift, string> = {
-  MORNING: 'bg-blue-50 text-blue-700 border border-blue-200',
-  AFTERNOON: 'bg-amber-50 text-amber-700 border border-amber-200',
-  MIXED: 'bg-purple-50 text-purple-700 border border-purple-200',
+const SHIFT_BADGE_MAP: Record<Shift, BadgeStyle> = {
+  MORNING: { label: SHIFT_LABELS.MORNING, className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  AFTERNOON: { label: SHIFT_LABELS.AFTERNOON, className: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  MIXED: { label: SHIFT_LABELS.MIXED, className: 'bg-purple-50 text-purple-700 border border-purple-200' },
 }
 
 interface GroupListItem {
@@ -242,11 +254,6 @@ export default function GruposList() {
     return matchPeriod && matchLevel
   })
 
-  // Display text for footer — based on client-filtered results, not server total
-  const displayedStartRow = displayedGroups.length === 0 ? 0 : 1
-  const displayedEndRow = displayedGroups.length
-  const displayedTotal = displayedGroups.length
-
   function programLabel(programId: string): string {
     const p = programs.find(p => p.id === programId)
     return p ? p.code : '—'
@@ -294,43 +301,51 @@ export default function GruposList() {
     }
   }
 
+  const emptyHint = loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'
+
+  const columns: ColumnDef<GroupListItem>[] = [
+    { key: 'code', header: 'Clave', type: 'code' },
+    { key: 'programId', header: 'Programa', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'generationId', header: 'Generación', type: 'muted', value: row => generationLabel(row.generationId) },
+    { key: 'planLevelId', header: 'Nivel', type: 'muted', value: row => levelLabel(row) },
+    { key: 'periodId', header: 'Periodo', type: 'muted', value: row => periodLabel(row.periodId) },
+    { key: 'shift', header: 'Turno', type: 'badge', badge: SHIFT_BADGE_MAP, className: 'w-24' },
+    { key: 'maxCapacity', header: 'Capacidad', type: 'count', sub: row => `cupo${row.maxCapacity !== 1 ? 's' : ''}`, className: 'w-28' },
+    { key: 'status', header: 'Estado', type: 'status', activeLabel: 'Abierto', inactiveLabel: 'Cerrado', className: 'w-28' },
+  ]
+
+  const desktopFooter = (
+    <Pagination
+      page={page}
+      totalPages={totalPages}
+      totalElements={displayedGroups.length}
+      perPage={perPage}
+      onPageChange={setPage}
+      suffix="registros"
+    />
+  )
+
   return (
-    <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
+    <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Grupos</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Grupos' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">Grupos</h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">Consulta y administra los grupos del periodo activo.</p>
-        </div>
-        <button
-          onClick={() => navigate('/grupos/new')}
-          className="flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors sm:whitespace-nowrap sm:self-start"
-        >
-          <Plus size={15} />Registrar Grupo
-        </button>
-      </div>
+      <PageHeader
+        title="Grupos"
+        subtitle="Consulta y administra los grupos del periodo activo."
+        actions={[{ label: 'Registrar Grupo', icon: <PlusIcon />, onClick: () => navigate('/grupos/new') }]}
+      />
 
-      {/* Error banner */}
-      {loadStatus === 'error' && errorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {errorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && errorMsg && <ErrorBanner message={errorMsg} />}
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mb-4">
+      <FilterBar>
         <div className="w-full sm:w-56">
           <SearchSelectField
             options={periodOptions}
@@ -369,227 +384,107 @@ export default function GruposList() {
             searchPlaceholder="Buscar nivel…"
           />
         </div>
-        <div className="relative flex-1 sm:max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Buscar grupo..."
-            className="w-full pl-9 pr-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
-          />
-        </div>
-        <span className="text-[12px] text-[#6B7280] hidden sm:inline">
-          {displayedGroups.length} resultado{displayedGroups.length !== 1 ? 's' : ''}
-        </span>
-      </div>
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1) }}
+          placeholder="Buscar grupo..."
+        />
+        <ResultCount count={displayedGroups.length} />
+      </FilterBar>
 
       {/* ── Desktop table (md+) ─────────────────────────────────────────────── */}
-      <div className="hidden md:block bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-10">#</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Clave</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Programa</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Generación</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Nivel</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Periodo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Turno</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Capacidad</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Estado</th>
-              <th className="px-4 py-3 w-24" />
-            </tr>
-          </thead>
-          <tbody>
-            {loadStatus === 'loading' ? (
-              <tr>
-                <td colSpan={10} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-                    <Loader2 size={24} className="animate-spin text-[#009574]" />
-                    <p className="text-[13px] font-medium">Cargando grupos...</p>
-                  </div>
-                </td>
-              </tr>
-            ) : displayedGroups.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-                    <Users2 size={36} className="text-[#E5E7EB]" />
-                    <p className="text-[13px] font-medium">No se encontraron grupos</p>
-                    <p className="text-[12px]">
-                      {loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              displayedGroups.map((row, i) => {
-                const rowNum = i + 1
-                return (
-                  <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                    <td className="px-4 py-3 text-[#6B7280] font-medium">{rowNum}</td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-[11px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{row.code}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-[#333333]">{programLabel(row.programId)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-[#6B7280]">{generationLabel(row.generationId)}</td>
-                    <td className="px-4 py-3 text-[#6B7280]">{levelLabel(row)}</td>
-                    <td className="px-4 py-3 text-[#6B7280]">{periodLabel(row.periodId)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${SHIFT_BADGE[row.shift]}`}>
-                        {SHIFT_LABELS[row.shift]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-[#333333]">
-                      {/* No enrolled-student count exists on `Group` yet (no
-                          Inscripciones<->academic_config link) — shows
-                          capacity only, not "inscritos/capacidad" as the
-                          original mock/spec example implied. */}
-                      {row.maxCapacity}
-                      <span className="ml-1 text-[11px] text-[#6B7280]">cupo{row.maxCapacity !== 1 ? 's' : ''}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={row.status === 'OPEN'}
-                          disabled={togglingId === row.id}
-                          onChange={() => handleToggleStatus(row)}
-                        />
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                          row.status === 'OPEN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
-                        }`}>
-                          {row.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <ActionBtn icon={<Eye size={15} />} tooltip="Ver detalle" onClick={() => navigate(`/grupos/form?mode=view&id=${row.id}`)} />
-                        <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => navigate(`/grupos/form?mode=edit&id=${row.id}`)} />
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-        {/* Pagination — desktop */}
-        <div className="px-4 py-3 border-t border-[#E5E7EB] flex items-center justify-between">
-          <span className="text-[12px] text-[#6B7280]">
-            {displayedTotal === 0 ? 'Sin registros' : `Mostrando ${displayedStartRow}–${displayedEndRow} de ${displayedTotal}`}
-          </span>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="p-1.5 rounded border border-[#E5E7EB] text-[#6B7280] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-[#F8F9FA]">
-              <ChevronLeft size={14} />
-            </button>
-            <button className="px-3 py-1 rounded border border-[#009574] bg-[#009574] text-white text-[12px] font-semibold">{page}</button>
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0}
-              className="p-1.5 rounded border border-[#E5E7EB] text-[#6B7280] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-[#F8F9FA]">
-              <ChevRight size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
+      <DataTable
+        numbered
+        columns={columns}
+        status={loadStatus}
+        items={displayedGroups}
+        keyFor={row => row.id}
+        loadingLabel="Cargando grupos..."
+        emptyTitle="No se encontraron grupos"
+        emptyHint={emptyHint}
+        emptyIcon={<Users2 size={36} className="text-[#E5E7EB]" />}
+        footer={desktopFooter}
+        actions={{
+          view: row => navigate(`/grupos/form?mode=view&id=${row.id}`),
+          edit: row => navigate(`/grupos/form?mode=edit&id=${row.id}`),
+          viewTooltip: 'Ver detalle',
+        }}
+        activeValue="OPEN"
+        onToggleStatus={handleToggleStatus}
+        togglingId={togglingId}
+      />
 
       {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
-      <div className="md:hidden space-y-3">
-        {loadStatus === 'loading' ? (
-          <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
-            <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-              <Loader2 size={24} className="animate-spin text-[#009574]" />
-              <p className="text-[13px] font-medium">Cargando grupos...</p>
-            </div>
-          </div>
-        ) : displayedGroups.length === 0 ? (
-          <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
-            <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-              <Users2 size={36} className="text-[#E5E7EB]" />
-              <p className="text-[13px] font-medium">No se encontraron grupos</p>
-              <p className="text-[12px]">
-                {loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          displayedGroups.map(row => (
-            <div key={row.id} className="bg-white border border-[#E5E7EB] rounded-lg p-4">
-              {/* Top row: clave + estado */}
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
-                  {row.code}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={row.status === 'OPEN'}
-                    disabled={togglingId === row.id}
-                    onChange={() => handleToggleStatus(row)}
-                  />
-                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                    row.status === 'OPEN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
-                  }`}>
-                    {row.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
-                  </span>
-                </div>
-              </div>
-              {/* Programa + Generación */}
-              <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">
-                {programLabel(row.programId)} · {generationLabel(row.generationId)}
-              </p>
-              {/* Nivel + Periodo + Turno */}
-              <p className="text-[12px] text-[#6B7280] mb-1">
-                {levelLabel(row)} · {periodLabel(row.periodId)}
-              </p>
-              <div className="flex items-center gap-2 mb-3">
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${SHIFT_BADGE[row.shift]}`}>
-                  {SHIFT_LABELS[row.shift]}
-                </span>
-                <span className="text-[12px] text-[#6B7280]">{row.maxCapacity} cupo{row.maxCapacity !== 1 ? 's' : ''}</span>
-              </div>
-              {/* Actions */}
-              <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
-                <button
-                  onClick={() => navigate(`/grupos/form?mode=view&id=${row.id}`)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#333333] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
-                >
-                  <Eye size={14} />Ver
-                </button>
-                <button
-                  onClick={() => navigate(`/grupos/form?mode=edit&id=${row.id}`)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
-                >
-                  <Pencil size={14} />Editar
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-
-        {/* Pagination — mobile (always shown, mirrors desktop footer's "Sin registros" when empty) */}
-        <div className="flex flex-col items-center gap-3 pt-2">
-          <p className="text-[12px] text-[#6B7280]">
-            {displayedTotal === 0 ? 'Sin registros' : `Mostrando ${displayedStartRow}–${displayedEndRow} de ${displayedTotal}`}
-          </p>
-          {displayedTotal > 0 && (
-            <div className="flex items-center gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed">
-                <ChevronLeft size={13} />Anterior
-              </button>
-              <span className="px-3 py-1.5 text-[12px] font-semibold text-[#009574] border border-[#009574] rounded-md bg-white tabular-nums">
-                {page} / {totalPages || 1}
+      <MobileCards
+        status={loadStatus}
+        items={displayedGroups}
+        keyFor={row => row.id}
+        renderItem={row => (
+          <>
+            {/* Top row: clave + estado */}
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
+                {row.code}
               </span>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0}
-                className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed">
-                Siguiente<ChevRight size={13} />
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={row.status === 'OPEN'}
+                  disabled={togglingId === row.id}
+                  onChange={() => handleToggleStatus(row)}
+                />
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  row.status === 'OPEN' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
+                }`}>
+                  {row.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
+                </span>
+              </div>
+            </div>
+            {/* Programa + Generación */}
+            <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">
+              {programLabel(row.programId)} · {generationLabel(row.generationId)}
+            </p>
+            {/* Nivel + Periodo + Turno */}
+            <p className="text-[12px] text-[#6B7280] mb-1">
+              {levelLabel(row)} · {periodLabel(row.periodId)}
+            </p>
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${SHIFT_BADGE_MAP[row.shift].className}`}>
+                {SHIFT_BADGE_MAP[row.shift].label}
+              </span>
+              <span className="text-[12px] text-[#6B7280]">{row.maxCapacity} cupo{row.maxCapacity !== 1 ? 's' : ''}</span>
+            </div>
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+              <button
+                onClick={() => navigate(`/grupos/form?mode=view&id=${row.id}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#333333] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
+              >
+                <Eye size={14} />Ver
+              </button>
+              <button
+                onClick={() => navigate(`/grupos/form?mode=edit&id=${row.id}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
+              >
+                <Pencil size={14} />Editar
               </button>
             </div>
-          )}
-        </div>
-      </div>
-    </div>
+          </>
+        )}
+        loadingLabel="Cargando grupos..."
+        emptyTitle="No se encontraron grupos"
+        emptyHint={emptyHint}
+        emptyIcon={<Users2 size={36} className="text-[#E5E7EB]" />}
+        pagination={(
+          <MobilePagination
+            page={page}
+            totalPages={totalPages}
+            totalElements={displayedGroups.length}
+            perPage={perPage}
+            onPageChange={setPage}
+            suffix="registros"
+          />
+        )}
+      />
+    </PageContainer>
   )
 }
