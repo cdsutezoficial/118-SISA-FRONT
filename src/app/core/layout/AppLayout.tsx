@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router'
 import { Menu, ChevronDown, HelpCircle, LogOut, UserCog } from 'lucide-react'
 import { useRole } from '../infra/RoleContext'
+import type { Role } from '../infra/RoleContext'
 import { Sidebar } from './Sidebar'
-import { ROLE_LABELS } from './layoutRoles'
+import { ROLE_LABELS, ROLE_DEFAULT_PATHS } from './layoutRoles'
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
 
@@ -45,18 +46,16 @@ function Navbar({
       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
         <div className="relative">
           <button
-            onClick={isRealSession ? undefined : onRoleMenuToggle}
-            disabled={isRealSession}
-            aria-disabled={isRealSession}
-            className={`flex items-center gap-1.5 text-sm text-[#333333] px-2 sm:px-3 py-1.5 rounded-md border border-[#E5E7EB] transition-colors ${
-              isRealSession ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[#F8F9FA]'
-            }`}
+            onClick={onRoleMenuToggle}
+            aria-haspopup="menu"
+            aria-expanded={roleMenuOpen}
+            className={`flex items-center gap-1.5 text-sm text-[#333333] px-2 sm:px-3 py-1.5 rounded-md border border-[#E5E7EB] transition-colors hover:bg-[#F8F9FA]`}
           >
             <UserCog size={15} className="text-[#6B7280] flex-shrink-0" />
             <span className="font-medium hidden sm:inline">{role ? ROLE_LABELS[role] : 'Seleccionar rol'}</span>
-            {!isRealSession && <ChevronDown size={14} className="text-[#6B7280] hidden sm:block" />}
+            <ChevronDown size={14} className="text-[#6B7280] hidden sm:block" />
           </button>
-          {!isRealSession && roleMenuOpen && (
+          {roleMenuOpen && (
             <div className="absolute right-0 top-9 w-52 bg-white border border-[#E5E7EB] rounded-lg shadow-lg py-1 z-50">
               <div className="px-4 py-2.5 border-b border-[#E5E7EB]">
                 <p className="text-[12px] font-semibold text-[#333333]">{user?.name}</p>
@@ -107,6 +106,27 @@ export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [roleMenuOpen, setRoleMenuOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { role } = useRole()
+  const navigate = useNavigate()
+  // Skips the redirect on the initial mount (a reload/refresh/re-login must
+  // NOT yank the user away from the route they opened).
+  const prevRoleRef = useRef<Role | null>(null)
+
+  // On a role switch, always land on that role's main view — never stay on a
+  // route the new role may not even see in its sidebar. Runs once centrally,
+  // covering every switch path (Navbar dropdown, Sidebar desktop/mobile,
+  // post-login role selection). `replace` keeps history clean so Back doesn't
+  // return into the previous role's stale view.
+  useEffect(() => {
+    if (prevRoleRef.current === null) {
+      prevRoleRef.current = role
+      return
+    }
+    prevRoleRef.current = role
+    if (role) {
+      navigate(ROLE_DEFAULT_PATHS[role], { replace: true })
+    }
+  }, [role, navigate])
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-['Inter',sans-serif] flex flex-col">

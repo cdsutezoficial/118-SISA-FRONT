@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { useRole } from '../infra/RoleContext'
 import type { Role } from '../infra/RoleContext'
-import { STAFF_ROLES, ROLE_LABELS } from './layoutRoles'
+import { ADMIN_SERVICIOS_ROLES, ROLE_LABELS } from './layoutRoles'
 
 // ─── Nav model ────────────────────────────────────────────────────────────────
 // Two entry types: NavLeaf (navigable item) and NavGroup (collapsible section).
@@ -38,25 +38,25 @@ function isGroup(e: NavEntry): e is NavGroup {
 
 /** System-wide navigation tree — any module/shell can render its own subset. */
 export const SYSTEM_NAV: NavEntry[] = [
-  { icon: <LayoutDashboard size={18} />, label: 'Dashboard', base: 'dashboard', path: '/dashboard', roles: STAFF_ROLES },
+  { icon: <LayoutDashboard size={18} />, label: 'Dashboard', base: 'dashboard', path: '/dashboard', roles: ADMIN_SERVICIOS_ROLES },
   {
     id: 'config', icon: <Settings size={18} />, label: 'Configuración Académica',
     children: [
-      { icon: <Building2 size={18} />,     label: 'Divisiones Académicas',   base: 'divisiones', path: '/divisiones', roles: STAFF_ROLES },
-      { icon: <GraduationCap size={18} />, label: 'Programas Educativos',    base: 'programas',  path: '/programas',  roles: STAFF_ROLES },
-      { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: STAFF_ROLES },
-      { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: STAFF_ROLES },
-      { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: STAFF_ROLES },
-      { icon: <Users2 size={18} />,        label: 'Generaciones',            base: 'generaciones', path: '/generaciones', roles: STAFF_ROLES },
-      { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: STAFF_ROLES },
-      { icon: <Ticket size={18} />,        label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: STAFF_ROLES },
-      { icon: <CreditCard size={18} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: STAFF_ROLES },
+      { icon: <Building2 size={18} />,     label: 'Divisiones Académicas',   base: 'divisiones', path: '/divisiones', roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <GraduationCap size={18} />, label: 'Programas Educativos',    base: 'programas',  path: '/programas',  roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <Users2 size={18} />,        label: 'Generaciones',            base: 'generaciones', path: '/generaciones', roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <Ticket size={18} />,        label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <CreditCard size={18} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: ADMIN_SERVICIOS_ROLES },
     ],
   },
   {
     id: 'admin', icon: <UserCog size={18} />, label: 'Administración',
     children: [
-      { icon: <IdCard size={18} />, label: 'Usuarios', base: 'usuarios', path: '/usuarios', roles: STAFF_ROLES },
+      { icon: <IdCard size={18} />, label: 'Usuarios', base: 'usuarios', path: '/usuarios', roles: ADMIN_SERVICIOS_ROLES },
     ],
   },
   {
@@ -76,13 +76,24 @@ function groupForSegment(nav: NavEntry[], segment: string): string | null {
   return null
 }
 
+/**
+ * `ADMINISTRADOR` is a superuser: it bypasses every entry's allow-list and
+ * sees the whole nav tree. Backend grants ADMIN on all endpoints, and
+ * `RequireRole` mirrors it, so the sidebar must show everything it could
+ * actually open. See `RequireRole.tsx` for the parallel rule.
+ */
+function isSuperAdmin(role: Role | null): boolean {
+  return role === 'ADMINISTRADOR'
+}
+
 /** Flat list of all NavLeaf items visible to `role` (for collapsed sidebar). */
 function allLeafsForRole(nav: NavEntry[], role: Role | null): NavLeaf[] {
   if (!role) return []
+  const superAdmin = isSuperAdmin(role)
   const out: NavLeaf[] = []
   for (const e of nav) {
-    if (isGroup(e)) out.push(...e.children.filter(c => c.roles.includes(role)))
-    else if (e.roles.includes(role)) out.push(e)
+    if (isGroup(e)) out.push(...(superAdmin ? e.children : e.children.filter(c => c.roles.includes(role))))
+    else if (superAdmin || e.roles.includes(role)) out.push(e)
   }
   return out
 }
@@ -167,10 +178,13 @@ export function Sidebar({
   }
 
   // Role-filtered nav entries. Groups with no visible children are hidden.
+  // ADMINISTRADOR bypasses the per-entry allow-lists (superuser — sees all).
   const visibleEntries: NavEntry[] = role === null ? [] : navigation
     .map((entry): NavEntry | null => {
-      if (!isGroup(entry)) return (entry as NavLeaf).roles.includes(role) ? entry : null
-      const kids = (entry as NavGroup).children.filter(c => c.roles.includes(role))
+      if (!isGroup(entry)) return isSuperAdmin(role) || (entry as NavLeaf).roles.includes(role) ? entry : null
+      const kids = isSuperAdmin(role)
+        ? (entry as NavGroup).children
+        : (entry as NavGroup).children.filter(c => c.roles.includes(role))
       return kids.length > 0 ? { ...(entry as NavGroup), children: kids } : null
     })
     .filter((e): e is NavEntry => e !== null)
@@ -397,16 +411,17 @@ export function Sidebar({
           })}
         </nav>
 
-        {/* Bottom: role switcher (mock) + actions */}
+        {/* Bottom: role switcher (when more than one selectable role — mock
+            staff catalog or a real multi-role account) + actions */}
         <div className="border-t border-[#E5E7EB] px-3 py-3 space-y-1 flex-shrink-0">
-          {!isRealSession && (
+          {availableRoles.length > 1 && (
             <div className="mb-3">
               <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider px-3 mb-1.5">Cambiar rol</p>
               <div className="space-y-0.5">
                 {availableRoles.map(r => (
                   <button
                     key={r}
-                    onClick={() => setRole(r)}
+                    onClick={() => { setRole(r); onMobileClose() }}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] transition-colors ${
                       role === r ? 'text-[#009574] font-semibold bg-[#e6f5f1]' : 'text-[#6B7280] hover:bg-[#F8F9FA] hover:text-[#333333]'
                     }`}
