@@ -39,7 +39,7 @@ Today `Login.tsx` fakes auth with a `setTimeout` and password-string branching, 
 4. **`mustChangePassword` routing** → reuse `CambiarPassword.tsx`; hard-block navigation away while the flag is true. Defense in depth: the backend also 403s (`MustChangePasswordException`) any other protected call until the flag clears — the client block is UX, not the sole gate.
 5. **Role mapping** → lookup table inside `RoleContext.tsx`, NOT a rename of the `Role` union. Keeps the diff login-focused.
 6. **Silent refresh** → deferred. Nothing except login is real yet, so there is no live session to auto-refresh for. On 401 from any future real call, force re-login. Explicit deferred item, not an oversight.
-7. **Role-switcher dropdown** → keep the mock switcher available ONLY when not authenticated / in an explicit dev-mock mode; hide/disable it for the authenticated session so a real user cannot self-escalate. Rationale: Docente/Estudiante/etc. have no backend users, so other in-progress module work (Inscripciones, Admisión) still needs the mock switcher — this is a scoped, known prototype convenience a future change removes once all roles are provisionable.
+7. **Role-switcher dropdown** → keep it available in BOTH modes: mock lists the full staff catalog for in-progress module work (Docente/Estudiante/etc. have no backend users, so the mock switcher stays a useful prototype convenience), real lists ONLY the account's own JWT-mapped roles. Multi-role accounts additionally pick their entry role in a post-login step — the switcher then continues that same role-selection across the session. No self-escalation is possible in real mode because only the account's own roles are selectable.
 8. **Base URL** → `VITE_API_URL` env var, not a Vite dev proxy. Explicit, doesn't hide the cross-origin call (which is why backend CORS was added), and works toward a future prod build.
 
 ## Backend Dependency (already shipped)
@@ -90,7 +90,7 @@ Single-repo, additive change. Revert the branch/PR: `Login.tsx`, `RoleContext.ts
 ## Success Criteria
 
 - [ ] ADMIN logs in via real `POST /auth/login`; invalid credentials show the existing error banner (401) and locked account shows the locked message (423).
-- [ ] `RoleContext` reflects the real `sub`/role from the JWT (`ADMIN → ADMINISTRADOR`); `RequireRole` gates pass for ADMIN with no code change to `RequireRole`.
+- [ ] `RoleContext` reflects the real `sub`/roles from the JWT; multi-role accounts select their entry role and can switch between their OWN roles afterwards (`ADMIN → ADMINISTRADOR`); `RequireRole` gates pass for ADMIN with no code change to `RequireRole`.
 - [ ] First login (`mustChangePassword=true`) forces `CambiarPassword.tsx`, blocks navigating away, and completing it via `POST /auth/change-password` clears the flag and lands on `/dashboard`.
 - [ ] Direct-URL access to an authenticated route with no session redirects to `/login`.
 - [ ] Logout clears tokens/session; re-accessing an authenticated route redirects to `/login`.
