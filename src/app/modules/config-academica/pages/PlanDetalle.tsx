@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { ActionBtn, Toast } from '@app/core/components/ui'
+import { ActionBtn, ModeSwitcher, Toast } from '@app/core/components/ui'
 import { apiDelete, apiGet } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 
@@ -387,11 +387,19 @@ export default function PlanDetalle() {
       </nav>
 
       {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">
-          {plan ? `Plan de Estudios — ${plan.version}` : 'Plan de Estudios'}
-        </h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">Visualiza la estructura completa del plan, sus niveles y materias asignadas.</p>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-[#333333]">
+            {plan ? `Plan de Estudios — ${plan.version}` : 'Plan de Estudios'}
+          </h1>
+          <p className="text-[14px] text-[#6B7280] mt-1">Visualiza la estructura completa del plan, sus niveles y materias asignadas.</p>
+        </div>
+        <ModeSwitcher
+          mode="view"
+          id={id}
+          registerUrl="/planes/new"
+          formUrl={m => m === 'view' ? `/planes/detalle?id=${id}` : `/planes/form?mode=edit&id=${id}`}
+        />
       </div>
 
       {/* Load error banner */}
