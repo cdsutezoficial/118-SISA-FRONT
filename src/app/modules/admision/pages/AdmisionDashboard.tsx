@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
 import {
-  ChevronRight,
   Users,
   CreditCard,
   ClipboardList,
@@ -12,6 +10,8 @@ import {
 } from 'lucide-react'
 import { Toast } from '@app/core/components/ui'
 import { usePendingToast } from '@app/core/infra/hooks'
+import { Breadcrumb, PageHeader, DataTable, type ColumnDef } from '@app/core/components/list'
+import { KpiCards, QuickAccess, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
 import { mockCandidates } from '../data/mockData'
 import type { Candidate } from '../data/types'
 
@@ -69,80 +69,48 @@ function buildProgramaStats(candidates: Candidate[]): ProgramaStat[] {
 
 const programaStats = buildProgramaStats(mockCandidates)
 
-const kpiCards: { label: string; value: number; sub: string; color: string; icon: React.ReactNode; badge?: string }[] = [
-  {
-    label: 'Fichas Registradas',
-    value: totalFichasRegistradas,
-    sub: 'aspirantes registrados',
-    color: 'bg-blue-50 text-blue-600',
-    icon: <Users size={20} />,
-  },
-  {
-    label: 'Pagos Confirmados',
-    value: pagosConfirmados,
-    sub: 'fichas pagadas',
-    color: 'bg-emerald-50 text-emerald-600',
-    icon: <CreditCard size={20} />,
-    badge: 'confirmados',
-  },
-  {
-    label: 'Exámenes Aplicados',
-    value: examenesAplicados,
-    sub: 'resultados capturados',
-    color: 'bg-violet-50 text-violet-600',
-    icon: <ClipboardList size={20} />,
-  },
-  {
-    label: 'Admitidos',
-    value: admitidos,
-    sub: 'candidatos admitidos',
-    color: 'bg-emerald-50 text-emerald-600',
-    icon: <CheckCircle2 size={20} />,
-    badge: 'confirmados',
-  },
+const kpiCards: KpiCardData[] = [
+  { label: 'Fichas Registradas', value: String(totalFichasRegistradas), sub: 'aspirantes registrados', color: 'bg-blue-50 text-blue-600', icon: <Users size={20} />, trend: false },
+  { label: 'Pagos Confirmados', value: String(pagosConfirmados), sub: 'fichas pagadas', color: 'bg-emerald-50 text-emerald-600', icon: <CreditCard size={20} />, badge: 'confirmados', trend: false },
+  { label: 'Exámenes Aplicados', value: String(examenesAplicados), sub: 'resultados capturados', color: 'bg-violet-50 text-violet-600', icon: <ClipboardList size={20} />, trend: false },
+  { label: 'Admitidos', value: String(admitidos), sub: 'candidatos admitidos', color: 'bg-emerald-50 text-emerald-600', icon: <CheckCircle2 size={20} />, badge: 'confirmados', trend: false },
+]
+
+const topProgramasColumns: ColumnDef<ProgramaStat>[] = [
+  { key: 'programa', header: 'Programa', type: 'name', value: r => r.programa },
+  { key: 'fichas', header: 'Fichas', type: 'count', value: r => r.fichas, className: 'w-20' },
+  { key: 'admitidos', header: 'Admitidos', type: 'count', value: r => r.admitidos, className: 'w-24' },
+]
+
+const estadoProgramasColumns: ColumnDef<ProgramaStat>[] = [
+  { key: 'programa', header: 'Programa', type: 'name', value: r => r.programa },
+  { key: 'enProceso', header: 'En Proceso', type: 'count', value: r => r.enProceso, className: 'w-24' },
+  { key: 'completados', header: 'Completados', type: 'count', value: r => r.completados, className: 'w-24' },
+]
+
+const quickAccess: QuickAccessItem[] = [
+  { label: 'Ver Candidatos', icon: <Users size={16} />, url: '/admision/candidatos' },
+  { label: 'Registrar Candidato', icon: <UserPlus size={16} />, url: '/admision/candidatos/registrar' },
+  ...(hayMatriculasPendientes ? [{ label: 'Generar Matrículas', icon: <IdCard size={16} />, url: '/admision/matriculas' }] : []),
+  ...(canPublicarResultados ? [{ label: 'Publicar Resultados', icon: <Megaphone size={16} />, url: '/admision/publicar' }] : []),
 ]
 
 export default function AdmisionDashboard() {
-  const navigate = useNavigate()
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
 
   return (
-    <div className="max-w-[1100px] mx-auto px-8 py-8">
+    <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <span className="text-[#333333] font-medium">Inicio</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Admisión</span>
-      </nav>
+      <Breadcrumb items={[{ label: 'Inicio' }, { label: 'Admisión' }]} />
 
-      {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Admisión</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Seguimiento del proceso de admisión del periodo activo: Enero – Abril 2026.
-        </p>
-      </div>
+      <PageHeader
+        title="Admisión"
+        subtitle="Seguimiento del proceso de admisión del periodo activo: Enero – Abril 2026."
+      />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {kpiCards.map(card => (
-          <div key={card.label} className="bg-white border border-[#E5E7EB] rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className={`p-2 rounded-lg ${card.color}`}>{card.icon}</div>
-              {card.badge && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {card.badge}
-                </span>
-              )}
-            </div>
-            <p className="text-2xl font-bold text-[#333333]">{card.value}</p>
-            <p className="text-[12px] font-medium text-[#333333] mt-0.5">{card.label}</p>
-            <p className="text-[11px] text-[#6B7280] mt-1">{card.sub}</p>
-          </div>
-        ))}
-      </div>
+      <KpiCards cards={kpiCards} />
 
       {/* Embudo de Admisión */}
       <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
@@ -165,93 +133,40 @@ export default function AdmisionDashboard() {
 
       {/* Candidatos por Programa */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-[#E5E7EB]">
-            <h2 className="text-[14px] font-semibold text-[#333333]">Top Programas Solicitados</h2>
-          </div>
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                <th className="text-left px-6 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Programa</th>
-                <th className="text-right px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Fichas</th>
-                <th className="text-right px-6 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Admitidos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {programaStats.map(stat => (
-                <tr key={stat.programa} className="border-b border-[#E5E7EB] last:border-0">
-                  <td className="px-6 py-3 text-[#333333] font-medium">{stat.programa}</td>
-                  <td className="px-4 py-3 text-right text-[#333333]">{stat.fichas}</td>
-                  <td className="px-6 py-3 text-right text-[#333333]">{stat.admitidos}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-[#E5E7EB]">
-            <h2 className="text-[14px] font-semibold text-[#333333]">Estado General por Programa</h2>
-          </div>
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                <th className="text-left px-6 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Programa</th>
-                <th className="text-right px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">En Proceso</th>
-                <th className="text-right px-6 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Completados</th>
-              </tr>
-            </thead>
-            <tbody>
-              {programaStats.map(stat => (
-                <tr key={stat.programa} className="border-b border-[#E5E7EB] last:border-0">
-                  <td className="px-6 py-3 text-[#333333] font-medium">{stat.programa}</td>
-                  <td className="px-4 py-3 text-right text-[#333333]">{stat.enProceso}</td>
-                  <td className="px-6 py-3 text-right text-[#333333]">{stat.completados}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={topProgramasColumns}
+          status="idle"
+          items={programaStats}
+          keyFor={r => r.programa}
+          loadingLabel="Calculando programas..."
+          emptyTitle="Sin candidatos"
+          emptyHint="Los programas solicitados aparecerán aquí."
+          showOnMobile
+          header={
+            <>
+              <h2 className="text-[14px] font-semibold text-[#333333]">Top Programas Solicitados</h2>
+            </>
+          }
+        />
+        <DataTable
+          columns={estadoProgramasColumns}
+          status="idle"
+          items={programaStats}
+          keyFor={r => r.programa}
+          loadingLabel="Calculando programas..."
+          emptyTitle="Sin candidatos"
+          emptyHint="El estado por programa aparecerá aquí."
+          showOnMobile
+          header={
+            <>
+              <h2 className="text-[14px] font-semibold text-[#333333]">Estado General por Programa</h2>
+            </>
+          }
+        />
       </div>
 
       {/* Acciones Rápidas */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6">
-        <h2 className="text-[14px] font-semibold text-[#333333] mb-4">Acciones Rápidas</h2>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => navigate('/admision/candidatos')}
-            className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] rounded-lg hover:border-[#009574] hover:bg-[#e6f5f1] transition-colors group"
-          >
-            <Users size={16} className="text-[#6B7280] group-hover:text-[#009574] transition-colors" />
-            <span className="text-[13px] font-medium text-[#333333]">Ver Candidatos</span>
-          </button>
-          <button
-            onClick={() => navigate('/admision/candidatos/registrar')}
-            className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] rounded-lg hover:border-[#009574] hover:bg-[#e6f5f1] transition-colors group"
-          >
-            <UserPlus size={16} className="text-[#6B7280] group-hover:text-[#009574] transition-colors" />
-            <span className="text-[13px] font-medium text-[#333333]">Registrar Candidato</span>
-          </button>
-          {hayMatriculasPendientes && (
-            <button
-              onClick={() => navigate('/admision/matriculas')}
-              className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] rounded-lg hover:border-[#009574] hover:bg-[#e6f5f1] transition-colors group"
-            >
-              <IdCard size={16} className="text-[#6B7280] group-hover:text-[#009574] transition-colors" />
-              <span className="text-[13px] font-medium text-[#333333]">Generar Matrículas</span>
-            </button>
-          )}
-          {canPublicarResultados && (
-            <button
-              onClick={() => navigate('/admision/publicar')}
-              className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] rounded-lg hover:border-[#009574] hover:bg-[#e6f5f1] transition-colors group"
-            >
-              <Megaphone size={16} className="text-[#6B7280] group-hover:text-[#009574] transition-colors" />
-              <span className="text-[13px] font-medium text-[#333333]">Publicar Resultados</span>
-            </button>
-          )}
-        </div>
-      </div>
+      <QuickAccess items={quickAccess} title="Acciones Rápidas" variant="inline" />
     </div>
   )
 }
