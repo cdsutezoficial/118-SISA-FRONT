@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import {
-  ChevronRight, Search, X, Loader2, AlertCircle, KeyRound, UserPlus, Users,
+  ChevronRight, Loader2, AlertCircle, KeyRound, UserPlus, Users,
 } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
 import { FieldLabel, FieldError, FieldHelp, inputCls } from '@app/core/components/ui'
+import { PickerInput, PickerPanel, PickerOption, PickerLoading, PickerError, PickerEmpty, SelectedItem } from '@app/core/components/form'
 import { apiGet, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 
@@ -111,66 +112,52 @@ function PersonSearchField({ selected, onSelect, onClear }: {
 
   if (selected) {
     return (
-      <div className="flex items-center justify-between gap-3 px-3 py-2 bg-[#e6f5f1] border border-[#009574]/30 rounded-md">
-        <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-[#333333] truncate">{personFullName(selected)}</p>
-          <p className="text-[12px] text-[#6B7280] font-mono truncate">{selected.institutionalEmail}</p>
-        </div>
-        <button type="button" onClick={onClear} className="text-[#6B7280] hover:text-[#333333] p-1 rounded flex-shrink-0">
-          <X size={14} />
-        </button>
-      </div>
+      <SelectedItem
+        title={personFullName(selected)}
+        subtitle={selected.institutionalEmail}
+        onClear={() => { onClear(); setQuery('') }}
+      />
     )
   }
 
   return (
     <div ref={ref} className="relative w-full">
-      <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-        <input
-          type="text"
-          value={query}
-          onChange={e => { setQuery(e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
-          placeholder="Busca por nombre, CURP o correo…"
-          className="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition"
-        />
-      </div>
+      <PickerInput
+        value={query}
+        onChange={v => { setQuery(v); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        placeholder="Busca por nombre, CURP o correo…"
+      />
       {open && (
-        <div className="absolute top-full mt-1 left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden">
+        <PickerPanel>
           <ul className="max-h-56 overflow-y-auto py-1">
             {status === 'loading' ? (
-              <li className="px-3 py-3 text-center text-[12px] text-[#6B7280] flex items-center justify-center gap-2">
-                <Loader2 size={13} className="animate-spin" />Buscando…
-              </li>
+              <PickerLoading label="Buscando…" />
             ) : status === 'error' ? (
-              <li className="px-3 py-3 text-center text-[12px] text-red-600">No se pudo buscar. Intenta de nuevo.</li>
+              <PickerError text="No se pudo buscar. Intenta de nuevo." />
             ) : results.length === 0 ? (
-              <li className="px-3 py-3 text-center text-[12px] text-[#6B7280]">Sin resultados</li>
+              <PickerEmpty text="Sin resultados" />
             ) : (
               results.map(p => (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    disabled={p.hasUser}
-                    onClick={() => { if (p.hasUser) return; onSelect(p); setOpen(false); setQuery('') }}
-                    className={`w-full text-left px-3 py-2 text-[13px] transition-colors ${p.hasUser ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#F8F9FA]'}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-[#333333] truncate">{personFullName(p)}</span>
-                      {p.hasUser && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200 flex-shrink-0 whitespace-nowrap">
-                          Ya tiene cuenta
-                        </span>
-                      )}
-                    </div>
-                    <div className="font-mono text-[11px] text-[#6B7280] truncate">{p.curp} · {p.institutionalEmail}</div>
-                  </button>
-                </li>
+                <PickerOption
+                  key={p.id}
+                  disabled={p.hasUser}
+                  onClick={() => { if (p.hasUser) return; onSelect(p); setOpen(false); setQuery('') }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-[#333333] truncate">{personFullName(p)}</span>
+                    {p.hasUser && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200 flex-shrink-0 whitespace-nowrap">
+                        Ya tiene cuenta
+                      </span>
+                    )}
+                  </div>
+                  <div className="font-mono text-[11px] text-[#6B7280] truncate">{p.curp} · {p.institutionalEmail}</div>
+                </PickerOption>
               ))
             )}
           </ul>
-        </div>
+        </PickerPanel>
       )}
     </div>
   )
