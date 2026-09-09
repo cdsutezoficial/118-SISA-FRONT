@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Pencil, Save, X, ArrowLeft, Loader2, AlertCircle } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, inputCls, ModeSwitcher, SearchSelectField } from '@app/core/components/ui'
+import { FieldLabel, FieldError, FieldHelp, ModeSwitcher, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField, TextAreaField, SelectField } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
@@ -83,6 +84,25 @@ export default function ProgramasForm() {
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [submitErrorMsg, setSubmitErrorMsg] = useState('')
+
+  useEffect(() => {
+    setSubmitStatus('idle')
+    setSubmitErrorMsg('')
+    setErrors({})
+    if (isRegister) {
+      setName('')
+      setOfferName('')
+      setCode('')
+      setLevel('')
+      setModality('')
+      setDivisionId('')
+      setDgpCode('')
+      setDescription('')
+      setContinuityProgramId(null)
+      setLoadStatus('idle')
+      setLoadErrorMsg('')
+    }
+  }, [mode, id])
 
   // ─── Load divisions (dropdown) ─────────────────────────────────────────────
   useEffect(() => {
@@ -169,11 +189,11 @@ export default function ProgramasForm() {
 
     try {
       if (isRegister) {
-        await apiPost<AcademicProgramDetail>('/programs', payload)
-        navigate('/programas', { state: { toast: 'Programa registrado exitosamente.' } })
+        const created = await apiPost<AcademicProgramDetail>('/programs', payload)
+        navigate(`/programas/form?mode=view&id=${created.id}`, { state: { toast: 'Programa registrado exitosamente.' } })
       } else if (id) {
         await apiPut<AcademicProgramDetail>(`/programs/${id}`, payload)
-        navigate('/programas', { state: { toast: 'Programa actualizado exitosamente.' } })
+        navigate(`/programas/form?mode=view&id=${id}`, { state: { toast: 'Programa actualizado exitosamente.' } })
       }
     } catch (err) {
       setSubmitStatus('error')
@@ -195,236 +215,145 @@ export default function ProgramasForm() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/programas')} className="hover:text-[#009574] transition-colors">Programas Educativos</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">
-          {isRegister ? 'Registrar Programa' : isView ? 'Ver Programa' : 'Editar Programa'}
-        </span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Programas Educativos', to: '/programas' },
+          { label: isRegister ? 'Registrar Programa' : isView ? 'Ver Programa' : 'Editar Programa' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">
-            {isRegister ? 'Registrar Programa' : isView ? 'Ver Programa' : 'Editar Programa'}
-          </h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">
-            {isRegister
-              ? 'Completa los campos para registrar un nuevo programa educativo.'
-              : isView
-              ? 'Información del programa educativo.'
-              : 'Modifica los datos del programa educativo.'}
-          </p>
-        </div>
-        <ModeSwitcher
-          mode={mode}
-          registerUrl="/programas/new"
-          formUrl={m => `/programas/form?mode=${m}&id=${id}`}
-        />
-      </div>
+      <FormHeader
+        title={isRegister ? 'Registrar Programa' : isView ? 'Ver Programa' : 'Editar Programa'}
+        subtitle={isRegister
+          ? 'Completa los campos para registrar un nuevo programa educativo.'
+          : isView
+          ? 'Información del programa educativo.'
+          : 'Modifica los datos del programa educativo.'}
+        right={
+          <ModeSwitcher
+            mode={mode}
+            id={id}
+            registerUrl="/programas/new"
+            formUrl={m => `/programas/form?mode=${m}&id=${id}`}
+          />
+        }
+      />
 
       {/* Load error banner */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
 
       {/* Submit error banner */}
-      {submitStatus === 'error' && submitErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {submitErrorMsg}
-        </div>
-      )}
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {/* Form card */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
-        {loadStatus === 'loading' ? (
-          <div className="flex flex-col items-center gap-3 text-[#6B7280] py-12">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando programa...</p>
+      <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando programa...">
+        <div className="grid grid-cols-12 gap-4">
+          <TextField
+            label="Nombre del Programa"
+            required={!isView}
+            value={name}
+            onChange={v => { setName(v); setErrors(prev => ({ ...prev, name: undefined })) }}
+            disabled={disabled}
+            error={errors.name}
+            placeholder="Ej. Ingeniería en Desarrollo y Gestión de Software"
+            help="Nombre oficial y completo del programa educativo."
+            className="col-span-12 sm:col-span-8"
+          />
+          <TextField
+            label="Clave"
+            required={!isView}
+            value={code}
+            onChange={v => { setCode(v); setErrors(prev => ({ ...prev, code: undefined })) }}
+            disabled={disabled}
+            error={errors.code}
+            placeholder="Ej. IDGS"
+            help="Identificador corto único del programa."
+            className="col-span-12 sm:col-span-4"
+          />
+          <TextField
+            label="Nombre de Oferta"
+            required={!isView}
+            value={offerName}
+            onChange={v => { setOfferName(v); setErrors(prev => ({ ...prev, offerName: undefined })) }}
+            disabled={disabled}
+            error={errors.offerName}
+            placeholder="Ej. Ingeniería en Desarrollo y Gestión de Software Presencial"
+            help="Nombre oficial de la oferta educativa (único junto con la modalidad)."
+            className="col-span-12 sm:col-span-8"
+          />
+          <SelectField
+            label="Nivel Académico"
+            required={!isView}
+            value={level}
+            onChange={v => { setLevel(v as AcademicLevel); setErrors(prev => ({ ...prev, level: undefined })) }}
+            disabled={disabled}
+            error={errors.level}
+            options={(Object.keys(LEVEL_LABELS) as AcademicLevel[]).map(l => ({ value: l, label: LEVEL_LABELS[l] }))}
+            placeholder="Seleccionar nivel…"
+            help="Nivel del plan de estudios."
+            className="col-span-12 sm:col-span-4"
+          />
+          <SelectField
+            label="Modalidad"
+            required={!isView}
+            value={modality}
+            onChange={v => { setModality(v as ProgramModality); setErrors(prev => ({ ...prev, modality: undefined })) }}
+            disabled={disabled}
+            error={errors.modality}
+            options={(Object.keys(MODALITY_LABELS) as ProgramModality[]).map(m => ({ value: m, label: MODALITY_LABELS[m] }))}
+            placeholder="Seleccionar modalidad…"
+            help="Modalidad de impartición."
+            className="col-span-12 sm:col-span-4"
+          />
+          <div className="col-span-12 sm:col-span-4">
+            <FieldLabel required={!isView}>División Académica</FieldLabel>
+            <SearchSelectField
+              options={divisions}
+              value={divisionId}
+              onChange={v => { setDivisionId(v); setErrors(prev => ({ ...prev, divisionId: undefined })) }}
+              placeholder="Seleccionar división…"
+              disabled={disabled}
+              hasError={!!errors.divisionId}
+              searchPlaceholder="Buscar división…"
+            />
+            {errors.divisionId
+              ? <FieldError>{errors.divisionId}</FieldError>
+              : <FieldHelp>División a la que pertenece el programa.</FieldHelp>}
           </div>
-        ) : (
-          <div className="grid grid-cols-12 gap-4">
-
-            {/* Nombre del programa */}
-            <div className="col-span-12 sm:col-span-8">
-              <FieldLabel required={!isView}>Nombre del Programa</FieldLabel>
-              <input
-                value={name}
-                onChange={e => { setName(e.target.value); setErrors(prev => ({ ...prev, name: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.name)}
-                placeholder="Ej. Ingeniería en Desarrollo y Gestión de Software"
-              />
-              {errors.name
-                ? <FieldError>{errors.name}</FieldError>
-                : <FieldHelp>Nombre oficial y completo del programa educativo.</FieldHelp>}
-            </div>
-
-            {/* Clave */}
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required={!isView}>Clave</FieldLabel>
-              <input
-                value={code}
-                onChange={e => { setCode(e.target.value); setErrors(prev => ({ ...prev, code: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.code)}
-                placeholder="Ej. IDGS"
-              />
-              {errors.code
-                ? <FieldError>{errors.code}</FieldError>
-                : <FieldHelp>Identificador corto único del programa.</FieldHelp>}
-            </div>
-
-            {/* Nombre de oferta */}
-            <div className="col-span-12 sm:col-span-8">
-              <FieldLabel required={!isView}>Nombre de Oferta</FieldLabel>
-              <input
-                value={offerName}
-                onChange={e => { setOfferName(e.target.value); setErrors(prev => ({ ...prev, offerName: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.offerName)}
-                placeholder="Ej. Ingeniería en Desarrollo y Gestión de Software Presencial"
-              />
-              {errors.offerName
-                ? <FieldError>{errors.offerName}</FieldError>
-                : <FieldHelp>Nombre oficial de la oferta educativa (único junto con la modalidad).</FieldHelp>}
-            </div>
-
-            {/* Nivel académico */}
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required={!isView}>Nivel Académico</FieldLabel>
-              <select
-                value={level}
-                onChange={e => { setLevel(e.target.value as AcademicLevel); setErrors(prev => ({ ...prev, level: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.level) + ' appearance-none'}
-              >
-                <option value="">Seleccionar nivel…</option>
-                {(Object.keys(LEVEL_LABELS) as AcademicLevel[]).map(l => (
-                  <option key={l} value={l}>{LEVEL_LABELS[l]}</option>
-                ))}
-              </select>
-              {errors.level
-                ? <FieldError>{errors.level}</FieldError>
-                : <FieldHelp>Nivel del plan de estudios.</FieldHelp>}
-            </div>
-
-            {/* Modalidad */}
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required={!isView}>Modalidad</FieldLabel>
-              <select
-                value={modality}
-                onChange={e => { setModality(e.target.value as ProgramModality); setErrors(prev => ({ ...prev, modality: undefined })) }}
-                disabled={disabled}
-                className={inputCls(disabled, !!errors.modality) + ' appearance-none'}
-              >
-                <option value="">Seleccionar modalidad…</option>
-                {(Object.keys(MODALITY_LABELS) as ProgramModality[]).map(m => (
-                  <option key={m} value={m}>{MODALITY_LABELS[m]}</option>
-                ))}
-              </select>
-              {errors.modality
-                ? <FieldError>{errors.modality}</FieldError>
-                : <FieldHelp>Modalidad de impartición.</FieldHelp>}
-            </div>
-
-            {/* División académica */}
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel required={!isView}>División Académica</FieldLabel>
-              <SearchSelectField
-                options={divisions}
-                value={divisionId}
-                onChange={v => { setDivisionId(v); setErrors(prev => ({ ...prev, divisionId: undefined })) }}
-                placeholder="Seleccionar división…"
-                disabled={disabled}
-                hasError={!!errors.divisionId}
-                searchPlaceholder="Buscar división…"
-              />
-              {errors.divisionId
-                ? <FieldError>{errors.divisionId}</FieldError>
-                : <FieldHelp>División a la que pertenece el programa.</FieldHelp>}
-            </div>
-
-            {/* Clave DGP */}
-            <div className="col-span-12 sm:col-span-4">
-              <FieldLabel>Clave DGP</FieldLabel>
-              <input
-                value={dgpCode}
-                onChange={e => setDgpCode(e.target.value)}
-                disabled={disabled}
-                className={inputCls(disabled, false)}
-                placeholder="Ej. 220740067"
-              />
-              <FieldHelp>Clave asignada por la Dirección General de Profesiones. Opcional.</FieldHelp>
-            </div>
-
-            {/* Descripción */}
-            <div className="col-span-12">
-              <FieldLabel>Descripción</FieldLabel>
-              <textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                disabled={disabled}
-                rows={3}
-                className={inputCls(disabled, false) + ' resize-none'}
-                placeholder="Descripción breve del programa y su enfoque académico."
-              />
-            </div>
-
-          </div>
-        )}
-      </div>
+          <TextField
+            label="Clave DGP"
+            value={dgpCode}
+            onChange={setDgpCode}
+            disabled={disabled}
+            placeholder="Ej. 220740067"
+            help="Clave asignada por la Dirección General de Profesiones. Opcional."
+            className="col-span-12 sm:col-span-4"
+          />
+          <TextAreaField
+            label="Descripción"
+            value={description}
+            onChange={setDescription}
+            disabled={disabled}
+            rows={3}
+            placeholder="Descripción breve del programa y su enfoque académico."
+            className="col-span-12"
+          />
+        </div>
+      </FormCard>
 
       {/* Actions */}
       {loadStatus !== 'loading' && (
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-          {isView ? (
-            <>
-              <button
-                onClick={() => navigate('/programas')}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-              >
-                <ArrowLeft size={14} />Regresar
-              </button>
-              <button
-                onClick={() => navigate(`/programas/form?mode=edit&id=${id}`)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-              >
-                <Pencil size={14} />Editar
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => navigate('/programas')}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <X size={14} />Cancelar
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {isRegister ? 'Registrar Programa' : 'Guardar Cambios'}
-              </button>
-            </>
-          )}
-        </div>
+        <FormActions
+          isView={isView}
+          onBack={() => navigate('/programas')}
+          onPrimary={isView ? () => navigate(`/programas/form?mode=edit&id=${id}`) : handleSubmit}
+          primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Programa' : 'Guardar Cambios'}
+          isSubmitting={isSubmitting}
+        />
       )}
-    </div>
+    </FormPage>
   )
 }
