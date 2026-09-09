@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { ChevronRight, ChevronLeft, Loader2, Search, AlertCircle, Plus, Eye, Pencil, Trash2 } from 'lucide-react'
+import { type ReactNode, useRef, useState, useEffect } from 'react'
+import { ChevronRight, ChevronLeft, ChevronDown, Loader2, Search, AlertCircle, Plus, Eye, Pencil, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { ActionBtn, Switch } from '@app/core/components/ui'
 
@@ -99,12 +99,15 @@ export function SearchInput({ value, onChange, placeholder }: {
 }) {
   return (
     <div className="relative flex-1 sm:max-w-sm">
-      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+      <Search
+        size={14}
+        className={`absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280] transition-all duration-300 ${value ? 'text-[#009574] scale-110' : ''}`}
+      />
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-9 pr-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+        className="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
       />
     </div>
   )
@@ -130,19 +133,70 @@ export function FilterSelect({ value, onChange, options, allLabel, className }: 
   /** Ancho extra (p.ej. `sm:w-64`) — por defecto `w-full sm:w-auto`. */
   className?: string
 }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const selected = options.find(o => o.value === value)
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [open])
+
   return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className={`w-full sm:w-auto px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] ${className ?? ''}`}
-    >
-      <option value="">{allLabel}</option>
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+    <div ref={ref} className={`relative w-full sm:w-auto ${className ?? ''}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] hover:border-[#d1d5db] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition-colors"
+      >
+        <span className={!selected ? 'text-[#6B7280]' : ''}>
+          {selected ? selected.label : allLabel}
+        </span>
+        <ChevronDown size={14} className={`text-[#6B7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <ul className="absolute z-10 mt-1 w-full bg-white border border-[#E5E7EB] rounded-md shadow-sm max-h-60 overflow-auto py-1">
+          <li>
+            <button
+              type="button"
+              onClick={() => { onChange(''); setOpen(false) }}
+              className={`w-full text-left px-3 py-2 text-[13px] transition-colors hover:bg-[#e6f5f1] ${!value ? 'bg-[#e6f5f1] text-[#009574] font-semibold' : 'text-[#6B7280]'}`}
+            >
+              {allLabel}
+            </button>
+          </li>
+          {options.map(o => (
+            <li key={o.value}>
+              <button
+                type="button"
+                onClick={() => { onChange(o.value); setOpen(false) }}
+                className={`w-full text-left px-3 py-2 text-[13px] transition-colors hover:bg-[#e6f5f1] ${value === o.value ? 'bg-[#e6f5f1] text-[#009574] font-semibold' : 'text-[#333333]'}`}
+              >
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
 export function ResultCount({ count }: { count: number }) {
+  if (count === 0) return null
   return (
     <span className="text-[12px] text-[#6B7280] hidden sm:inline">
       {count} resultado{count !== 1 ? 's' : ''}
