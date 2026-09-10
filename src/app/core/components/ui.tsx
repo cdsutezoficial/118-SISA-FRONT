@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router'
 import { ChevronDown, X, Check, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Pencil, Eye, RotateCcw, Search } from 'lucide-react'
@@ -491,6 +491,38 @@ export function Switch({ checked, onChange, disabled = false }: { checked: boole
     >
       <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
     </button>
+  )
+}
+
+// ─── Tabs ──────────────────────────────────────────────────────────────────────
+// Barra de pestañas sin scroll: el contenido define su propia altura (solo se
+// alterna la pestaña activa). Útil para detalle/fichas con sub-vistas.
+export function Tabs({ tabs, active, onSelect }: {
+  tabs: { key: string; label: ReactNode; icon?: ReactNode }[]
+  active: string
+  onSelect: (key: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1 border-b border-[#E5E7EB] mb-6">
+      {tabs.map(tab => {
+        const isActive = tab.key === active
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            aria-selected={isActive}
+            onClick={() => onSelect(tab.key)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
+              isActive
+                ? 'border-[#009574] text-[#009574]'
+                : 'border-transparent text-[#6B7280] hover:text-[#333333] hover:border-[#E5E7EB]'
+            }`}
+          >
+            {tab.icon}{tab.label}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
