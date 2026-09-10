@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  ChevronRight, Pencil, Layers, BookMarked, Hash, Plus, Trash2,
-  GraduationCap, ChevronDown, ChevronUp, ArrowLeft, ClipboardList, AlertCircle, Loader2,
+  Pencil, Layers, BookMarked, Hash, Plus, Trash2,
+  GraduationCap, ChevronDown, ChevronUp, ClipboardList,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { ActionBtn, ModeSwitcher, Toast } from '@app/core/components/ui'
+import { ActionBtn, ModeSwitcher, Tabs, Toast } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, Button, MiniTable } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { apiDelete, apiGet } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 
@@ -186,44 +188,42 @@ function NivelRow({ nivel, index, defaultOpen, planId, onChanged }: {
             <>
               {/* Desktop table */}
               <div className="hidden md:block">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="bg-[#F8F9FA] border-b border-[#E5E7EB]">
-                      <th className="text-left px-5 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">Materia</th>
-                      <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Clave</th>
-                      <th className="text-right px-5 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Créditos</th>
-                      <th className="px-3 py-2 w-20" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {nivel.subjects.map(s => (
-                      <tr key={s.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#FAFAFA] transition-colors">
-                        <td className="px-5 py-2.5 font-medium text-[#333333]">{s.name}</td>
-                        <td className="px-3 py-2.5">
-                          <span className="font-mono text-[11px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{s.code}</span>
-                        </td>
-                        <td className="px-5 py-2.5 text-right tabular-nums font-medium text-[#333333]">
-                          {s.credits}<span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center justify-end gap-1">
-                            <ActionBtn icon={<Pencil size={14} />} tooltip="Editar" onClick={() => goEdit(s.id)} disabled={deletingId === s.id} />
-                            <ActionBtn icon={<Trash2 size={14} />} tooltip="Eliminar" danger onClick={() => handleDelete(s)} disabled={deletingId === s.id} />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-[#F8F9FA] border-t border-[#E5E7EB]">
-                      <td colSpan={2} className="px-5 py-2 text-[11px] text-[#6B7280]">Subtotal del nivel</td>
-                      <td className="px-5 py-2 text-right text-[12px] font-bold text-[#333333] tabular-nums">
+                <MiniTable
+                  columns={[
+                    { key: 'name', header: 'Materia' },
+                    {
+                      key: 'code', header: 'Clave', className: 'w-28',
+                      render: s => (
+                        <span className="inline-block font-mono text-[11px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{s.code}</span>
+                      ),
+                    },
+                    {
+                      key: 'credits', header: 'Créditos', className: 'w-24 text-right',
+                      render: s => (
+                        <><span className="tabular-nums font-medium text-[#333333]">{s.credits}</span><span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span></>
+                      ),
+                    },
+                    {
+                      key: 'actions', header: '', className: 'w-20',
+                      render: s => (
+                        <div className="flex items-center justify-end gap-1">
+                          <ActionBtn icon={<Pencil size={14} />} tooltip="Editar" onClick={() => goEdit(s.id)} disabled={deletingId === s.id} />
+                          <ActionBtn icon={<Trash2 size={14} />} tooltip="Eliminar" danger onClick={() => handleDelete(s)} disabled={deletingId === s.id} />
+                        </div>
+                      ),
+                    },
+                  ]}
+                  items={nivel.subjects}
+                  keyFor={s => s.id}
+                  footer={(
+                    <div className="flex items-center justify-between text-[11px] text-[#6B7280]">
+                      <span>Subtotal del nivel</span>
+                      <span className="text-[12px] font-bold text-[#333333] tabular-nums">
                         {creditosNivel}<span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span>
-                      </td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
+                      </span>
+                    </div>
+                  )}
+                />
               </div>
               {/* Mobile cards */}
               <div className="md:hidden divide-y divide-[#E5E7EB]">
@@ -245,14 +245,10 @@ function NivelRow({ nivel, index, defaultOpen, planId, onChanged }: {
               </div>
             </>
           )}
-          <div className="border-t border-[#E5E7EB] px-5 py-2.5">
-            <button
-              type="button"
-              onClick={goRegister}
-              className="flex items-center gap-1.5 text-[12px] font-semibold text-[#009574] hover:text-[#007a5e] transition-colors"
-            >
+          <div className="border-t border-[#E5E7EB] px-3 py-2">
+            <Button variant="ghost" size="sm" onClick={goRegister}>
               <Plus size={14} />Registrar Materia
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -372,55 +368,39 @@ export default function PlanDetalle() {
   const internshipLevels = levels.filter(n => n.type === 'INTERNSHIP')
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
+    <FormPage>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/planes')} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Detalle del Plan</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Planes de Estudio', to: '/planes' },
+          { label: 'Detalle del Plan' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">
-            {plan ? `Plan de Estudios — ${plan.version}` : 'Plan de Estudios'}
-          </h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">Visualiza la estructura completa del plan, sus niveles y materias asignadas.</p>
-        </div>
-        <ModeSwitcher
-          mode="view"
-          id={id}
-          registerUrl="/planes/new"
-          formUrl={m => m === 'view' ? `/planes/detalle?id=${id}` : `/planes/form?mode=edit&id=${id}`}
-        />
-      </div>
+      <FormHeader
+        title={plan ? `Plan de Estudios — ${plan.version}` : 'Plan de Estudios'}
+        subtitle="Visualiza la estructura completa del plan, sus niveles y materias asignadas."
+        right={
+          <ModeSwitcher
+            mode="view"
+            id={id}
+            registerUrl="/planes/new"
+            formUrl={m => m === 'view' ? `/planes/detalle?id=${id}` : `/planes/form?mode=edit&id=${id}`}
+          />
+        }
+      />
 
       {/* Load error banner */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
 
       {loadStatus === 'loading' ? (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center">
-          <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando plan de estudios...</p>
-          </div>
-        </div>
+        <FormCard loading loadingLabel="Cargando plan de estudios..." />
       ) : plan ? (
         <>
-          {/* Summary card */}
-          <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+          <FormCard>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
                 <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Programa</p>
@@ -504,30 +484,20 @@ export default function PlanDetalle() {
                 </div>
               </div>
             </div>
-          </div>
+          </FormCard>
 
           {/* Tabs */}
-          <div className="flex items-center gap-1 border-b border-[#E5E7EB] mb-6 overflow-x-auto">
-            {([
+          <Tabs
+            tabs={[
               { key: 'niveles' as TabKey, label: 'Niveles y Materias', icon: <Layers size={14} /> },
               { key: 'escalas' as TabKey, label: 'Escalas de Calificación', icon: <ClipboardList size={14} /> },
-            ]).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
-                  activeTab === tab.key
-                    ? 'border-[#009574] text-[#009574]'
-                    : 'border-transparent text-[#6B7280] hover:text-[#333333] hover:border-[#E5E7EB]'
-                }`}
-              >
-                {tab.icon}{tab.label}
-              </button>
-            ))}
-          </div>
+            ]}
+            active={activeTab}
+            onSelect={k => setActiveTab(k as TabKey)}
+          />
 
           {activeTab === 'niveles' && (
-            <div>
+            <div className="mb-6">
               {levels.length === 0 ? (
                 <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-12 text-center">
                   <p className="text-[13px] text-[#6B7280]">Este plan todavía no tiene niveles registrados.</p>
@@ -550,67 +520,56 @@ export default function PlanDetalle() {
           )}
 
           {activeTab === 'escalas' && (
-            <div>
+            <div className="mb-6">
               {plan.gradeScales.length === 0 ? (
                 <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-12 text-center">
                   <p className="text-[13px] text-[#6B7280] mb-4">Este plan todavía no tiene escalas de calificación registradas.</p>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/planes/escala/form?planId=${plan.id}`)}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-                  >
+                  <Button onClick={() => navigate(`/planes/escala/form?planId=${plan.id}`)}>
                     <Plus size={14} />Agregar Escala
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <>
                   <div className="flex justify-end mb-3">
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/planes/escala/form?planId=${plan.id}`)}
-                      className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-                    >
+                    <Button onClick={() => navigate(`/planes/escala/form?planId=${plan.id}`)}>
                       <Plus size={14} />Agregar Escala
-                    </button>
+                    </Button>
                   </div>
 
                   {/* Desktop table */}
                   <div className="hidden md:block bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-                    <table className="w-full text-[13px]">
-                      <thead>
-                        <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Clasificación</th>
-                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-40">Rango Numérico</th>
-                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-40">Rangos Configurados</th>
-                          <th className="px-4 py-3 w-24" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {plan.gradeScales.map(scale => (
-                          <tr key={scale.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                            <td className="px-4 py-3 font-medium text-[#333333]">{classificationLabel(scale.classificationId)}</td>
-                            <td className="px-4 py-3 tabular-nums text-[#333333]">{scale.numericMin.toFixed(1)}–{scale.numericMax.toFixed(1)}</td>
-                            <td className="px-4 py-3 tabular-nums text-[#333333]">
-                              {scale.entries.length} rango{scale.entries.length !== 1 ? 's' : ''}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center justify-end gap-1">
-                                <ActionBtn
-                                  icon={<Pencil size={14} />} tooltip="Editar"
-                                  onClick={() => navigate(`/planes/escala/form?planId=${plan.id}&mode=edit&scaleId=${scale.id}`)}
-                                  disabled={deletingScaleId === scale.id}
-                                />
-                                <ActionBtn
-                                  icon={<Trash2 size={14} />} tooltip="Eliminar" danger
-                                  onClick={() => handleDeleteScale(scale)}
-                                  disabled={deletingScaleId === scale.id}
-                                />
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <MiniTable
+                      columns={[
+                        { key: 'classification', header: 'Clasificación', render: scale => <span className="font-medium text-[#333333]">{classificationLabel(scale.classificationId)}</span> },
+                        {
+                          key: 'range', header: 'Rango Numérico', className: 'w-40 tabular-nums',
+                          render: scale => <span className="text-[#333333]">{scale.numericMin.toFixed(1)}–{scale.numericMax.toFixed(1)}</span>,
+                        },
+                        {
+                          key: 'entries', header: 'Rangos Configurados', className: 'w-40 tabular-nums',
+                          render: scale => <span className="text-[#333333]">{scale.entries.length} rango{scale.entries.length !== 1 ? 's' : ''}</span>,
+                        },
+                        {
+                          key: 'actions', header: '', className: 'w-24',
+                          render: scale => (
+                            <div className="flex items-center justify-end gap-1">
+                              <ActionBtn
+                                icon={<Pencil size={14} />} tooltip="Editar"
+                                onClick={() => navigate(`/planes/escala/form?planId=${plan.id}&mode=edit&scaleId=${scale.id}`)}
+                                disabled={deletingScaleId === scale.id}
+                              />
+                              <ActionBtn
+                                icon={<Trash2 size={14} />} tooltip="Eliminar" danger
+                                onClick={() => handleDeleteScale(scale)}
+                                disabled={deletingScaleId === scale.id}
+                              />
+                            </div>
+                          ),
+                        },
+                      ]}
+                      items={plan.gradeScales}
+                      keyFor={scale => scale.id}
+                    />
                   </div>
 
                   {/* Mobile cards */}
@@ -623,20 +582,18 @@ export default function PlanDetalle() {
                           <span className="tabular-nums">{scale.entries.length} rango{scale.entries.length !== 1 ? 's' : ''}</span>
                         </div>
                         <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
-                          <button
+                          <Button variant="secondary" size="sm" className="flex-1"
                             onClick={() => navigate(`/planes/escala/form?planId=${plan.id}&mode=edit&scaleId=${scale.id}`)}
                             disabled={deletingScaleId === scale.id}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors disabled:opacity-50"
                           >
                             <Pencil size={13} />Editar
-                          </button>
-                          <button
+                          </Button>
+                          <Button variant="danger" size="sm" className="flex-1"
                             onClick={() => handleDeleteScale(scale)}
                             disabled={deletingScaleId === scale.id}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-red-500 border border-red-200 rounded-md hover:bg-red-50 transition-colors disabled:opacity-50"
                           >
                             <Trash2 size={13} />Eliminar
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -647,22 +604,14 @@ export default function PlanDetalle() {
           )}
 
           {/* Actions */}
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-8">
-            <button
-              onClick={() => navigate('/planes')}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-            >
-              <ArrowLeft size={14} />Regresar
-            </button>
-            <button
-              onClick={() => navigate(`/planes/form?mode=edit&id=${plan.id}`)}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-            >
-              <Pencil size={14} />Editar Plan
-            </button>
-          </div>
+          <FormActions
+            isView
+            onBack={() => navigate('/planes')}
+            onPrimary={() => navigate(`/planes/form?mode=edit&id=${plan.id}`)}
+            primaryLabel="Editar"
+          />
         </>
       ) : null}
-    </div>
+    </FormPage>
   )
 }
