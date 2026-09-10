@@ -281,7 +281,7 @@ export function SelectField({ label, required, value, onChange, disabled, error,
             className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${
               error
                 ? 'border-red-400'
-                : 'border-[#E5E7EB] hover:border-[#009574]/50 focus-within:ring-2 focus-within:ring-[#009574]/30 focus-within:border-[#009574]'
+                : 'border-[#E5E7EB] hover:border-[#009574]/50 focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]'
             }`}
           >
             <span className={`truncate ${selected ? 'text-[#333333]' : 'text-[#6B7280]'}`}>
@@ -313,7 +313,7 @@ export function SelectField({ label, required, value, onChange, disabled, error,
                       className={`w-full text-left px-3 py-2 text-[13px] transition-colors flex items-center justify-between ${
                         o.value === value
                           ? 'bg-[#e6f5f1] text-[#009574] font-medium'
-                          : 'text-[#333333] hover:bg-[#F8F9FA]'
+                          : 'text-[#333333] hover:bg-[#e6f5f1] hover:text-[#009574]'
                       }`}
                     >
                       {o.label}
