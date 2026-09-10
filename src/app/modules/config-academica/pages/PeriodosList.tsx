@@ -241,7 +241,7 @@ export default function PeriodosList() {
     { key: 'startDate', header: 'Inicio', type: 'muted', value: row => formatIsoDate(row.startDate), className: 'w-24' },
     { key: 'endDate', header: 'Fin', type: 'muted', value: row => formatIsoDate(row.endDate), className: 'w-24' },
     { key: 'type', header: 'Tipo', value: row => TYPE_LABELS[row.type], className: 'w-28' },
-    { key: 'status', header: 'Estado', type: 'badge', badge: STATUS_BADGE_MAP, className: 'w-32' },
+    { key: 'status', header: 'Estado', type: 'badge', badge: STATUS_BADGE_MAP, className: 'w-36' },
   ]
 
   return (
@@ -336,7 +336,7 @@ export default function PeriodosList() {
                 <span className="font-mono text-[12px] font-semibold bg-[#F8F9FA] border border-[#E5E7EB] px-2 py-0.5 rounded text-[#333333]">
                   Año {row.year} · P{row.periodNumber}
                 </span>
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_BADGE_MAP[row.status].className}`}>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_BADGE_MAP[row.status].className}`}>
                   {STATUS_BADGE_MAP[row.status].label}
                 </span>
               </div>

@@ -312,7 +312,7 @@ export function StatusBadge({ active, activeLabel = 'Activo', inactiveLabel = 'I
   inactiveLabel?: string
 }) {
   return (
-    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
       active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
     }`}>
       {active ? activeLabel : inactiveLabel}
@@ -333,7 +333,7 @@ export function BadgePill({ value, active, activeLabel, inactiveLabel, map }: {
   const entry = value != null ? map?.[String(value)] : undefined
   if (entry) {
     return (
-      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${entry.className}`}>
+      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${entry.className}`}>
         {entry.label}
       </span>
     )
