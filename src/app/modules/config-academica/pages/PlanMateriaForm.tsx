@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Save, X, Loader2, AlertCircle, BookOpen, Layers } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, inputCls, SearchSelectField, Switch } from '@app/core/components/ui'
+import { BookOpen, Layers } from 'lucide-react'
+import { FieldLabel, FieldHelp, FieldError, SearchSelectField, Switch } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate, useSearchParams } from 'react-router'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
@@ -245,57 +247,27 @@ export default function PlanMateriaForm() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/planes')} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate(cancelUrl())} className="hover:text-[#009574] transition-colors">
-          {plan ? plan.version : 'Detalle del Plan'}
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">
-          {isRegister ? 'Registrar Materia' : 'Editar Materia'}
-        </span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Planes de Estudio', to: '/planes' },
+          { label: plan ? plan.version : 'Detalle del Plan', to: cancelUrl() },
+          { label: isRegister ? 'Registrar Materia' : 'Editar Materia' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">
-          {isRegister ? 'Registrar Materia en el Nivel' : 'Editar Materia del Nivel'}
-        </h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Completa los datos de la materia y configura cómo se evaluará y mostrará dentro de este nivel del plan.
-        </p>
-      </div>
+      <FormHeader
+        title={isRegister ? 'Registrar Materia en el Nivel' : 'Editar Materia del Nivel'}
+        subtitle="Completa los datos de la materia y configura cómo se evaluará y mostrará dentro de este nivel del plan."
+      />
 
-      {/* Load error banner */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
-
-      {/* Submit error banner */}
-      {submitStatus === 'error' && submitErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {submitErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {loadStatus === 'loading' ? (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center mb-6">
-          <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando información del plan...</p>
-          </div>
-        </div>
+        <FormCard loading loadingLabel="Cargando información del plan..." />
       ) : loadStatus === 'error' ? null : (
         <>
           {/* Context card */}
@@ -324,61 +296,62 @@ export default function PlanMateriaForm() {
           </div>
 
           {/* Form card */}
-          <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+          <FormCard>
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-4">Datos de la Materia</p>
 
             <div className="grid grid-cols-12 gap-4 mb-6">
               {/* Código */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required>Código</FieldLabel>
-                <input
-                  value={code}
-                  onChange={e => { setCode(e.target.value.toUpperCase()); clearErr('code') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.code)}
-                  placeholder="Ej. FP-101"
-                />
-                {errors.code && <FieldError>{errors.code}</FieldError>}
-              </div>
+              <TextField
+                label="Código"
+                required
+                value={code}
+                onChange={v => { setCode(v.toUpperCase()); clearErr('code') }}
+                disabled={disabled}
+                error={errors.code}
+                placeholder="Ej. FP-101"
+                mono
+                className="col-span-12 sm:col-span-4"
+              />
               {/* Nombre */}
-              <div className="col-span-12 sm:col-span-8">
-                <FieldLabel required>Nombre</FieldLabel>
-                <input
-                  value={name}
-                  onChange={e => { setName(e.target.value); clearErr('name') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.name)}
-                  placeholder="Ej. Fundamentos de Programación"
-                />
-                {errors.name && <FieldError>{errors.name}</FieldError>}
-              </div>
+              <TextField
+                label="Nombre"
+                required
+                value={name}
+                onChange={v => { setName(v); clearErr('name') }}
+                disabled={disabled}
+                error={errors.name}
+                placeholder="Ej. Fundamentos de Programación"
+                className="col-span-12 sm:col-span-8"
+              />
 
               {/* Créditos */}
-              <div className="col-span-6 sm:col-span-3">
-                <FieldLabel required>Créditos</FieldLabel>
-                <input
-                  type="number" min={0}
-                  value={credits}
-                  onChange={e => { setCredits(e.target.value); clearErr('credits') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.credits) + ' tabular-nums'}
-                  placeholder="Ej. 5"
-                />
-                {errors.credits && <FieldError>{errors.credits}</FieldError>}
-              </div>
+              <TextField
+                label="Créditos"
+                required
+                value={credits}
+                onChange={v => { setCredits(v); clearErr('credits') }}
+                disabled={disabled}
+                error={errors.credits}
+                type="number"
+                min={0}
+                numeric
+                placeholder="Ej. 5"
+                className="col-span-6 sm:col-span-3"
+              />
               {/* Horas Semanales */}
-              <div className="col-span-6 sm:col-span-3">
-                <FieldLabel required>Horas Semanales</FieldLabel>
-                <input
-                  type="number" min={0}
-                  value={weeklyHours}
-                  onChange={e => { setWeeklyHours(e.target.value); clearErr('weeklyHours') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.weeklyHours) + ' tabular-nums'}
-                  placeholder="Ej. 4"
-                />
-                {errors.weeklyHours && <FieldError>{errors.weeklyHours}</FieldError>}
-              </div>
+              <TextField
+                label="Horas Semanales"
+                required
+                value={weeklyHours}
+                onChange={v => { setWeeklyHours(v); clearErr('weeklyHours') }}
+                disabled={disabled}
+                error={errors.weeklyHours}
+                type="number"
+                min={0}
+                numeric
+                placeholder="Ej. 4"
+                className="col-span-6 sm:col-span-3"
+              />
               {/* Clasificación */}
               <div className="col-span-12 sm:col-span-6">
                 <FieldLabel required>Clasificación</FieldLabel>
@@ -405,52 +378,49 @@ export default function PlanMateriaForm() {
 
             <div className="grid grid-cols-12 gap-4">
               {/* Unidades de Evaluación */}
-              <div className="col-span-6 sm:col-span-3">
-                <FieldLabel required>Unidades de Evaluación</FieldLabel>
-                <input
-                  type="number" min={1}
-                  value={evaluationUnits}
-                  onChange={e => { setEvaluationUnits(e.target.value); clearErr('evaluationUnits') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.evaluationUnits) + ' tabular-nums'}
-                  placeholder="Ej. 3"
-                />
-                {errors.evaluationUnits
-                  ? <FieldError>{errors.evaluationUnits}</FieldError>
-                  : <FieldHelp>Número de parciales que registrará el docente.</FieldHelp>}
-              </div>
+              <TextField
+                label="Unidades de Evaluación"
+                required
+                value={evaluationUnits}
+                onChange={v => { setEvaluationUnits(v); clearErr('evaluationUnits') }}
+                disabled={disabled}
+                error={errors.evaluationUnits}
+                type="number"
+                min={1}
+                numeric
+                placeholder="Ej. 3"
+                help="Número de parciales que registrará el docente."
+                className="col-span-6 sm:col-span-3"
+              />
 
               {/* Tipo */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required>Tipo</FieldLabel>
-                <select
-                  value={type}
-                  onChange={e => { setType(e.target.value as SubjectType); clearErr('type') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.type) + ' appearance-none'}
-                >
-                  {(Object.keys(TYPE_LABELS) as SubjectType[]).map(t => (
-                    <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-                  ))}
-                </select>
-                {errors.type && <FieldError>{errors.type}</FieldError>}
-              </div>
+              <SelectField
+                label="Tipo"
+                required
+                value={type}
+                onChange={v => { setType(v as SubjectType); clearErr('type') }}
+                disabled={disabled}
+                error={errors.type}
+                options={(Object.keys(TYPE_LABELS) as SubjectType[]).map(t => ({ value: t, label: TYPE_LABELS[t] }))}
+                placeholder="Selecciona el tipo…"
+                className="col-span-12 sm:col-span-4"
+              />
 
               {/* Orden en Kardex */}
-              <div className="col-span-6 sm:col-span-3">
-                <FieldLabel required>Orden en Kardex</FieldLabel>
-                <input
-                  type="number" min={1}
-                  value={displayOrder}
-                  onChange={e => { setDisplayOrder(e.target.value); clearErr('displayOrder') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.displayOrder) + ' tabular-nums'}
-                  placeholder="Ej. 1"
-                />
-                {errors.displayOrder
-                  ? <FieldError>{errors.displayOrder}</FieldError>
-                  : <FieldHelp>Posición en kardex y certificados de estudios.</FieldHelp>}
-              </div>
+              <TextField
+                label="Orden en Kardex"
+                required
+                value={displayOrder}
+                onChange={v => { setDisplayOrder(v); clearErr('displayOrder') }}
+                disabled={disabled}
+                error={errors.displayOrder}
+                type="number"
+                min={1}
+                numeric
+                placeholder="Ej. 1"
+                help="Posición en kardex y certificados de estudios."
+                className="col-span-6 sm:col-span-3"
+              />
 
               {/* ¿Recursable? */}
               <div className="col-span-6 sm:col-span-2 flex flex-col">
@@ -463,28 +433,18 @@ export default function PlanMateriaForm() {
                 </div>
               </div>
             </div>
-          </div>
+          </FormCard>
 
           {/* Actions */}
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-            <button
-              onClick={() => navigate(cancelUrl())}
-              disabled={isSubmitting}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <X size={14} />Cancelar
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              {isRegister ? 'Registrar Materia' : 'Guardar Cambios'}
-            </button>
-          </div>
+          <FormActions
+            isView={false}
+            onBack={() => navigate(cancelUrl())}
+            onPrimary={handleSubmit}
+            primaryLabel={isRegister ? 'Registrar Materia' : 'Guardar Cambios'}
+            isSubmitting={isSubmitting}
+          />
         </>
       )}
-    </div>
+    </FormPage>
   )
 }
