@@ -304,7 +304,7 @@ interface DatePickerProps {
   placeholder?: string
 }
 
-export function DatePicker({ value, onChange, disabled = false, minDate, placeholder = 'dd/MM/yyyy' }: DatePickerProps) {
+export function DatePicker({ value, onChange, disabled = false, minDate, placeholder = 'dd/mm/yyyy' }: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const today = new Date()
   const parsed = parseDate(value)
@@ -439,7 +439,7 @@ export function MiniDatePicker({ value, onChange, disabled = false }: { value: s
         onClick={() => setOpen(!open)}
         className="px-2 py-1 text-[12px] border border-[#E5E7EB] rounded bg-white text-[#333333] hover:border-[#009574] focus:outline-none w-28 text-left"
       >
-        {value || 'dd/MM/yyyy'}
+        {value || 'dd/mm/yyyy'}
       </button>
       {open && (
         <div className="absolute z-50 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-60">
