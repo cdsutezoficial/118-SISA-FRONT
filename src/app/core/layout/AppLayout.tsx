@@ -5,6 +5,15 @@ import { useRole } from '../infra/RoleContext'
 import type { Role } from '../infra/RoleContext'
 import { Sidebar } from './Sidebar'
 import { ROLE_LABELS, ROLE_DEFAULT_PATHS } from './layoutRoles'
+import { decodeJwtPayload } from '../infra/auth'
+import { getAccessToken, getStoredAuthMode } from '../infra/apiClient'
+
+function isRealSessionActive(): boolean {
+  if (getStoredAuthMode() !== 'real') return false
+  const token = getAccessToken()
+  const claims = token ? decodeJwtPayload(token) : null
+  return claims !== null && claims.exp * 1000 > Date.now()
+}
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
 
@@ -111,6 +120,20 @@ export default function AppLayout() {
   // Skips the redirect on the initial mount (a reload/refresh/re-login must
   // NOT yank the user away from the route they opened).
   const prevRoleRef = useRef<Role | null>(null)
+
+  // Browser Back/Forward can restore a protected page from the bfcache with
+  // its DOM intact even after the session was cleared — the user would briefly
+  // SEE the stale screen. On any such restore in real mode without a live
+  // token, hard-leave to /login instead of showing that snapshot.
+  useEffect(() => {
+    const onPageshow = (e: PageTransitionEvent) => {
+      if (e.persisted && !isRealSessionActive()) {
+        window.location.replace('/login')
+      }
+    }
+    window.addEventListener('pageshow', onPageshow)
+    return () => window.removeEventListener('pageshow', onPageshow)
+  }, [])
 
   // On a role switch, always land on that role's main view — never stay on a
   // route the new role may not even see in its sidebar. Runs once centrally,

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   mapRoles,
@@ -7,6 +7,7 @@ import {
   persistSession,
   clearSession,
   persistMustChangePasswordCleared,
+  markSignedOut,
 } from './auth'
 import type { LoginResponse, JwtClaims } from './auth'
 import { getAccessToken, getStoredAuthMode, setUnauthorizedHandler } from './apiClient'
@@ -117,6 +118,20 @@ export interface RoleContextValue {
   mustChangePassword: boolean
   /** Establishes a real session from a successful `/auth/login` response. */
   login: (res: LoginResponse) => void
+  /**
+   * Session ended involuntarily (`true` when a 401 or the JWT `exp` crossed).
+   * Flags so `RequireAuth` keeps the current view mounted and shows the
+   * floating expiry alert OVER it for 5 seconds; the actual cleanup happens
+   * right before that alert redirects (clearing earlier would gut the
+   * role-hydrated tree underneath and trigger redirect loops).
+   */
+  sessionExpired: boolean
+  /**
+   * Marks the session as expired WITHOUT clearing anything. Called by the 401
+   * handler and the expiry timer; `RequireAuth` turns it into the floating
+   * alert, and the alert itself performs the real `logout()` + redirect.
+   */
+  triggerSessionExpired: () => void
   /** Clears the real session; `authMode` stays `'real'` so re-access routes to `/login`, not back to mock mode. */
   logout: () => void
   /** Clears the pending mandatory-password-change flag after `/auth/change-password` succeeds. */
@@ -144,6 +159,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [mockRole, setMockRoleState] = useState<Role | null>(readStoredRole)
   const [authMode, setAuthModeState] = useState<'mock' | 'real'>(getStoredAuthMode)
   const [mustChangePassword, setMustChangePasswordState] = useState<boolean>(getStoredMustChangePassword)
+  const [sessionExpired, setSessionExpired] = useState(false)
   // Lazy initializer (not a `useEffect`) so a real session's `claims` — and
   // therefore `role` — is correct on the VERY FIRST render after a full
   // reload/direct URL navigation. An effect-based rehydration leaves `claims`
@@ -196,15 +212,34 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     setActiveRoleState(readStoredActiveRole(decoded ? mapRoles(decoded.roles) : []))
     setAuthModeState('real')
     setMustChangePasswordState(res.mustChangePassword)
+    setSessionExpired(false) // a fresh login clears the expiry flag so a future expiry can alert again
   }
 
-  function logout() {
+  /**
+   * Deliberate sign-out (Navbar's "Cerrar sesión", cancelar selección de rol).
+   * Marks the tab as intentionally signed out so `RequireAuth` redirects
+   * instantly — that tab must never show the 3-second "sesión expirada" gate.
+   */
+  const logout = useCallback(() => {
     clearSession()
+    markSignedOut()
     setClaims(null)
     setActiveRoleState(null)
     setMustChangePasswordState(false)
     setAuthModeState('real') // stays 'real' — re-access must route to /login, not fall back to mock mode
-  }
+  }, [])
+
+  /**
+   * Involuntary session end (401 / token expiry). Only FLAGS it — it must NOT
+   * clear storage/state here: `RequireAuth` keeps the current view mounted and
+   * floats the 5-second alert over it. If we cleared first, `role` would flip
+   * to `null` under the still-mounted route tree, `RequireRole` would kick the
+   * redirect-to-fallback chain and the alert would chase a moving view (or
+   * loop). The alert performs the real `logout()` + redirect at its countdown.
+   */
+  const triggerSessionExpired = useCallback(() => {
+    setSessionExpired(true)
+  }, [])
 
   function completePasswordChange() {
     persistMustChangePasswordCleared()
@@ -212,16 +247,40 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }
 
   // Registers the global 401 reaction once — any `apiGet`/`apiPost` call
-  // (from anywhere in the app) that gets a 401 back triggers `logout()`
-  // through this handler, on top of whatever local error handling the
-  // calling screen already does (e.g. a red banner). `apiClient.ts` can't
+  // (from anywhere in the app) that gets a 401 back triggers
+  // `triggerSessionExpired()` through this handler, on top of whatever local
+  // error handling the calling screen already does (e.g. a red banner).
+  // `RequireAuth` then floats the expiry alert over the current view, keeping
+  // it mounted until the alert's countdown redirects. `apiClient.ts` can't
   // import this module directly (RoleContext already depends on `auth.ts`,
   // which depends on `apiClient.ts` — importing back would cycle), hence the
   // callback-registration indirection.
   useEffect(() => {
-    setUnauthorizedHandler(logout)
+    setUnauthorizedHandler(() => {
+      // Only real-mode requests attach an access token; a mock-mode 401 (if any)
+      // must not nuke the mock session.
+      if (getStoredAuthMode() === 'real') triggerSessionExpired()
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Proactively flags the expiry the moment the access token's `exp` passes —
+  // not just on the next navigation/request — so the alert also shows to an
+  // idle user. Re-armed whenever the session changes (`claims` flips on
+  // login/logout), so a re-login gets a fresh timer for its new token.
+  useEffect(() => {
+    if (authMode !== 'real') return
+    const token = getAccessToken()
+    const decoded = token ? decodeJwtPayload(token) : null
+    if (!decoded) return
+    const msLeft = decoded.exp * 1000 - Date.now()
+    if (msLeft <= 0) {
+      triggerSessionExpired()
+      return
+    }
+    const timer = setTimeout(triggerSessionExpired, msLeft)
+    return () => clearTimeout(timer)
+  }, [authMode, claims, triggerSessionExpired])
 
   const role = authMode === 'real' ? activeRole : mockRole
 
@@ -235,8 +294,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     user: role === null ? null : MOCK_USER,
     authMode,
     mustChangePassword,
+    sessionExpired,
     login,
     logout,
+    triggerSessionExpired,
     completePasswordChange,
   }
 

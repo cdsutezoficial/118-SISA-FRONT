@@ -110,6 +110,7 @@ const ACCESS_TOKEN_KEY = 'sisa.accessToken'
 const REFRESH_TOKEN_KEY = 'sisa.refreshToken'
 const AUTH_MODE_KEY = 'sisa.authMode'
 const MUST_CHANGE_PASSWORD_KEY = 'sisa.mustChangePassword'
+const SIGNED_OUT_KEY = 'sisa.signedOut'
 
 export function getStoredMustChangePassword(): boolean {
   try {
@@ -126,24 +127,61 @@ export function persistSession(res: LoginResponse): void {
     sessionStorage.setItem(REFRESH_TOKEN_KEY, res.refreshToken)
     sessionStorage.setItem(AUTH_MODE_KEY, 'real')
     sessionStorage.setItem(MUST_CHANGE_PASSWORD_KEY, String(res.mustChangePassword))
+    // A fresh login must not inherit a stale "signed out"/expired marker.
+    sessionStorage.removeItem(SIGNED_OUT_KEY)
   } catch {
     // sessionStorage unavailable (e.g. private browsing) — session just won't survive a reload.
   }
 }
 
 /**
- * Clears tokens/claims/pending-password-change on logout, but keeps
- * `authMode` at `'real'` — a subsequent visit (or back-navigation) must still
- * be routed to `/login`, not silently fall back to mock mode.
+ * Removes every `sisa.*` key from the given storage — tokens, mock role,
+ * active role, pending-password flag, sign-out marker — so a logout/expiry
+ * leaves nothing behind. Both storages get cleaned because a session must not
+ * survive in one if a future flow writes it to the other.
+ */
+function removeSisaKeys(storage: Storage): void {
+  for (let i = storage.length - 1; i >= 0; i--) {
+    const key = storage.key(i)
+    if (key && key.startsWith('sisa.')) storage.removeItem(key)
+  }
+}
+
+/**
+ * Clears the whole session (tokens, mock/active role, pending-password) from
+ * BOTH browser storages on logout/expiry, but keeps `authMode` at `'real'` — a
+ * subsequent visit (or back-navigation) must still be routed to `/login`, not
+ * silently fall back to mock mode.
  */
 export function clearSession(): void {
+  try { removeSisaKeys(sessionStorage) } catch { /* storage unavailable — nothing to clear. */ }
+  try { removeSisaKeys(localStorage) } catch { /* storage unavailable — nothing to clear. */ }
   try {
-    sessionStorage.removeItem(ACCESS_TOKEN_KEY)
-    sessionStorage.removeItem(REFRESH_TOKEN_KEY)
-    sessionStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'false')
     sessionStorage.setItem(AUTH_MODE_KEY, 'real')
+    sessionStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'false')
   } catch {
-    // sessionStorage unavailable — nothing to clear.
+    // sessionStorage unavailable — nothing to re-mark.
+  }
+}
+
+/**
+ * Marks the tab as intentionally signed out. `RequireAuth` reads this to
+ * redirect instantly instead of showing the 3-second "sesión expirada" gate —
+ * that gate is reserved for involuntary endings (401/token expiry).
+ */
+export function markSignedOut(): void {
+  try {
+    sessionStorage.setItem(SIGNED_OUT_KEY, 'true')
+  } catch {
+    // sessionStorage unavailable — marker just won't survive a reload.
+  }
+}
+
+export function getStoredSignedOut(): boolean {
+  try {
+    return sessionStorage.getItem(SIGNED_OUT_KEY) === 'true'
+  } catch {
+    return false
   }
 }
 
