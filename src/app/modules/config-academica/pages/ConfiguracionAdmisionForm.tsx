@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FieldLabel, FieldHelp, Switch, SearchSelectField } from '@app/core/components/ui'
+import { DateTimePicker, FieldError, FieldHelp, FieldLabel, Switch, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
@@ -19,9 +19,9 @@ import type { ApiError } from '@app/core/infra/apiClient'
 // not merely a client-side filter. `status` is never edited here — only from
 // the list (`ConfiguracionAdmisionList.tsx`'s Switch), same convention as
 // Generaciones/Grupos/Conceptos. `opensAt`/`closesAt` are `Instant` — the
-// first date+time field wired in the frontend — so a native
-// `<input type="datetime-local">` is used (no shared date+time picker exists
-// in `shared/ui.tsx`, and one screen doesn't justify building one).
+// first date+time fields wired in the frontend — so the shared
+// `DateTimePicker` (`ui.tsx`, the `DatePicker` design language plus a
+// time row) is used.
 
 interface ConfigResponse {
   id: string
@@ -75,23 +75,26 @@ interface PeriodsPageResponse {
   items: PeriodSummary[]
 }
 
-// ─── datetime-local <-> Instant helpers ────────────────────────────────────
-// `<input type="datetime-local">` reads/writes "YYYY-MM-DDTHH:mm" in the
-// browser's LOCAL time, with no timezone info. `new Date(iso)` /
-// `date.toISOString()` already do the local<->UTC conversion for us — we
-// just need to read/write the local Y/M/D/h/m components ourselves instead
-// of the UTC ones, since `toISOString()` always reports UTC.
-function toDatetimeLocalInput(iso: string): string {
+// ─── dd/mm/yyyy HH:mm <-> Instant helpers ───────────────────────────────────
+// El `DateTimePicker` lee/escribe `dd/mm/yyyy HH:mm` en hora LOCAL; la API
+// guarda un `Instant` ISO en UTC. `new Date(iso)` / `date.toISOString()` ya
+// hacen la conversión local<->UTC — solo hay que leer/escribir los componentes
+// locales (toISOString siempre reporta UTC). Mismo patrón que los
+// `isoToDisplay`/`displayToIso` de PeriodosForm, pero con hora.
+function isoToDisplay(iso: string): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function fromDatetimeLocalInput(local: string): string {
-  const d = new Date(local)
-  return d.toISOString()
+function displayToIso(display: string): string {
+  if (!display) return ''
+  const [datePart, timePart = '0:0'] = display.split(' ')
+  const [dd, mm, yyyy] = datePart.split('/').map(Number)
+  const [hh = 0, mi = 0] = timePart.split(':').map(Number)
+  return new Date(yyyy, mm - 1, dd, hh, mi).toISOString()
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
@@ -167,8 +170,8 @@ export default function ConfiguracionAdmisionForm() {
         setPeriodId(data.periodId)
         setIsOffered(data.isOffered)
         setMaxCandidates(String(data.maxCandidates))
-        setOpensAt(toDatetimeLocalInput(data.opensAt))
-        setClosesAt(toDatetimeLocalInput(data.closesAt))
+        setOpensAt(data.opensAt)
+        setClosesAt(data.closesAt)
         setLoadStatus('idle')
       })
       .catch((err: unknown) => {
@@ -240,8 +243,8 @@ export default function ConfiguracionAdmisionForm() {
       targetGenerationId,
       isOffered,
       maxCandidates: Number(maxCandidates),
-      opensAt: fromDatetimeLocalInput(opensAt),
-      closesAt: fromDatetimeLocalInput(closesAt),
+      opensAt,
+      closesAt,
     }
     try {
       if (isRegister) {
@@ -360,27 +363,23 @@ export default function ConfiguracionAdmisionForm() {
             help="Máximo de fichas pagadas antes de que el programa deje de aparecer disponible."
             className="col-span-12 sm:col-span-4"
           />
-          <TextField
-            label="Apertura de Venta"
-            required
-            type="datetime-local"
-            value={opensAt}
-            onChange={handleOpensAtChange}
-            disabled={disabled}
-            error={dateOrderError}
-            className="col-span-12 sm:col-span-4"
-          />
-          <TextField
-            label="Cierre de Venta"
-            required
-            type="datetime-local"
-            value={closesAt}
-            onChange={handleClosesAtChange}
-            disabled={disabled}
-            error={dateOrderError}
-            help="Debe ser posterior a la Apertura de Venta."
-            className="col-span-12 sm:col-span-4"
-          />
+          <div className="col-span-12 sm:col-span-4">
+            <FieldLabel required>Apertura de Venta</FieldLabel>
+            <DateTimePicker
+              value={isoToDisplay(opensAt)}
+              onChange={v => handleOpensAtChange(displayToIso(v))}
+              disabled={disabled}
+            />
+          </div>
+          <div className="col-span-12 sm:col-span-4">
+            <FieldLabel required>Cierre de Venta</FieldLabel>
+            <DateTimePicker
+              value={isoToDisplay(closesAt)}
+              onChange={v => handleClosesAtChange(displayToIso(v))}
+              disabled={disabled}
+            />
+            {dateOrderError ? <FieldError>{dateOrderError}</FieldError> : <FieldHelp>Debe ser posterior a la Apertura de Venta.</FieldHelp>}
+          </div>
         </div>
       </FormCard>
 
