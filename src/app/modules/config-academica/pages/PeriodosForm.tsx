@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ModeSwitcher } from '@app/core/components/ui'
+import { ModeSwitcher, DatePicker, FieldLabel, FieldError } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
@@ -51,6 +51,20 @@ type FormErrors = Partial<Record<
   'name' | 'year' | 'periodNumber' | 'type' | 'startDate' | 'endDate' | 'enrollmentStart' | 'enrollmentEnd',
   string
 >>
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+// La API trabaja con ISO (YYYY-MM-DD); el DatePicker muestra dd/mm/yyyy.
+function isoToDisplay(iso: string): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return d && m && y ? `${d}/${m}/${y}` : ''
+}
+
+function displayToIso(display: string): string {
+  if (!display) return ''
+  const [d, m, y] = display.split('/')
+  return y && m && d ? `${y}-${m}-${d}` : ''
+}
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
@@ -295,46 +309,42 @@ export default function PeriodosForm() {
             placeholder="Seleccionar tipo…"
             className="col-span-12 sm:col-span-6"
           />
-          <TextField
-            label="Fecha de Inicio"
-            required={!isView}
-            type="date"
-            value={startDate}
-            onChange={v => { setStartDate(v); setErrors(prev => ({ ...prev, startDate: undefined })) }}
-            disabled={disabled}
-            error={errors.startDate}
-            className="col-span-6 sm:col-span-3"
-          />
-          <TextField
-            label="Fecha de Fin"
-            required={!isView}
-            type="date"
-            value={endDate}
-            onChange={v => { setEndDate(v); setErrors(prev => ({ ...prev, endDate: undefined })) }}
-            disabled={disabled}
-            error={errors.endDate}
-            className="col-span-6 sm:col-span-3"
-          />
-          <TextField
-            label="Inicio de Inscripciones"
-            required={!isView}
-            type="date"
-            value={enrollmentStart}
-            onChange={v => { setEnrollmentStart(v); setErrors(prev => ({ ...prev, enrollmentStart: undefined })) }}
-            disabled={disabled}
-            error={errors.enrollmentStart}
-            className="col-span-6 sm:col-span-3"
-          />
-          <TextField
-            label="Fin de Inscripciones"
-            required={!isView}
-            type="date"
-            value={enrollmentEnd}
-            onChange={v => { setEnrollmentEnd(v); setErrors(prev => ({ ...prev, enrollmentEnd: undefined })) }}
-            disabled={disabled}
-            error={errors.enrollmentEnd}
-            className="col-span-6 sm:col-span-3"
-          />
+          <div className="col-span-6 sm:col-span-3">
+            <FieldLabel required={!isView}>Fecha de Inicio</FieldLabel>
+            <DatePicker
+              value={isoToDisplay(startDate)}
+              onChange={v => { setStartDate(displayToIso(v)); setErrors(prev => ({ ...prev, startDate: undefined })) }}
+              disabled={disabled}
+            />
+            {errors.startDate && <FieldError>{errors.startDate}</FieldError>}
+          </div>
+          <div className="col-span-6 sm:col-span-3">
+            <FieldLabel required={!isView}>Fecha de Fin</FieldLabel>
+            <DatePicker
+              value={isoToDisplay(endDate)}
+              onChange={v => { setEndDate(displayToIso(v)); setErrors(prev => ({ ...prev, endDate: undefined })) }}
+              disabled={disabled}
+            />
+            {errors.endDate && <FieldError>{errors.endDate}</FieldError>}
+          </div>
+          <div className="col-span-6 sm:col-span-3">
+            <FieldLabel required={!isView}>Inicio de Inscripciones</FieldLabel>
+            <DatePicker
+              value={isoToDisplay(enrollmentStart)}
+              onChange={v => { setEnrollmentStart(displayToIso(v)); setErrors(prev => ({ ...prev, enrollmentStart: undefined })) }}
+              disabled={disabled}
+            />
+            {errors.enrollmentStart && <FieldError>{errors.enrollmentStart}</FieldError>}
+          </div>
+          <div className="col-span-6 sm:col-span-3">
+            <FieldLabel required={!isView}>Fin de Inscripciones</FieldLabel>
+            <DatePicker
+              value={isoToDisplay(enrollmentEnd)}
+              onChange={v => { setEnrollmentEnd(displayToIso(v)); setErrors(prev => ({ ...prev, enrollmentEnd: undefined })) }}
+              disabled={disabled}
+            />
+            {errors.enrollmentEnd && <FieldError>{errors.enrollmentEnd}</FieldError>}
+          </div>
         </div>
       </FormCard>
 
