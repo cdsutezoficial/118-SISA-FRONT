@@ -42,7 +42,7 @@ export function FormHeader({ title, subtitle, right }: {
 // Tarjeta blanca del formulario. Con `loading` muestra el spinner en vez del
 // contenido (patrón de carga de edit/view en todos los forms CRUD).
 export function FormCard({ children, loading = false, loadingLabel = 'Cargando...' }: {
-  children: ReactNode
+  children?: ReactNode
   /** true → muestra el spinner de carga en lugar del formulario. */
   loading?: boolean
   loadingLabel?: string
@@ -345,11 +345,13 @@ export interface MiniColumn<T> {
   render?: (row: T) => ReactNode
 }
 
-export function MiniTable<T>({ columns, items, keyFor, className }: {
+export function MiniTable<T>({ columns, items, keyFor, className, footer }: {
   columns: MiniColumn<T>[]
   items: T[]
   keyFor: (row: T) => string
   className?: string
+  /** Fila de pie (tfoot) a ancho completo — p.ej. subtotales. */
+  footer?: ReactNode
 }) {
   return (
     <table className={`w-full text-[12px] ${className ?? ''}`}>
@@ -373,6 +375,15 @@ export function MiniTable<T>({ columns, items, keyFor, className }: {
           </tr>
         ))}
       </tbody>
+      {footer && (
+        <tfoot>
+          <tr className="bg-[#F8F9FA] border-t border-[#E5E7EB]">
+            <td colSpan={columns.length} className="px-3 py-2">
+              {footer}
+            </td>
+          </tr>
+        </tfoot>
+      )}
     </table>
   )
 }
