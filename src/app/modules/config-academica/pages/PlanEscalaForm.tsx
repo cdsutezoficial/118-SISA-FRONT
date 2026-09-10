@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Save, X, Loader2, AlertCircle, BookOpen, Plus, Trash2 } from 'lucide-react'
+import { BookOpen, Plus, Trash2 } from 'lucide-react'
 import { FieldLabel, FieldHelp, FieldError, inputCls, SearchSelectField, Switch } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, Button, IconButton, TextField } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate, useSearchParams } from 'react-router'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
@@ -289,57 +291,27 @@ export default function PlanEscalaForm() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/planes')} className="hover:text-[#009574] transition-colors">Planes de Estudio</button>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate(cancelUrl())} className="hover:text-[#009574] transition-colors">
-          {plan ? plan.version : 'Detalle del Plan'}
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">
-          {isRegister ? 'Registrar Escala' : 'Editar Escala'}
-        </span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Planes de Estudio', to: '/planes' },
+          { label: plan ? plan.version : 'Detalle del Plan', to: cancelUrl() },
+          { label: isRegister ? 'Registrar Escala' : 'Editar Escala' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">
-          {isRegister ? 'Registrar Escala de Calificación' : 'Editar Escala de Calificación'}
-        </h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Define los rangos numéricos y su equivalencia en letra para una clasificación de materia dentro de este plan.
-        </p>
-      </div>
+      <FormHeader
+        title={isRegister ? 'Registrar Escala de Calificación' : 'Editar Escala de Calificación'}
+        subtitle="Define los rangos numéricos y su equivalencia en letra para una clasificación de materia dentro de este plan."
+      />
 
-      {/* Load error banner */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
-
-      {/* Submit error banner */}
-      {submitStatus === 'error' && submitErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {submitErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {loadStatus === 'loading' ? (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center mb-6">
-          <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando información del plan...</p>
-          </div>
-        </div>
+        <FormCard loading loadingLabel="Cargando información del plan..." />
       ) : loadStatus === 'error' ? null : (
         <>
           {/* Context card */}
@@ -356,7 +328,7 @@ export default function PlanEscalaForm() {
           </div>
 
           {/* Form card — general config */}
-          <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+          <FormCard>
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-4">Configuración General</p>
 
             <div className="grid grid-cols-12 gap-4">
@@ -377,37 +349,37 @@ export default function PlanEscalaForm() {
                   : <FieldHelp>Las clasificaciones que ya tienen una escala en este plan no aparecen aquí.</FieldHelp>}
               </div>
               {/* Calificación Mínima */}
-              <div className="col-span-6 sm:col-span-3">
-                <FieldLabel required>Calificación Mínima</FieldLabel>
-                <input
-                  type="number" step="0.1"
-                  value={numericMin}
-                  onChange={e => { setNumericMin(e.target.value); clearErr('numericMin') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.numericMin) + ' tabular-nums'}
-                  placeholder="Ej. 0.0"
-                />
-                {errors.numericMin
-                  ? <FieldError>{errors.numericMin}</FieldError>
-                  : <FieldHelp>Valor numérico mínimo válido para esta escala.</FieldHelp>}
-              </div>
+              <TextField
+                label="Calificación Mínima"
+                required
+                value={numericMin}
+                onChange={v => { setNumericMin(v); clearErr('numericMin') }}
+                disabled={disabled}
+                error={errors.numericMin}
+                type="number"
+                step={0.1}
+                numeric
+                placeholder="Ej. 0.0"
+                help="Valor numérico mínimo válido para esta escala."
+                className="col-span-6 sm:col-span-3"
+              />
               {/* Calificación Máxima */}
-              <div className="col-span-6 sm:col-span-3">
-                <FieldLabel required>Calificación Máxima</FieldLabel>
-                <input
-                  type="number" step="0.1"
-                  value={numericMax}
-                  onChange={e => { setNumericMax(e.target.value); clearErr('numericMax') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.numericMax) + ' tabular-nums'}
-                  placeholder="Ej. 10.0"
-                />
-                {errors.numericMax
-                  ? <FieldError>{errors.numericMax}</FieldError>
-                  : <FieldHelp>Valor numérico máximo válido para esta escala.</FieldHelp>}
-              </div>
+              <TextField
+                label="Calificación Máxima"
+                required
+                value={numericMax}
+                onChange={v => { setNumericMax(v); clearErr('numericMax') }}
+                disabled={disabled}
+                error={errors.numericMax}
+                type="number"
+                step={0.1}
+                numeric
+                placeholder="Ej. 10.0"
+                help="Valor numérico máximo válido para esta escala."
+                className="col-span-6 sm:col-span-3"
+              />
             </div>
-          </div>
+          </FormCard>
 
           {/* Entries table */}
           <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
@@ -482,14 +454,12 @@ export default function PlanEscalaForm() {
                           </div>
                         </td>
                         <td className="px-2 py-2">
-                          <button
-                            type="button"
+                          <IconButton
+                            icon={<Trash2 size={14} />}
+                            danger
                             onClick={() => removeRow(i)}
                             disabled={disabled || entries.length === 1}
-                            className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          />
                         </td>
                       </tr>
                     )
@@ -557,14 +527,15 @@ export default function PlanEscalaForm() {
                         placeholder="Ej. No Aprobatorio"
                       />
                     </div>
-                    <button
-                      type="button"
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      className="w-full"
                       onClick={() => removeRow(i)}
                       disabled={disabled || entries.length === 1}
-                      className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-red-500 border border-red-200 rounded-md hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Trash2 size={13} />Eliminar Rango
-                    </button>
+                    </Button>
                   </div>
                 )
               })}
@@ -572,36 +543,21 @@ export default function PlanEscalaForm() {
 
             {errors.entries && <FieldError>{errors.entries}</FieldError>}
 
-            <button
-              type="button"
-              onClick={addRow}
-              disabled={disabled}
-              className="mt-3 flex items-center gap-1.5 text-[12px] font-semibold text-[#009574] hover:text-[#007a5e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
+            <Button variant="ghost" size="sm" className="mt-3" onClick={addRow} disabled={disabled}>
               <Plus size={14} />Agregar Rango
-            </button>
+            </Button>
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-            <button
-              onClick={() => navigate(cancelUrl())}
-              disabled={isSubmitting}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <X size={14} />Cancelar
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              {isRegister ? 'Registrar Escala' : 'Guardar Cambios'}
-            </button>
-          </div>
+          <FormActions
+            isView={false}
+            onBack={() => navigate(cancelUrl())}
+            onPrimary={handleSubmit}
+            primaryLabel={isRegister ? 'Registrar Escala' : 'Guardar Cambios'}
+            isSubmitting={isSubmitting}
+          />
         </>
       )}
-    </div>
+    </FormPage>
   )
 }
