@@ -372,99 +372,100 @@ export default function UsuarioDetalle() {
                   El usuario ya tiene todos los roles del catálogo.
                 </p>
               ) : (
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-12 md:col-span-5">
-                    <FieldLabel>Selección múltiple</FieldLabel>
-                    <div ref={addRef} className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setAddOpen(o => !o)}
-                        className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${addNoRoles ? 'border-red-400' : 'border-[#E5E7EB] hover:border-[#009574]/50 focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]'}`}
-                      >
-                        <span className={`truncate ${toAdd.length > 0 ? 'text-[#333333] font-medium' : 'text-[#6B7280]'}`}>
-                          {toAdd.length > 0 ? `${toAdd.length} rol(es) seleccionado(s)` : 'Selecciona roles…'}
-                        </span>
-                        <ChevronDown size={14} className={`text-[#6B7280] transition-transform flex-shrink-0 ${addOpen ? 'rotate-180' : ''}`} />
-                      </button>
-                      {addOpen && (
-                        <div className="absolute top-full mt-1 left-0 z-50 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg overflow-hidden">
-                          <div className="max-h-60 overflow-y-auto py-1">
-                            {selectableRoles.map(o => {
-                              const rt = o.value as RoleType
-                              const selected = toAdd.includes(rt)
-                              return (
-                                <button
-                                  key={rt}
-                                  type="button"
-                                  onClick={() => {
-                                    setToAdd(prev => selected ? prev.filter(r => r !== rt) : [...prev, rt])
-                                    if (addSubmitted) setAddSubmitted(false)
-                                  }}
-                                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[13px] hover:bg-[#e6f5f1] transition-colors"
-                                >
-                                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${ROLE_BADGE_STYLE[rt]}`}>{o.label}</span>
-                                  <span className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center ${selected ? 'bg-[#009574] border-[#009574]' : 'border-[#D1D5DB]'}`}>
-                                    {selected && <Check size={11} className="text-white" strokeWidth={3} />}
-                                  </span>
-                                </button>
-                              )
-                            })}
+                <>
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-12 md:col-span-6">
+                      <FieldLabel>Selección múltiple</FieldLabel>
+                      <div ref={addRef} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setAddOpen(o => !o)}
+                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${addNoRoles ? 'border-red-400' : 'border-[#E5E7EB] hover:border-[#009574]/50 focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]'}`}
+                        >
+                          <span className={`truncate ${toAdd.length > 0 ? 'text-[#333333] font-medium' : 'text-[#6B7280]'}`}>
+                            {toAdd.length > 0 ? `${toAdd.length} rol(es) seleccionado(s)` : 'Selecciona roles…'}
+                          </span>
+                          <ChevronDown size={14} className={`text-[#6B7280] transition-transform flex-shrink-0 ${addOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {addOpen && (
+                          <div className="absolute top-full mt-1 left-0 z-50 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg overflow-hidden">
+                            <div className="max-h-60 overflow-y-auto py-1">
+                              {selectableRoles.map(o => {
+                                const rt = o.value as RoleType
+                                const selected = toAdd.includes(rt)
+                                return (
+                                  <button
+                                    key={rt}
+                                    type="button"
+                                    onClick={() => {
+                                      setToAdd(prev => selected ? prev.filter(r => r !== rt) : [...prev, rt])
+                                      if (addSubmitted) setAddSubmitted(false)
+                                    }}
+                                    className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[13px] hover:bg-[#e6f5f1] transition-colors"
+                                  >
+                                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${ROLE_BADGE_STYLE[rt]}`}>{o.label}</span>
+                                    <span className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center ${selected ? 'bg-[#009574] border-[#009574]' : 'border-[#D1D5DB]'}`}>
+                                      {selected && <Check size={11} className="text-white" strokeWidth={3} />}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      {addNoRoles && <FieldError>Selecciona al menos un rol.</FieldError>}
+                      <FieldHelp>Los roles ya asignados no aparecen: cada rol solo puede asignarse una vez.</FieldHelp>
                     </div>
-                    {addNoRoles && <FieldError>Selecciona al menos un rol.</FieldError>}
-                    <FieldHelp>Los roles ya asignados no aparecen: cada rol solo puede asignarse una vez.</FieldHelp>
+
+                    {addScopedNeeded && (
+                      <div className="col-span-12 md:col-span-6">
+                        <FieldLabel required>División (alcance)</FieldLabel>
+                        <SearchSelectField
+                          options={divisionOptions}
+                          value={addDivision}
+                          onChange={v => { setAddDivision(v); if (addSubmitted) setAddSubmitted(false) }}
+                          placeholder="Selecciona la división"
+                          hasError={addNoDivision}
+                          searchPlaceholder="Buscar división…"
+                        />
+                        {addNoDivision
+                          ? <FieldError>Selecciona la división para los roles con alcance de división.</FieldError>
+                          : <FieldHelp>Los roles con alcance de división solo operan en la división elegida.</FieldHelp>
+                        }
+                      </div>
+                    )}
                   </div>
 
-                  {addScopedNeeded && (
-                    <div className="col-span-12 md:col-span-4">
-                      <FieldLabel required>División (alcance)</FieldLabel>
-                      <SearchSelectField
-                        options={divisionOptions}
-                        value={addDivision}
-                        onChange={v => { setAddDivision(v); if (addSubmitted) setAddSubmitted(false) }}
-                        placeholder="Selecciona la división"
-                        hasError={addNoDivision}
-                        searchPlaceholder="Buscar división…"
-                      />
-                      {addNoDivision
-                        ? <FieldError>Selecciona la división para los roles con alcance de división.</FieldError>
-                        : <FieldHelp>Los roles con alcance de división solo operan en la división elegida.</FieldHelp>
-                      }
+                  {toAdd.length > 0 && !adding && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                      {toAdd.map(rt => (
+                        <span key={rt} className={`inline-flex items-center gap-1 text-[11px] font-semibold pl-2 pr-1 py-0.5 rounded-full ${ROLE_BADGE_STYLE[rt]}`}>
+                          {ROLE_LABELS[rt]}
+                          <button
+                            type="button"
+                            onClick={() => setToAdd(prev => prev.filter(r => r !== rt))}
+                            className="hover:opacity-70 rounded"
+                            aria-label={`Quitar ${ROLE_LABELS[rt]}`}
+                          >
+                            <X size={11} />
+                          </button>
+                        </span>
+                      ))}
                     </div>
                   )}
 
-                  <div className="col-span-12 md:col-span-3 flex items-end justify-end">
+                  <div className="flex items-center justify-end mt-4">
                     <Button
                       variant="primary"
                       size="sm"
                       loading={adding}
                       onClick={handleAddRoles}
-                      className="w-full md:w-auto"
                     >
                       {adding ? 'Asignando...' : <>Asignar{toAdd.length > 0 ? ` (${toAdd.length})` : ''}</>}
                     </Button>
                   </div>
-                </div>
-              )}
-
-              {toAdd.length > 0 && !adding && (
-                <div className="flex flex-wrap items-center gap-1.5 mt-3">
-                  {toAdd.map(rt => (
-                    <span key={rt} className={`inline-flex items-center gap-1 text-[11px] font-semibold pl-2 pr-1 py-0.5 rounded-full ${ROLE_BADGE_STYLE[rt]}`}>
-                      {ROLE_LABELS[rt]}
-                      <button
-                        type="button"
-                        onClick={() => setToAdd(prev => prev.filter(r => r !== rt))}
-                        className="hover:opacity-70 rounded"
-                        aria-label={`Quitar ${ROLE_LABELS[rt]}`}
-                      >
-                        <X size={11} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
+                </>
               )}
             </div>
           </div>
