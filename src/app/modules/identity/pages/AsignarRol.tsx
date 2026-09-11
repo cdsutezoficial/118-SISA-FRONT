@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Info, AlertCircle, UserCircle2, Loader2, Save, X } from 'lucide-react'
+import { Info, UserCircle2 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { FieldLabel, FieldError, FieldHelp, SearchSelectField, Toast } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { apiGet, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 import { ROLE_LABELS, ROLE_BADGE_STYLE, ROLE_OPTIONS, DIVISION_SCOPED_ROLES } from '../data/roles'
@@ -34,6 +36,15 @@ interface FormErrors {
 }
 
 const rolOptions: SelectOption[] = ROLE_OPTIONS
+
+// ─── Helpers ────────────────────────────────────────────────────────────────────
+
+function initialsFor(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
+}
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
@@ -129,50 +140,32 @@ export default function AsignarRol() {
   const isSubmitting = submitStatus === 'submitting'
 
   return (
-    <div className="max-w-[860px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
+    <FormPage>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4 flex-wrap">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Identidad</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/usuarios')} className="hover:text-[#009574] transition-colors">Usuarios</button>
-        <ChevronRight size={13} />
-        {userId && (
-          <>
-            <button onClick={() => navigate(`/usuarios/detalle?id=${userId}`)} className="hover:text-[#009574] transition-colors">
-              {user?.fullName ?? 'Detalle'}
-            </button>
-            <ChevronRight size={13} />
-          </>
-        )}
-        <span className="text-[#333333] font-medium">Asignar Rol</span>
-      </nav>
 
-      {/* Title */}
-      <div className="mb-1">
-        <h1 className="text-2xl font-semibold text-[#333333]">Asignar Rol</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Agrega un nuevo rol de acceso para este usuario. Un usuario puede tener múltiples roles con distintos scopes.
-        </p>
-      </div>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Identidad' },
+          { label: 'Usuarios', to: '/usuarios' },
+          ...(userId
+            ? [{ label: user?.fullName ?? 'Detalle', to: `/usuarios/detalle?id=${userId}` }]
+            : []),
+          { label: 'Asignar Rol' },
+        ]}
+      />
 
-      <hr className="border-[#E5E7EB] my-6" />
+      <FormHeader
+        title="Asignar Rol"
+        subtitle="Agrega un nuevo rol de acceso para este usuario. Un usuario puede tener múltiples roles con distintos scopes."
+      />
 
-      {/* Load error banner */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
+
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {loadStatus === 'loading' ? (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg p-12 flex flex-col items-center gap-3 text-[#6B7280]">
-          <Loader2 size={24} className="animate-spin text-[#009574]" />
-          <p className="text-[13px] font-medium">Cargando usuario...</p>
-        </div>
+        <FormCard loading loadingLabel="Cargando usuario..." />
       ) : userId && user ? (
         <>
           {/* Context card */}
@@ -186,16 +179,8 @@ export default function AsignarRol() {
             </div>
           </div>
 
-          {/* Submit error banner */}
-          {submitStatus === 'error' && submitErrorMsg && (
-            <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-              <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-              {submitErrorMsg}
-            </div>
-          )}
-
           {/* Form card */}
-          <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 sm:p-8">
+          <FormCard>
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-4">Rol a Asignar</p>
 
             <div className="grid grid-cols-12 gap-6 mb-6">
@@ -269,37 +254,18 @@ export default function AsignarRol() {
                 </div>
               </div>
             )}
-          </div>
+          </FormCard>
 
-          {/* Action zone */}
-          <div className="flex items-center justify-end gap-3 mt-6">
-            <button
-              onClick={() => navigate(`/usuarios/detalle?id=${userId}`)}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <X size={14} className="inline mr-1.5 -mt-0.5" />Cancelar
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="flex items-center gap-2 px-5 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              Asignar Rol
-            </button>
-          </div>
+          {/* Actions */}
+          <FormActions
+            isView={false}
+            onBack={() => navigate(`/usuarios/detalle?id=${userId}`)}
+            onPrimary={handleSubmit}
+            primaryLabel="Asignar Rol"
+            isSubmitting={isSubmitting}
+          />
         </>
       ) : null}
-    </div>
+    </FormPage>
   )
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────────────
-
-function initialsFor(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[1][0]).toUpperCase()
 }
