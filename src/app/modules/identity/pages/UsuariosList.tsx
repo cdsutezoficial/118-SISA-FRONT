@@ -8,6 +8,7 @@ import { apiGet } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 import { Toast, ActionBtn, SearchSelectField, ConfirmModal } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
+import { Button } from '@app/core/components/form'
 import {
   PageContainer,
   Breadcrumb,
@@ -355,13 +356,15 @@ export default function UsuariosList() {
       {loadStatus === 'error' && errorMsg && <ErrorBanner message={errorMsg} />}
 
       <FilterBar>
-        <SearchSelectField
-          options={rolOptions}
-          value={rolFilter}
-          onChange={v => { setRolFilter(v); setPage(1) }}
-          placeholder="Todos los roles"
-          searchPlaceholder="Buscar rol…"
-        />
+        <div className="w-full sm:w-56">
+          <SearchSelectField
+            options={rolOptions}
+            value={rolFilter}
+            onChange={v => { setRolFilter(v); setPage(1) }}
+            placeholder="Todos los roles"
+            searchPlaceholder="Buscar rol…"
+          />
+        </div>
         <div className="w-full sm:w-40">
           <FilterSelect
             value={estadoFilter}
@@ -437,19 +440,23 @@ export default function UsuariosList() {
             </p>
             {/* Actions */}
             <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
                 onClick={() => navigate(`/usuarios/detalle?id=${row.id}`)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#6B7280] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
               >
                 <Eye size={14} />Ver
-              </button>
+              </Button>
               {row.estado === 'LOCKED' && (
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="flex-1"
                   onClick={() => setUnlockTarget(row)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
                 >
                   <LockKeyholeOpen size={14} />Desbloquear
-                </button>
+                </Button>
               )}
             </div>
           </>
