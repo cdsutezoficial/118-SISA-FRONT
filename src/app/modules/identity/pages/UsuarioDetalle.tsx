@@ -334,6 +334,7 @@ export default function UsuarioDetalle() {
                   {
                     key: 'rol',
                     header: 'Rol',
+                    className: 'w-[calc(50%-32px)]',
                     render: row => (
                       <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${ROLE_BADGE_STYLE[row.roleType]}`}>
                         {ROLE_LABELS[row.roleType]}
@@ -343,7 +344,7 @@ export default function UsuarioDetalle() {
                   {
                     key: 'scope',
                     header: 'Scope (División)',
-                    className: 'w-56',
+                    className: 'w-[calc(50%-32px)]',
                     render: row => <span className="text-[#333333]">{divisionLabel(row.divisionId)}</span>,
                   },
                   {
