@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  ShieldCheck, X, Plus, LockKeyholeOpen, Clock, CalendarPlus, ArrowLeft, Loader2,
+  ShieldCheck, X, Plus, Check, ChevronDown, LockKeyholeOpen, Clock, CalendarPlus, ArrowLeft, Loader2,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { apiGet, apiDelete, apiPatch } from '@app/core/infra/apiClient'
+import { apiGet, apiDelete, apiPatch, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
-import { ConfirmModal, Toast, ActionBtn } from '@app/core/components/ui'
+import { ConfirmModal, Toast, ActionBtn, FieldLabel, FieldError, FieldHelp, SearchSelectField } from '@app/core/components/ui'
+import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, Button, MiniTable } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
-import { ROLE_LABELS, ROLE_BADGE_STYLE } from '../data/roles'
+import { ROLE_LABELS, ROLE_BADGE_STYLE, DIVISION_SCOPED_ROLES, ROLE_OPTIONS } from '../data/roles'
 import type { RoleType } from '../data/roles'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -84,6 +85,28 @@ export default function UsuarioDetalle() {
   const [actionErrorMsg, setActionErrorMsg] = useState('')
   const [toast, setToast] = useState(pendingToast ?? '')
 
+  // Multi-assign de roles (selección múltiple inline).
+  const addRef = useRef<HTMLDivElement>(null)
+  const [addOpen, setAddOpen] = useState(false)
+  const [toAdd, setToAdd] = useState<RoleType[]>([])
+  const [addDivision, setAddDivision] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [addSubmitted, setAddSubmitted] = useState(false)
+
+  const assignedRoleTypes = new Set((user?.roles ?? []).map(r => r.roleType))
+  const addScopedNeeded = toAdd.some(r => DIVISION_SCOPED_ROLES.has(r))
+  const selectableRoles = ROLE_OPTIONS.filter(o => !assignedRoleTypes.has(o.value as RoleType))
+  const divisionOptions: SelectOption[] = divisions.map(d => ({ value: d.id, label: `${d.code} — ${d.name}` }))
+  const addNoRoles = addSubmitted && toAdd.length === 0
+  const addNoDivision = addSubmitted && addScopedNeeded && !addDivision
+
+  useEffect(() => {
+    if (!addOpen) return
+    function outside(e: MouseEvent) { if (addRef.current && !addRef.current.contains(e.target as Node)) setAddOpen(false) }
+    document.addEventListener('mousedown', outside)
+    return () => document.removeEventListener('mousedown', outside)
+  }, [addOpen])
+
   function loadUser() {
     if (!id) return Promise.resolve()
     setLoadStatus('loading')
@@ -154,6 +177,46 @@ export default function UsuarioDetalle() {
     } finally {
       setUnlocking(false)
     }
+  }
+
+  async function handleAddRoles() {
+    if (!user) return
+    setAddSubmitted(true)
+    if (toAdd.length === 0 || (addScopedNeeded && !addDivision)) return
+    setAdding(true)
+    setActionErrorMsg('')
+    const ok: string[] = []
+    const bad: string[] = []
+    for (const rt of toAdd) {
+      try {
+        await apiPost(`/users/${user.userId}/roles`, {
+          roleType: rt,
+          divisionId: DIVISION_SCOPED_ROLES.has(rt) ? addDivision : undefined,
+        })
+        ok.push(ROLE_LABELS[rt])
+      } catch (err) {
+        const apiErr = err as Partial<ApiError>
+        if (apiErr.status === 401) { setActionErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.'); break }
+        if (apiErr.status === 403) { setActionErrorMsg('No tienes permiso para asignar roles.'); break }
+        if (apiErr.status === 404) { setActionErrorMsg('El usuario ya no existe.'); break }
+        bad.push(ROLE_LABELS[rt])
+      }
+    }
+    setToAdd([])
+    setAddDivision('')
+    setAddSubmitted(false)
+    setAddOpen(false)
+    await loadUser()
+    if (ok.length > 0) {
+      setToast(`Roles asignados: ${ok.join(', ')}.`)
+      setTimeout(() => setToast(''), 4000)
+    }
+    if (bad.length > 0) {
+      setActionErrorMsg(ok.length > 0
+        ? `Se asignaron ${ok.length} rol(es), pero no se pudieron asignar: ${bad.join(', ')}.`
+        : `No se pudieron asignar: ${bad.join(', ')}.`)
+    }
+    setAdding(false)
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -251,11 +314,14 @@ export default function UsuarioDetalle() {
           </div>
 
           {/* Roles section */}
-          <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#E5E7EB] bg-[#F8F9FA] flex items-center justify-between">
+          <div className="bg-white border border-[#E5E7EB] rounded-lg">
+            <div className="px-4 py-3 border-b border-[#E5E7EB] bg-[#F8F9FA] rounded-t-lg flex items-center justify-between">
               <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest flex items-center gap-1.5">
                 <ShieldCheck size={13} />Roles Asignados
               </p>
+              <span className="text-[11px] font-medium text-[#6B7280] bg-white border border-[#E5E7EB] rounded-full px-2 py-0.5">
+                {user.roles.length} {user.roles.length === 1 ? 'rol' : 'roles'}
+              </span>
             </div>
 
             {user.roles.length === 0 ? (
@@ -296,10 +362,110 @@ export default function UsuarioDetalle() {
               />
             )}
 
-            <div className="border-t border-[#E5E7EB] px-4 py-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate(`/usuarios/asignar-rol?userId=${user.userId}`)}>
-                <Plus size={14} />Asignar Rol
-              </Button>
+            <div className="border-t border-[#E5E7EB] px-4 py-4">
+              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <Plus size={13} />Agregar Roles
+              </p>
+
+              {selectableRoles.length === 0 ? (
+                <p className="text-[12px] text-[#6B7280]">
+                  El usuario ya tiene todos los roles del catálogo.
+                </p>
+              ) : (
+                <div className="grid grid-cols-12 gap-3">
+                  <div className="col-span-12 md:col-span-5">
+                    <FieldLabel>Selección múltiple</FieldLabel>
+                    <div ref={addRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setAddOpen(o => !o)}
+                        className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${addNoRoles ? 'border-red-400' : 'border-[#E5E7EB] hover:border-[#009574]/50 focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]'}`}
+                      >
+                        <span className={`truncate ${toAdd.length > 0 ? 'text-[#333333] font-medium' : 'text-[#6B7280]'}`}>
+                          {toAdd.length > 0 ? `${toAdd.length} rol(es) seleccionado(s)` : 'Selecciona roles…'}
+                        </span>
+                        <ChevronDown size={14} className={`text-[#6B7280] transition-transform flex-shrink-0 ${addOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {addOpen && (
+                        <div className="absolute top-full mt-1 left-0 z-50 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg overflow-hidden">
+                          <div className="max-h-60 overflow-y-auto py-1">
+                            {selectableRoles.map(o => {
+                              const rt = o.value as RoleType
+                              const selected = toAdd.includes(rt)
+                              return (
+                                <button
+                                  key={rt}
+                                  type="button"
+                                  onClick={() => {
+                                    setToAdd(prev => selected ? prev.filter(r => r !== rt) : [...prev, rt])
+                                    if (addSubmitted) setAddSubmitted(false)
+                                  }}
+                                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[13px] hover:bg-[#e6f5f1] transition-colors"
+                                >
+                                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${ROLE_BADGE_STYLE[rt]}`}>{o.label}</span>
+                                  <span className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center ${selected ? 'bg-[#009574] border-[#009574]' : 'border-[#D1D5DB]'}`}>
+                                    {selected && <Check size={11} className="text-white" strokeWidth={3} />}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {addNoRoles && <FieldError>Selecciona al menos un rol.</FieldError>}
+                    <FieldHelp>Los roles ya asignados no aparecen: cada rol solo puede asignarse una vez.</FieldHelp>
+                  </div>
+
+                  {addScopedNeeded && (
+                    <div className="col-span-12 md:col-span-4">
+                      <FieldLabel required>División (alcance)</FieldLabel>
+                      <SearchSelectField
+                        options={divisionOptions}
+                        value={addDivision}
+                        onChange={v => { setAddDivision(v); if (addSubmitted) setAddSubmitted(false) }}
+                        placeholder="Selecciona la división"
+                        hasError={addNoDivision}
+                        searchPlaceholder="Buscar división…"
+                      />
+                      {addNoDivision
+                        ? <FieldError>Selecciona la división para los roles con alcance de división.</FieldError>
+                        : <FieldHelp>Los roles con alcance de división solo operan en la división elegida.</FieldHelp>
+                      }
+                    </div>
+                  )}
+
+                  <div className="col-span-12 md:col-span-3 flex items-end justify-end">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={adding}
+                      onClick={handleAddRoles}
+                      className="w-full md:w-auto"
+                    >
+                      {adding ? 'Asignando...' : <>Asignar{toAdd.length > 0 ? ` (${toAdd.length})` : ''}</>}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {toAdd.length > 0 && !adding && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                  {toAdd.map(rt => (
+                    <span key={rt} className={`inline-flex items-center gap-1 text-[11px] font-semibold pl-2 pr-1 py-0.5 rounded-full ${ROLE_BADGE_STYLE[rt]}`}>
+                      {ROLE_LABELS[rt]}
+                      <button
+                        type="button"
+                        onClick={() => setToAdd(prev => prev.filter(r => r !== rt))}
+                        className="hover:opacity-70 rounded"
+                        aria-label={`Quitar ${ROLE_LABELS[rt]}`}
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
