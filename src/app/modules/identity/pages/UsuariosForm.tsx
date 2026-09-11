@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import {
-  ChevronRight, Loader2, AlertCircle, KeyRound, UserPlus, Users,
-} from 'lucide-react'
+import { KeyRound, UserPlus, Users } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
 import { FieldLabel, FieldError, FieldHelp, inputCls } from '@app/core/components/ui'
-import { PickerInput, PickerPanel, PickerOption, PickerLoading, PickerError, PickerEmpty, SelectedItem } from '@app/core/components/form'
+import { FormPage, FormHeader, FormCard, TextField, PickerInput, PickerPanel, PickerOption, PickerLoading, PickerError, PickerEmpty, SelectedItem } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { apiGet, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 
@@ -290,36 +289,31 @@ export default function UsuariosForm() {
             </div>
           ) : (
             <div className="grid grid-cols-12 gap-6">
-              <div className="col-span-12 md:col-span-6">
-                <FieldLabel required>Nombre(s)</FieldLabel>
-                <input
-                  value={newPerson.firstName}
-                  onChange={e => { setNewPerson(f => ({ ...f, firstName: e.target.value })); clearNewPersonErr('firstName') }}
-                  placeholder="Ej. María Elena"
-                  className={inputCls(false, !!newPersonErrors.firstName)}
-                />
-                {newPersonErrors.firstName && <FieldError>{newPersonErrors.firstName}</FieldError>}
-              </div>
-              <div className="col-span-12 md:col-span-3">
-                <FieldLabel required>Apellido Paterno</FieldLabel>
-                <input
-                  value={newPerson.lastName1}
-                  onChange={e => { setNewPerson(f => ({ ...f, lastName1: e.target.value })); clearNewPersonErr('lastName1') }}
-                  placeholder="Ej. García"
-                  className={inputCls(false, !!newPersonErrors.lastName1)}
-                />
-                {newPersonErrors.lastName1 && <FieldError>{newPersonErrors.lastName1}</FieldError>}
-              </div>
-              <div className="col-span-12 md:col-span-3">
-                <FieldLabel>Apellido Materno</FieldLabel>
-                <input
-                  value={newPerson.lastName2}
-                  onChange={e => setNewPerson(f => ({ ...f, lastName2: e.target.value }))}
-                  placeholder="Ej. López"
-                  className={inputCls(false, false)}
-                />
-              </div>
-
+              <TextField
+                label="Nombre(s)"
+                required
+                value={newPerson.firstName}
+                onChange={v => { setNewPerson(f => ({ ...f, firstName: v })); clearNewPersonErr('firstName') }}
+                placeholder="Ej. María Elena"
+                error={newPersonErrors.firstName}
+                className="col-span-12 md:col-span-6"
+              />
+              <TextField
+                label="Apellido Paterno"
+                required
+                value={newPerson.lastName1}
+                onChange={v => { setNewPerson(f => ({ ...f, lastName1: v })); clearNewPersonErr('lastName1') }}
+                placeholder="Ej. García"
+                error={newPersonErrors.lastName1}
+                className="col-span-12 md:col-span-3"
+              />
+              <TextField
+                label="Apellido Materno"
+                value={newPerson.lastName2}
+                onChange={v => setNewPerson(f => ({ ...f, lastName2: v }))}
+                placeholder="Ej. López"
+                className="col-span-12 md:col-span-3"
+              />
               <div className="col-span-12 md:col-span-6">
                 <FieldLabel required>CURP</FieldLabel>
                 <input
@@ -337,20 +331,17 @@ export default function UsuariosForm() {
                   <span className="text-[11px] text-[#6B7280] tabular-nums ml-auto pl-2">{newPerson.curp.length}/18</span>
                 </div>
               </div>
-              <div className="col-span-12 md:col-span-6">
-                <FieldLabel required>Correo Institucional</FieldLabel>
-                <input
-                  type="email"
-                  value={newPerson.institutionalEmail}
-                  onChange={e => { setNewPerson(f => ({ ...f, institutionalEmail: e.target.value })); clearNewPersonErr('institutionalEmail') }}
-                  placeholder="usuario@utez.edu.mx"
-                  className={inputCls(false, !!newPersonErrors.institutionalEmail)}
-                />
-                {newPersonErrors.institutionalEmail
-                  ? <FieldError>{newPersonErrors.institutionalEmail}</FieldError>
-                  : <FieldHelp>Se usará como nombre de usuario de la cuenta.</FieldHelp>
-                }
-              </div>
+              <TextField
+                label="Correo Institucional"
+                required
+                type="email"
+                value={newPerson.institutionalEmail}
+                onChange={v => { setNewPerson(f => ({ ...f, institutionalEmail: v })); clearNewPersonErr('institutionalEmail') }}
+                placeholder="usuario@utez.edu.mx"
+                error={newPersonErrors.institutionalEmail}
+                help="Se usará como nombre de usuario de la cuenta."
+                className="col-span-12 md:col-span-6"
+              />
             </div>
           )}
         </div>
@@ -365,30 +356,27 @@ export default function UsuariosForm() {
           <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-4">Datos de acceso</p>
 
           <div className="grid grid-cols-12 gap-6 mb-6">
-            <div className="col-span-12 md:col-span-6">
-              <FieldLabel>Correo Institucional (usuario)</FieldLabel>
-              <input
-                value={institutionalEmail}
-                disabled
-                readOnly
-                className={inputCls(true, false) + ' font-mono'}
-              />
-              <FieldHelp>Este será el nombre de usuario de la cuenta.</FieldHelp>
-            </div>
-            <div className="col-span-12 md:col-span-6">
-              <FieldLabel required>Contraseña Temporal</FieldLabel>
-              <input
-                type="text"
-                value={temporaryPassword}
-                onChange={e => { setTemporaryPassword(e.target.value); if (passwordSubmitted) setPasswordError(undefined) }}
-                placeholder="Ej. Bienvenido123"
-                className={`${inputCls(false, !!passwordError)} font-mono`}
-              />
-              {passwordError
-                ? <FieldError>{passwordError}</FieldError>
-                : <FieldHelp>El usuario deberá cambiarla en su primer inicio de sesión.</FieldHelp>
-              }
-            </div>
+            <TextField
+              label="Correo Institucional (usuario)"
+              value={institutionalEmail}
+              disabled
+              readOnly
+              mono
+              type="email"
+              help="Este será el nombre de usuario de la cuenta."
+              className="col-span-12 md:col-span-6"
+            />
+            <TextField
+              label="Contraseña Temporal"
+              required
+              value={temporaryPassword}
+              onChange={v => { setTemporaryPassword(v); if (passwordSubmitted) setPasswordError(undefined) }}
+              placeholder="Ej. Bienvenido123"
+              mono
+              error={passwordError}
+              help={passwordError ? undefined : 'El usuario deberá cambiarla en su primer inicio de sesión.'}
+              className="col-span-12 md:col-span-6"
+            />
           </div>
 
           <div className="flex items-start gap-2 text-[12px] text-[#6B7280] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md px-3 py-2.5">
@@ -397,9 +385,8 @@ export default function UsuariosForm() {
           </div>
 
           {submitStatus === 'error' && submitErrorMsg && (
-            <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mt-4">
-              <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-              {submitErrorMsg}
+            <div className="mt-4">
+              <ErrorBanner message={submitErrorMsg} />
             </div>
           )}
         </div>
@@ -427,36 +414,24 @@ export default function UsuariosForm() {
   }
 
   return (
-    <div className="max-w-[860px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Identidad</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/usuarios')} className="hover:text-[#009574] transition-colors">Usuarios</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Registrar Usuario</span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Identidad' },
+          { label: 'Usuarios', to: '/usuarios' },
+          { label: 'Registrar Usuario' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-1">
-        <h1 className="text-2xl font-semibold text-[#333333]">Registrar Usuario</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">Crea una nueva cuenta de acceso al sistema.</p>
-      </div>
+      <FormHeader
+        title="Registrar Usuario"
+        subtitle="Crea una nueva cuenta de acceso al sistema."
+      />
 
-      <hr className="border-[#E5E7EB] my-6" />
-
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-8">
-        {isSubmitting ? (
-          <div className="flex flex-col items-center gap-3 text-[#6B7280] py-12">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Registrando usuario...</p>
-          </div>
-        ) : (
-          <Wizard steps={steps} onComplete={handleComplete} finishLabel="Registrar Usuario" />
-        )}
-      </div>
-    </div>
+      <FormCard loading={isSubmitting} loadingLabel="Registrando usuario...">
+        <Wizard steps={steps} onComplete={handleComplete} finishLabel="Registrar Usuario" />
+      </FormCard>
+    </FormPage>
   )
 }
