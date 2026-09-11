@@ -203,7 +203,7 @@ export default function AsignarRol() {
                 <Info size={13} className="text-[#009574] flex-shrink-0 mt-0.5" />
                 <span>
                   El rol <span className={`inline-flex text-[11px] font-semibold px-1.5 py-0.5 rounded-full mx-1 ${ROLE_BADGE_STYLE[rol]}`}>{ROLE_LABELS[rol]}</span>
-                  tiene acceso global al sistema. No requiere scope de división.
+                  tiene alcance global en la universidad: sus operaciones no están limitadas a una división. El acceso a los módulos y pantallas depende de los permisos de cada rol, no es acceso total al sistema.
                 </span>
               </div>
             )}
