@@ -313,9 +313,9 @@ export default function UsuarioDetalle() {
             </div>
           </div>
 
-          {/* Roles section */}
-          <div className="bg-white border border-[#E5E7EB] rounded-lg">
-            <div className="px-4 py-3 border-b border-[#E5E7EB] bg-[#F8F9FA] rounded-t-lg flex items-center justify-between">
+            {/* Roles Asignados — card exclusiva */}
+          <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#E5E7EB] bg-[#F8F9FA] flex items-center justify-between">
               <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest flex items-center gap-1.5">
                 <ShieldCheck size={13} />Roles Asignados
               </p>
@@ -326,7 +326,7 @@ export default function UsuarioDetalle() {
 
             {user.roles.length === 0 ? (
               <p className="text-[12px] text-[#6B7280] text-center py-12">
-                Sin roles asignados todavía. Asigna un rol para que el usuario pueda acceder al sistema.
+                Sin roles asignados todavía. Agrega un rol en la sección de abajo para que el usuario pueda acceder al sistema.
               </p>
             ) : (
               <MiniTable
@@ -362,15 +362,20 @@ export default function UsuarioDetalle() {
                 keyFor={row => row.userRoleId}
               />
             )}
+          </div>
 
-            <div className="border-t border-[#E5E7EB] px-4 py-4">
-              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          {/* Agregar Roles — card independiente */}
+          <div className="bg-white border border-[#E5E7EB] rounded-lg mt-4">
+            <div className="px-4 py-3 border-b border-[#E5E7EB] bg-[#F8F9FA] rounded-t-lg">
+              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest flex items-center gap-1.5">
                 <Plus size={13} />Agregar Roles
               </p>
+            </div>
 
+            <div className="px-4 py-4">
               {selectableRoles.length === 0 ? (
                 <p className="text-[12px] text-[#6B7280]">
-                  El usuario ya tiene todos los roles del catálogo.
+                  Este usuario ya tiene todos los roles del catálogo.
                 </p>
               ) : (
                 <>
