@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import { ChevronRight, Eye, EyeOff, AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, CheckCircle2, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useRole } from '@app/core/infra/RoleContext'
+import { FieldLabel, FieldError, FieldHelp, Toast } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, Button } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { apiChangePassword } from '@app/core/infra/auth'
 import type { ApiError } from '@app/core/infra/apiClient'
 
@@ -133,29 +136,23 @@ export default function CambiarPassword() {
   }
 
   return (
-    <div className="max-w-[1100px] mx-auto px-8 py-8">
+    <FormPage>
       {/* Breadcrumb — "Inicio" nav-away is disabled while a password change is
           mandatory (first login / forced change): the user must complete it
           before reaching any other authenticated route. */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        {mustChangePassword
-          ? <span className="cursor-not-allowed opacity-60">Inicio</span>
-          : <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>}
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Mi Cuenta</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Cambiar Contraseña</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: mustChangePassword ? undefined : '/dashboard' },
+          { label: 'Mi Cuenta' },
+          { label: 'Cambiar Contraseña' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Cambiar Contraseña</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">Actualiza tu contraseña de acceso al sistema.</p>
-      </div>
+      <FormHeader
+        title="Cambiar Contraseña"
+        subtitle="Actualiza tu contraseña de acceso al sistema."
+      />
 
-      <hr className="border-[#E5E7EB] mb-8" />
-
-      {/* Centered form */}
       <div className="max-w-[480px]">
         {/* Success state */}
         {done ? (
@@ -170,115 +167,88 @@ export default function CambiarPassword() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} noValidate>
-            <div className="bg-white border border-[#E5E7EB] rounded-lg p-8 space-y-6">
+            <FormCard>
+              <div className="space-y-6">
+                {/* Contraseña actual */}
+                <div>
+                  <FieldLabel required>Contraseña Actual</FieldLabel>
+                  <PasswordInput id="actual" value={actual} onChange={setActual} hasError={errActual} />
+                  {errActual && <FieldError>Este campo es obligatorio.</FieldError>}
+                </div>
 
-              {/* Contraseña actual */}
-              <div>
-                <label htmlFor="actual" className="block text-[13px] font-medium text-[#333333] mb-1.5">
-                  Contraseña Actual <span className="text-red-500">*</span>
-                </label>
-                <PasswordInput id="actual" value={actual} onChange={setActual} hasError={errActual} />
-                {errActual && (
-                  <p className="mt-1 flex items-center gap-1 text-[12px] text-red-600"><AlertCircle size={12} />Este campo es obligatorio.</p>
-                )}
-              </div>
+                {/* Nueva contraseña */}
+                <div>
+                  <FieldLabel required>Nueva Contraseña</FieldLabel>
+                  <PasswordInput id="nueva" value={nueva} onChange={setNueva} hasError={errNueva} />
 
-              {/* Nueva contraseña */}
-              <div>
-                <label htmlFor="nueva" className="block text-[13px] font-medium text-[#333333] mb-1.5">
-                  Nueva Contraseña <span className="text-red-500">*</span>
-                </label>
-                <PasswordInput id="nueva" value={nueva} onChange={setNueva} hasError={errNueva} />
-
-                {/* Strength bar */}
-                {nueva && (
-                  <div className="mt-2">
-                    <div className="h-1.5 bg-[#E5E7EB] rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-300 ${strengthColor[strength]} ${strengthWidth[strength]}`} />
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <p className={`text-[11px] font-semibold ${strengthText[strength]}`}>
-                        {strengthLabel[strength]}
-                      </p>
-                      <div className="flex gap-1">
-                        {(['weak', 'medium', 'strong'] as Strength[]).map(s => (
-                          <div key={s} className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                            (strength === 'weak' && s === 'weak') ||
-                            (strength === 'medium' && (s === 'weak' || s === 'medium')) ||
-                            (strength === 'strong')
-                              ? strengthColor[strength]
-                              : 'bg-[#E5E7EB]'
-                          }`} />
-                        ))}
+                  {/* Strength bar */}
+                  {nueva && (
+                    <div className="mt-2">
+                      <div className="h-1.5 bg-[#E5E7EB] rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-300 ${strengthColor[strength]} ${strengthWidth[strength]}`} />
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className={`text-[11px] font-semibold ${strengthText[strength]}`}>
+                          {strengthLabel[strength]}
+                        </p>
+                        <div className="flex gap-1">
+                          {(['weak', 'medium', 'strong'] as Strength[]).map(s => (
+                            <div key={s} className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                              (strength === 'weak' && s === 'weak') ||
+                              (strength === 'medium' && (s === 'weak' || s === 'medium')) ||
+                              (strength === 'strong')
+                                ? strengthColor[strength]
+                                : 'bg-[#E5E7EB]'
+                            }`} />
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {errNueva
-                  ? <p className="mt-1 flex items-center gap-1 text-[12px] text-red-600"><AlertCircle size={12} />Este campo es obligatorio.</p>
-                  : <p className="mt-1.5 text-[12px] text-[#6B7280]">Mínimo 8 caracteres, una mayúscula y un número.</p>
-                }
-              </div>
-
-              {/* Confirmar */}
-              <div>
-                <label htmlFor="confirmar" className="block text-[13px] font-medium text-[#333333] mb-1.5">
-                  Confirmar Nueva Contraseña <span className="text-red-500">*</span>
-                </label>
-                <PasswordInput id="confirmar" value={confirmar} onChange={setConfirmar} hasError={errCoincide || (submitted && !confirmar.trim())} />
-                {(noCoincide || errCoincide) && (
-                  <p className="mt-1 flex items-center gap-1 text-[12px] text-red-600"><AlertCircle size={12} />Las contraseñas no coinciden.</p>
-                )}
-                {confirmar && nueva === confirmar && (
-                  <p className="mt-1 flex items-center gap-1 text-[12px] text-emerald-600"><CheckCircle2 size={12} />Las contraseñas coinciden.</p>
-                )}
-              </div>
-
-              {/* API error banner */}
-              {apiErrorMsg && (
-                <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700">
-                  <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                  {apiErrorMsg}
+                  {errNueva
+                    ? <FieldError>Este campo es obligatorio.</FieldError>
+                    : <FieldHelp>Mínimo 8 caracteres, una mayúscula y un número.</FieldHelp>
+                  }
                 </div>
-              )}
-            </div>
+
+                {/* Confirmar */}
+                <div>
+                  <FieldLabel required>Confirmar Nueva Contraseña</FieldLabel>
+                  <PasswordInput id="confirmar" value={confirmar} onChange={setConfirmar} hasError={errCoincide || (submitted && !confirmar.trim())} />
+                  {(noCoincide || errCoincide) && (
+                    <p className="mt-1 flex items-center gap-1 text-[12px] text-red-600"><CheckCircle2 size={12} />Las contraseñas no coinciden.</p>
+                  )}
+                  {confirmar && nueva === confirmar && (
+                    <p className="mt-1 flex items-center gap-1 text-[12px] text-emerald-600"><CheckCircle2 size={12} />Las contraseñas coinciden.</p>
+                  )}
+                </div>
+
+                {/* API error banner */}
+                {apiErrorMsg && <ErrorBanner message={apiErrorMsg} />}
+              </div>
+            </FormCard>
 
             {/* Actions — Cancelar is hidden while a password change is
                 mandatory; there is nowhere else authenticated to go back to. */}
             <div className="flex items-center justify-end gap-3 mt-6">
               {!mustChangePassword && (
-                <button type="button" onClick={() => navigate('/dashboard')}
-                  className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+                <Button variant="secondary" onClick={() => navigate('/dashboard')}>
                   Cancelar
-                </button>
+                </Button>
               )}
-              <button type="submit" disabled={loading}
-                className={`flex items-center gap-2 px-5 py-2 text-[13px] font-semibold rounded-md transition-all ${
-                  loading
-                    ? 'bg-[#009574]/70 text-white cursor-not-allowed'
-                    : 'bg-[#009574] hover:bg-[#007a5e] text-white'
-                }`}>
-                {loading && (
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                )}
+              <Button type="submit" loading={loading}>
                 {loading ? 'Actualizando...' : 'Actualizar Contraseña'}
-              </button>
+              </Button>
             </div>
           </form>
         )}
-      </div>
 
-      {/* Toast */}
-      {done && (
-        <div className="fixed top-5 right-5 z-[100] flex items-center gap-3 bg-white border border-emerald-200 shadow-lg rounded-lg px-4 py-3">
-          <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
-          <span className="text-[13px] font-medium text-[#333333]">Tu contraseña se actualizó correctamente.</span>
-        </div>
-      )}
-    </div>
+        {/* Toast */}
+        {done && (
+          <Toast message="Tu contraseña se actualizó correctamente." onClose={() => setDone(false)} />
+        )}
+      </div>
+    </FormPage>
   )
 }
