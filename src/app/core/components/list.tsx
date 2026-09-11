@@ -35,7 +35,10 @@ export function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
           <span key={i} className="flex items-center gap-1.5">
             {i > 0 && <ChevronRight size={13} />}
             {item.to && !isLast ? (
-              <button onClick={() => navigate(item.to!)} className="hover:text-[#009574] transition-colors">
+              <button
+                onClick={() => navigate(item.to!)}
+                className="text-[13px] font-normal leading-normal hover:text-[#009574] transition-colors"
+              >
                 {item.label}
               </button>
             ) : (
