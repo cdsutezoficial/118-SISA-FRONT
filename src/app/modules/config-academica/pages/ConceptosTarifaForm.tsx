@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Save, X, Loader2, AlertCircle, Receipt } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, inputCls, SearchSelectField } from '@app/core/components/ui'
+import { Receipt } from 'lucide-react'
+import { FieldLabel, FieldHelp, FieldError, SearchSelectField, DatePicker } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate, useSearchParams } from 'react-router'
 import { apiGet, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
@@ -61,6 +63,21 @@ interface PaymentRateFormPayload {
 }
 
 type FormErrors = Partial<Record<'amount' | 'validFrom', string>>
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+// La API trabaja con ISO (YYYY-MM-DD); el DatePicker muestra dd/mm/yyyy — same
+// pair of helpers as `PeriodosForm.tsx`.
+function isoToDisplay(iso: string): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return d && m && y ? `${d}/${m}/${y}` : ''
+}
+
+function displayToIso(display: string): string {
+  if (!display) return ''
+  const [d, m, y] = display.split('/')
+  return y && m && d ? `${y}-${m}-${d}` : ''
+}
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
@@ -200,53 +217,30 @@ export default function ConceptosTarifaForm() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[860px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Configuración Académica</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/conceptos')} className="hover:text-[#009574] transition-colors">Conceptos de Pago</button>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate(cancelUrl())} className="hover:text-[#009574] transition-colors">
-          {concept ? concept.name : 'Detalle del Concepto'}
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Registrar Tarifa</span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Conceptos de Pago', to: '/conceptos' },
+          { label: concept ? concept.name : 'Detalle del Concepto', to: cancelUrl() },
+          { label: 'Registrar Tarifa' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Registrar Tarifa</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Agrega una nueva tarifa al historial de este concepto de pago. El historial es de solo lectura: una vez registrada, una tarifa no se edita ni se borra.
-        </p>
-      </div>
+      <FormHeader
+        title="Registrar Tarifa"
+        subtitle="Agrega una nueva tarifa al historial de este concepto de pago. El historial es de solo lectura: una vez registrada, una tarifa no se edita ni se borra."
+      />
 
       {/* Load error banner */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
 
       {/* Submit error banner */}
-      {submitStatus === 'error' && submitErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {submitErrorMsg}
-        </div>
-      )}
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {loadStatus === 'loading' ? (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg px-4 py-16 text-center mb-6">
-          <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-            <Loader2 size={24} className="animate-spin text-[#009574]" />
-            <p className="text-[13px] font-medium">Cargando información del concepto...</p>
-          </div>
-        </div>
+        <FormCard loading loadingLabel="Cargando información del concepto..." />
       ) : loadStatus === 'error' ? null : (
         <>
           {/* Context card */}
@@ -261,7 +255,7 @@ export default function ConceptosTarifaForm() {
           </div>
 
           {/* Form card */}
-          <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+          <FormCard>
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-4">Alcance de la Tarifa</p>
 
             <div className="grid grid-cols-12 gap-4 mb-2">
@@ -279,21 +273,16 @@ export default function ConceptosTarifaForm() {
                 <FieldHelp>Vacío = aplica a todos los programas.</FieldHelp>
               </div>
               {/* Nivel */}
-              <div className="col-span-12 sm:col-span-6">
-                <FieldLabel>Nivel</FieldLabel>
-                <select
-                  value={level}
-                  onChange={e => setLevel(e.target.value as AcademicLevel | '')}
-                  disabled={disabled}
-                  className={inputCls(disabled, false) + ' appearance-none'}
-                >
-                  <option value="">Todos los niveles</option>
-                  {(Object.keys(LEVEL_LABELS) as AcademicLevel[]).map(l => (
-                    <option key={l} value={l}>{LEVEL_LABELS[l]}</option>
-                  ))}
-                </select>
-                <FieldHelp>Vacío = aplica a todos los niveles.</FieldHelp>
-              </div>
+              <SelectField
+                label="Nivel"
+                value={level}
+                onChange={v => setLevel(v as AcademicLevel | '')}
+                disabled={disabled}
+                options={(Object.keys(LEVEL_LABELS) as AcademicLevel[]).map(l => ({ value: l, label: LEVEL_LABELS[l] }))}
+                placeholder="Todos los niveles"
+                help="Vacío = aplica a todos los niveles."
+                className="col-span-12 sm:col-span-6"
+              />
               {/* Periodo Académico */}
               <div className="col-span-12">
                 <FieldLabel>Periodo Académico</FieldLabel>
@@ -319,53 +308,43 @@ export default function ConceptosTarifaForm() {
 
             <div className="grid grid-cols-12 gap-4">
               {/* Monto */}
-              <div className="col-span-12 sm:col-span-6">
-                <FieldLabel required>Monto</FieldLabel>
-                <input
-                  type="number" min={0} step="0.01"
-                  value={amount}
-                  onChange={e => { setAmount(e.target.value); clearErr('amount') }}
-                  disabled={disabled}
-                  className={inputCls(disabled, !!errors.amount) + ' tabular-nums'}
-                  placeholder="Ej. 3500.00"
-                />
-                {errors.amount && <FieldError>{errors.amount}</FieldError>}
-              </div>
+              <TextField
+                label="Monto"
+                required
+                value={amount}
+                onChange={v => { setAmount(v); clearErr('amount') }}
+                disabled={disabled}
+                error={errors.amount}
+                type="number"
+                min={0}
+                step="0.01"
+                numeric
+                placeholder="Ej. 3500.00"
+                className="col-span-12 sm:col-span-6"
+              />
               {/* Vigente desde */}
               <div className="col-span-12 sm:col-span-6">
                 <FieldLabel required>Vigente desde</FieldLabel>
-                <input
-                  type="date"
-                  value={validFrom}
-                  onChange={e => { setValidFrom(e.target.value); clearErr('validFrom') }}
+                <DatePicker
+                  value={isoToDisplay(validFrom)}
+                  onChange={v => { setValidFrom(displayToIso(v)); clearErr('validFrom') }}
                   disabled={disabled}
-                  className={inputCls(disabled, !!errors.validFrom)}
                 />
                 {errors.validFrom && <FieldError>{errors.validFrom}</FieldError>}
               </div>
             </div>
-          </div>
+          </FormCard>
 
           {/* Actions */}
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-            <button
-              onClick={() => navigate(cancelUrl())}
-              disabled={isSubmitting}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <X size={14} />Cancelar
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              Registrar Tarifa
-            </button>
-          </div>
+          <FormActions
+            isView={false}
+            onBack={() => navigate(cancelUrl())}
+            onPrimary={handleSubmit}
+            primaryLabel="Registrar Tarifa"
+            isSubmitting={isSubmitting}
+          />
         </>
       )}
-    </div>
+    </FormPage>
   )
 }
