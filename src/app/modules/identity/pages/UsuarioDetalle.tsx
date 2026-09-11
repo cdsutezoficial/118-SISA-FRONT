@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
-  ChevronRight, ShieldCheck, X, Plus, LockKeyholeOpen, Loader2, AlertCircle,
-  Clock, CalendarPlus,
+  ShieldCheck, X, Plus, LockKeyholeOpen, Clock, CalendarPlus, ArrowLeft, Loader2,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { apiGet, apiDelete, apiPatch } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 import { ConfirmModal, Toast, ActionBtn } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, Button, MiniTable } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { ROLE_LABELS, ROLE_BADGE_STYLE } from '../data/roles'
 import type { RoleType } from '../data/roles'
 
@@ -155,8 +156,10 @@ export default function UsuarioDetalle() {
     }
   }
 
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
+    <FormPage>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
       {revokeTarget && (
         <ConfirmModal
@@ -168,44 +171,28 @@ export default function UsuarioDetalle() {
         />
       )}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4 flex-wrap">
-        <button onClick={() => navigate('/dashboard')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Identidad</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/usuarios')} className="hover:text-[#009574] transition-colors">Usuarios</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Detalle</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Identidad' },
+          { label: 'Usuarios', to: '/usuarios' },
+          { label: 'Detalle' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">{user?.fullName ?? 'Detalle del Usuario'}</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">Información completa de la cuenta de usuario.</p>
-      </div>
+      <FormHeader
+        title={user?.fullName ?? 'Detalle del Usuario'}
+        subtitle="Información completa de la cuenta de usuario."
+      />
 
       {/* Load error banner */}
-      {loadStatus === 'error' && loadErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {loadErrorMsg}
-        </div>
-      )}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
 
       {/* Action error banner (revoke/unlock) */}
-      {actionErrorMsg && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-          {actionErrorMsg}
-        </div>
-      )}
+      {actionErrorMsg && <ErrorBanner message={actionErrorMsg} />}
 
       {loadStatus === 'loading' ? (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg p-16 flex flex-col items-center gap-3 text-[#6B7280]">
-          <Loader2 size={24} className="animate-spin text-[#009574]" />
-          <p className="text-[13px] font-medium">Cargando usuario...</p>
-        </div>
+        <FormCard loading loadingLabel="Cargando usuario..." />
       ) : user ? (
         <>
           {/* Summary card */}
@@ -270,65 +257,60 @@ export default function UsuarioDetalle() {
                 <ShieldCheck size={13} />Roles Asignados
               </p>
             </div>
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Rol</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-56">Scope (División)</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {user.roles.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-12 text-center">
-                      <div className="flex flex-col items-center gap-2 text-[#6B7280]">
-                        <ShieldCheck size={28} className="text-[#E5E7EB]" />
-                        <p className="text-[13px] font-medium">Sin roles asignados</p>
-                        <p className="text-[12px]">Asigna un rol para que el usuario pueda acceder al sistema.</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  user.roles.map(row => (
-                    <tr key={row.userRoleId} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                      <td className="px-4 py-3">
-                        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${ROLE_BADGE_STYLE[row.roleType]}`}>
-                          {ROLE_LABELS[row.roleType]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[#333333]">{divisionLabel(row.divisionId)}</td>
-                      <td className="px-4 py-3">
+
+            {user.roles.length === 0 ? (
+              <p className="text-[12px] text-[#6B7280] text-center py-12">
+                Sin roles asignados todavía. Asigna un rol para que el usuario pueda acceder al sistema.
+              </p>
+            ) : (
+              <MiniTable
+                columns={[
+                  {
+                    key: 'rol',
+                    header: 'Rol',
+                    render: row => (
+                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${ROLE_BADGE_STYLE[row.roleType]}`}>
+                        {ROLE_LABELS[row.roleType]}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'scope',
+                    header: 'Scope (División)',
+                    className: 'w-56',
+                    render: row => <span className="text-[#333333]">{divisionLabel(row.divisionId)}</span>,
+                  },
+                  {
+                    key: 'acciones',
+                    header: '',
+                    className: 'w-16',
+                    render: row => (
+                      <div className="flex items-center justify-end gap-1">
                         <ActionBtn icon={<X size={15} />} tooltip="Revocar rol" danger onClick={() => setRevokeTarget(row)} />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                    ),
+                  },
+                ]}
+                items={user.roles}
+                keyFor={row => row.userRoleId}
+              />
+            )}
 
             <div className="border-t border-[#E5E7EB] px-4 py-3">
-              <button
-                type="button"
-                onClick={() => navigate(`/usuarios/asignar-rol?userId=${user.userId}`)}
-                className="flex items-center gap-1.5 text-[12px] font-medium text-[#009574] hover:text-[#007a5e] transition-colors"
-              >
+              <Button variant="ghost" size="sm" onClick={() => navigate(`/usuarios/asignar-rol?userId=${user.userId}`)}>
                 <Plus size={14} />Asignar Rol
-              </button>
+              </Button>
             </div>
           </div>
 
-          {/* Action zone */}
-          <div className="flex items-center justify-end gap-3 mt-8">
-            <button
-              onClick={() => navigate('/usuarios')}
-              className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-            >
-              Regresar
-            </button>
+          {/* Actions */}
+          <div className="flex items-center justify-end mt-6">
+            <Button variant="secondary" onClick={() => navigate('/usuarios')}>
+              <ArrowLeft size={14} />Regresar
+            </Button>
           </div>
         </>
       ) : null}
-    </div>
+    </FormPage>
   )
 }
