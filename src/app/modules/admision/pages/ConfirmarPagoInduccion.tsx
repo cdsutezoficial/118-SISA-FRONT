@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { ChevronRight, CreditCard } from 'lucide-react'
-import { FieldLabel, FieldError, SimpleSelect, DatePicker, inputCls } from '@app/core/components/ui'
+import { FieldLabel, FieldError, DatePicker, ReadField } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
+import { Breadcrumb } from '@app/core/components/list'
 import { FileUpload, type UploadedFile } from '@app/core/components/FileUpload'
 import { mockCandidates } from '../data/mockData'
 import type { Candidate } from '../data/types'
@@ -63,16 +64,6 @@ function buildReferencia(folio: string): string {
   return `REF-IND-${yyyy}${mm}${dd}-${suffix}`
 }
 
-/** Read-only summary field — mirrors the page-local `ReadField` pattern already used in `ConfirmarPagoFicha.tsx`/`CandidatoDetalle.tsx`/`CandidatoRegistro.tsx`/`FichaConfirmacion.tsx`. */
-function ReadField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
-      <p className={`text-[13px] text-[#333333] ${mono ? 'font-mono' : 'font-medium'}`}>{value || '—'}</p>
-    </div>
-  )
-}
-
 interface FormErrors {
   fecha?: string
   metodo?: string
@@ -128,30 +119,24 @@ export default function ConfirmarPagoInduccion() {
   }
 
   return (
-    <div className="max-w-[900px] mx-auto px-8 py-8">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4 flex-wrap">
-        <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">Admisión</button>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/admision/candidatos')} className="hover:text-[#009574] transition-colors">Candidatos</button>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate(`/admision/candidatos/detalle?id=${candidate.id}`)} className="hover:text-[#009574] transition-colors">Detalle</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Confirmar Pago Inducción</span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/admision' },
+          { label: 'Admisión', to: '/admision' },
+          { label: 'Candidatos', to: '/admision/candidatos' },
+          { label: 'Detalle', to: `/admision/candidatos/detalle?id=${candidate.id}` },
+          { label: 'Confirmar Pago Inducción' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Confirmar Pago del Curso de Inducción</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Registra el pago del curso de inducción del candidato. Este comprobante es requisito para asistir al curso y para que se pueda registrar el resultado.
-        </p>
-      </div>
+      <FormHeader
+        title="Confirmar Pago del Curso de Inducción"
+        subtitle="Registra el pago del curso de inducción del candidato. Este comprobante es requisito para asistir al curso y para que se pueda registrar el resultado."
+      />
 
       {/* Informative card (read-only) */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg px-6 py-5 mb-6">
+      <FormCard>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-6">
           <ReadField label="Candidato" value={candidate.nombre} />
           <ReadField label="Folio" value={candidate.folio} mono />
@@ -159,51 +144,50 @@ export default function ConfirmarPagoInduccion() {
           <ReadField label="Referencia Generada" value={referenciaGenerada} mono />
           <ReadField label="Monto Esperado" value={`$${INDUCCION_MONTO.toFixed(2)}`} />
         </div>
-      </div>
+      </FormCard>
 
       {/* Form */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+      <FormCard>
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 sm:col-span-4">
             <FieldLabel required>Fecha de Pago</FieldLabel>
             <DatePicker value={fecha} onChange={v => { setFecha(v); clearErr('fecha') }} />
             {errors.fecha && <FieldError>{errors.fecha}</FieldError>}
           </div>
-          <div className="col-span-12 sm:col-span-4">
-            <FieldLabel required>Método de Pago</FieldLabel>
-            <SimpleSelect
-              options={METODOS_PAGO}
-              value={metodo}
-              onChange={v => { setMetodo(v); clearErr('metodo') }}
-              placeholder="Selecciona un método"
-            />
-            {errors.metodo && <FieldError>{errors.metodo}</FieldError>}
-          </div>
-          <div className="col-span-12 sm:col-span-4">
-            <FieldLabel required>Monto Recibido</FieldLabel>
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              value={monto}
-              onChange={e => { setMonto(e.target.value); clearErr('monto') }}
-              className={inputCls(false, !!errors.monto)}
-              placeholder="350.00"
-            />
-            {errors.monto && <FieldError>{errors.monto}</FieldError>}
-          </div>
+          <SelectField
+            label="Método de Pago"
+            required
+            value={metodo}
+            onChange={v => { setMetodo(v); clearErr('metodo') }}
+            error={errors.metodo}
+            options={METODOS_PAGO.map(m => ({ value: m, label: m }))}
+            placeholder="Selecciona un método"
+            className="col-span-12 sm:col-span-4"
+          />
+          <TextField
+            label="Monto Recibido"
+            required
+            type="number"
+            step="0.01"
+            min={0}
+            numeric
+            value={monto}
+            onChange={v => { setMonto(v); clearErr('monto') }}
+            error={errors.monto}
+            placeholder="350.00"
+            className="col-span-12 sm:col-span-4"
+          />
 
-          <div className="col-span-12 sm:col-span-8">
-            <FieldLabel required>Número de Comprobante / Recibo</FieldLabel>
-            <input
-              value={comprobanteNumero}
-              onChange={e => { setComprobanteNumero(e.target.value); clearErr('comprobanteNumero') }}
-              className={inputCls(false, !!errors.comprobanteNumero)}
-              placeholder="Número de comprobante o recibo"
-            />
-            {errors.comprobanteNumero && <FieldError>{errors.comprobanteNumero}</FieldError>}
-            <p className="text-[11px] text-[#6B7280] mt-1">El candidato debe presentar este comprobante para asistir al curso de inducción.</p>
-          </div>
+          <TextField
+            label="Número de Comprobante / Recibo"
+            required
+            value={comprobanteNumero}
+            onChange={v => { setComprobanteNumero(v); clearErr('comprobanteNumero') }}
+            error={errors.comprobanteNumero}
+            placeholder="Número de comprobante o recibo"
+            help="El candidato debe presentar este comprobante para asistir al curso de inducción."
+            className="col-span-12 sm:col-span-8"
+          />
           <div className="col-span-12 sm:col-span-4">
             <FileUpload
               label="Comprobante Digital"
@@ -213,23 +197,15 @@ export default function ConfirmarPagoInduccion() {
             />
           </div>
         </div>
-      </div>
+      </FormCard>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-3">
-        <button
-          onClick={() => navigate(`/admision/candidatos/detalle?id=${candidate.id}`)}
-          className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={handleConfirmar}
-          className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-        >
-          <CreditCard size={14} />Confirmar Pago
-        </button>
-      </div>
-    </div>
+      <FormActions
+        isView={false}
+        onBack={() => navigate(`/admision/candidatos/detalle?id=${candidate.id}`)}
+        onPrimary={handleConfirmar}
+        primaryLabel="Confirmar Pago"
+      />
+    </FormPage>
   )
 }

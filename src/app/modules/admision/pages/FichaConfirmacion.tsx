@@ -8,9 +8,10 @@ import {
   CreditCard,
   Building2,
   Loader2,
-  ChevronRight,
 } from 'lucide-react'
-import { Toast } from '@app/core/components/ui'
+import { Toast, Tabs, ReadField } from '@app/core/components/ui'
+import { FormPage, Button } from '@app/core/components/form'
+import { Breadcrumb } from '@app/core/components/list'
 import { formatDate } from '@app/core/infra/utils'
 import { mockCandidates } from '../data/mockData'
 import type { Candidate } from '../data/types'
@@ -65,16 +66,6 @@ function buildReferencia(folio: string): string {
   const mm = String(today.getMonth() + 1).padStart(2, '0')
   const dd = String(today.getDate()).padStart(2, '0')
   return `REF-${yyyy}${mm}${dd}-${suffix}`
-}
-
-/** Read-only summary field — mirrors the page-local `ReadField` pattern already used in `CandidatoDetalle.tsx`/`CandidatoRegistro.tsx`. */
-function ReadField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
-      <p className={`text-[13px] text-[#333333] ${mono ? 'font-mono' : 'font-medium'}`}>{value || '—'}</p>
-    </div>
-  )
 }
 
 export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
@@ -154,41 +145,23 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
   const tabsSection = (
     <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
       <p className="text-[13px] font-semibold text-[#333333] mb-4">Instrucciones de pago</p>
-      <div className="flex items-center gap-1 border-b border-[#E5E7EB] mb-5">
-        <button
-          type="button"
-          onClick={() => setActiveTab('ONLINE')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
-            activeTab === 'ONLINE' ? 'border-[#009574] text-[#009574]' : 'border-transparent text-[#6B7280] hover:text-[#333333]'
-          }`}
-        >
-          <CreditCard size={14} />Pago en línea
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('VENTANILLA')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
-            activeTab === 'VENTANILLA' ? 'border-[#009574] text-[#009574]' : 'border-transparent text-[#6B7280] hover:text-[#333333]'
-          }`}
-        >
-          <Building2 size={14} />Pago en ventanilla
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { key: 'ONLINE', label: 'Pago en línea', icon: <CreditCard size={14} /> },
+          { key: 'VENTANILLA', label: 'Pago en ventanilla', icon: <Building2 size={14} /> },
+        ]}
+        active={activeTab}
+        onSelect={k => setActiveTab(k as MetodoPago)}
+      />
 
       {activeTab === 'ONLINE' ? (
         <div>
           <div className="bg-blue-50 border border-blue-200 rounded-md px-4 py-3 mb-4 text-[13px] text-blue-700">
             Haz clic en el botón de abajo para pagar de forma segura con tarjeta o transferencia. Serás redirigido a Evo Payments.
           </div>
-          <button
-            type="button"
-            onClick={handlePagarEnLinea}
-            disabled={payingOverlay}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-[14px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {payingOverlay && <Loader2 size={16} className="animate-spin" />}
+          <Button onClick={handlePagarEnLinea} loading={payingOverlay} className="w-full sm:w-auto">
             Pagar en línea — ${candidate.pagoFicha.monto.toFixed(2)}
-          </button>
+          </Button>
           <p className="text-[12px] text-[#6B7280] mt-3">
             Una vez confirmado el pago recibirás un correo de confirmación y podrás continuar con el proceso.
           </p>
@@ -214,20 +187,12 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
 
   const actionsRow = (
     <div className="flex flex-wrap items-center gap-3 mb-4">
-      <button
-        type="button"
-        onClick={handleDescargarPdf}
-        className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-      >
+      <Button variant="secondary" onClick={handleDescargarPdf}>
         <Download size={14} />Descargar ficha en PDF
-      </button>
-      <button
-        type="button"
-        onClick={handleEnviarCorreo}
-        className="flex items-center gap-2 px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-      >
+      </Button>
+      <Button variant="secondary" onClick={handleEnviarCorreo}>
         <Mail size={14} />Enviar instrucciones a mi correo
-      </button>
+      </Button>
     </div>
   )
 
@@ -250,36 +215,31 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           listing' link" — an anonymous candidate has no candidate listing to
           return to. */}
       {origin === 'staff' && (
-        <button
-          type="button"
-          onClick={() => navigate('/admision/candidatos')}
-          className="text-[12px] text-[#6B7280] hover:text-[#009574] transition-colors"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate('/admision/candidatos')}>
           ← Volver al listado de candidatos
-        </button>
+        </Button>
       )}
     </div>
   )
 
-  // ── Staff mount — AppLayout shell, sidebar/breadcrumb present ──
+  // ── Staff mount — AppLayout shell, sidebar present; chrome aligned to core ──
   if (origin === 'staff') {
     return (
-      <div className="max-w-[960px] mx-auto px-8 py-8">
+      <FormPage>
         {toast && <Toast message={toast} onClose={() => setToast('')} />}
         {overlay}
 
-        <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-          <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">Inicio</button>
-          <ChevronRight size={13} />
-          <span className="text-[#6B7280]">Admisión</span>
-          <ChevronRight size={13} />
-          <button onClick={() => navigate('/admision/candidatos')} className="hover:text-[#009574] transition-colors">Candidatos</button>
-          <ChevronRight size={13} />
-          <span className="text-[#333333] font-medium">Ficha de Admisión</span>
-        </nav>
+        <Breadcrumb
+          items={[
+            { label: 'Inicio', to: '/admision' },
+            { label: 'Admisión', to: '/admision' },
+            { label: 'Candidatos', to: '/admision/candidatos' },
+            { label: 'Ficha de Admisión' },
+          ]}
+        />
 
         {content}
-      </div>
+      </FormPage>
     )
   }
 
