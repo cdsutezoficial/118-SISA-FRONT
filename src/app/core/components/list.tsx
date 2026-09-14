@@ -1,5 +1,5 @@
-import { type ReactNode, useRef, useState, useEffect } from 'react'
-import { ChevronRight, ChevronLeft, ChevronDown, Loader2, Search, AlertCircle, Plus, Eye, Pencil, Trash2 } from 'lucide-react'
+import { type ReactNode, Fragment, useRef, useState, useEffect } from 'react'
+import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Loader2, Search, AlertCircle, Plus, Eye, Pencil, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { ActionBtn, Switch } from '@app/core/components/ui'
 
@@ -461,6 +461,13 @@ interface DataTableProps<T> {
   header?: ReactNode
   /** true → la tabla se muestra también en móvil (con scroll horizontal) en lugar de ocultarse (< md). */
   showOnMobile?: boolean
+  /** Fila expandible opcional: cuando `expandedId === keyFor(row)` añade una fila de ancho completo con `render`. */
+  detail?: {
+    expandedId: string | null
+    onExpand: (id: string | null) => void
+    tooltip?: string
+    render: (row: T) => ReactNode
+  }
 }
 
 export function DataTable<T>({
@@ -481,6 +488,7 @@ export function DataTable<T>({
   rowNumberOffset = 0,
   header,
   showOnMobile = false,
+  detail,
 }: DataTableProps<T>) {
   const numberedColumn: ColumnDef<T> = {
     key: '__rowNum__',
@@ -553,6 +561,13 @@ export function DataTable<T>({
     if (!actions) return null
     return (
       <TableActions>
+        {detail && (
+          <ActionBtn
+            icon={detail.expandedId === keyFor(row) ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            tooltip={detail.tooltip ?? 'Ver detalles'}
+            onClick={() => detail.onExpand(detail.expandedId === keyFor(row) ? null : keyFor(row))}
+          />
+        )}
         {actions.extraFirst && actions.extraFirst(row)}
         {actions.view && <ActionBtn icon={<Eye size={15} />} tooltip={actions.viewTooltip ?? 'Ver'} onClick={() => actions.view!(row)} />}
         {actions.edit && <ActionBtn icon={<Pencil size={15} />} tooltip={actions.editTooltip ?? 'Editar'} disabled={actions.editDisabled?.(row) ?? false} onClick={() => actions.edit!(row)} />}
@@ -602,13 +617,22 @@ export function DataTable<T>({
             </tr>
           ) : (
             items.map((item, index) => (
-              <tr key={keyFor(item)} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                {allColumns.map(col => (
-                  <td key={col.key} className={`px-2.5 py-3 ${col.cellClassName ?? ''}`}>
-                    {col.key === '__actions__' ? renderActions(item) : renderCell(col, item, index)}
-                  </td>
-                ))}
-              </tr>
+              <Fragment key={keyFor(item)}>
+                <tr className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
+                  {allColumns.map(col => (
+                    <td key={col.key} className={`px-2.5 py-3 ${col.cellClassName ?? ''}`}>
+                      {col.key === '__actions__' ? renderActions(item) : renderCell(col, item, index)}
+                    </td>
+                  ))}
+                </tr>
+                {detail && detail.expandedId === keyFor(item) && (
+                  <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
+                    <td colSpan={colSpan} className="p-0">
+                      {detail.render(item)}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))
           )}
         </tbody>
