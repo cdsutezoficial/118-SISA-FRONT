@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight, Search, BadgePercent, Info } from 'lucide-react'
-import { FieldLabel, FieldError, SimpleSelect, inputCls, Toast } from '@app/core/components/ui'
+import { Search, Info } from 'lucide-react'
+import { FieldLabel, FieldError, inputCls, Toast, ReadField, RadioCard } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, Button, SelectField } from '@app/core/components/form'
+import { Breadcrumb, SearchInput } from '@app/core/components/list'
 import { mockCandidates } from '../data/mockData'
 import { STATUS_META, type Candidate } from '../data/types'
 
@@ -43,38 +45,6 @@ type Concepto = 'Ficha de Admisión' | 'Curso de Inducción'
 type TipoDescuento = 'Porcentaje' | 'Sin costo (100%)'
 
 const CONCEPTOS: Concepto[] = ['Ficha de Admisión', 'Curso de Inducción']
-
-/** Read-only summary field — mirrors the page-local `ReadField` pattern already used across the Admisión screens (`ConfirmarPagoFicha.tsx`, `PublicarResultados.tsx`, etc.). */
-function ReadField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
-      <p className={`text-[13px] text-[#333333] ${mono ? 'font-mono' : 'font-medium'}`}>{value || '—'}</p>
-    </div>
-  )
-}
-
-/** Radio card — same shared visual as `CandidatoRegistro.tsx`'s `RadioCard` (Nacionalidad, isFirstChoice, método de pago), reproduced locally since it isn't exported there. */
-function RadioCard({ selected, title, onSelect }: { selected: boolean; title: string; onSelect: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`w-full text-left flex items-center gap-3 px-4 py-3 border rounded-lg transition-colors ${
-        selected ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
-      }`}
-    >
-      <span
-        className={`flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-          selected ? 'border-[#009574]' : 'border-[#E5E7EB]'
-        }`}
-      >
-        {selected && <span className="w-2 h-2 rounded-full bg-[#009574]" />}
-      </span>
-      <span className="text-[13px] font-semibold text-[#333333]">{title}</span>
-    </button>
-  )
-}
 
 interface FormErrors {
   concepto?: string
@@ -167,47 +137,30 @@ export default function AplicarDescuento() {
   const bannerIsFree = tipo === 'Sin costo (100%)'
 
   return (
-    <div className="max-w-[900px] mx-auto px-8 py-8">
+    <FormPage>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">
-          Inicio
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Admisión</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Descuentos</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/admision' },
+          { label: 'Admisión' },
+          { label: 'Descuentos' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Aplicar Descuento</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Busca un candidato y aplica un descuento a su pago de ficha de admisión o al curso de inducción.
-        </p>
-      </div>
+      <FormHeader
+        title="Aplicar Descuento"
+        subtitle="Busca un candidato y aplica un descuento a su pago de ficha de admisión o al curso de inducción."
+      />
 
       {/* Search bar (full width) */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-          <input
-            type="text"
-            placeholder="Buscar por folio, nombre completo o CURP"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleBuscar() }}
-            className="w-full pl-9 pr-3 py-2.5 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition"
-          />
-        </div>
-        <button
-          onClick={handleBuscar}
-          className="px-4 py-2.5 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-        >
-          Buscar
-        </button>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Buscar por folio, nombre completo o CURP"
+        />
+        <Button onClick={handleBuscar}>Buscar</Button>
       </div>
 
       {hasSearched && !resultCandidate && (
@@ -220,7 +173,7 @@ export default function AplicarDescuento() {
       {resultCandidate && (
         <>
           {/* Result card (read-only) */}
-          <div className="bg-white border border-[#E5E7EB] rounded-lg px-6 py-5 mb-6">
+          <FormCard>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-6">
               <ReadField label="Nombre" value={resultCandidate.nombre} />
               <ReadField label="Folio" value={resultCandidate.folio} mono />
@@ -235,22 +188,22 @@ export default function AplicarDescuento() {
                 </span>
               </div>
             </div>
-          </div>
+          </FormCard>
 
           {/* Configurar descuento */}
-          <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+          <FormCard>
             <h2 className="text-[14px] font-semibold text-[#333333] mb-4">Configurar descuento</h2>
             <div className="grid grid-cols-12 gap-4">
-              <div className="col-span-12 sm:col-span-6">
-                <FieldLabel required>Concepto</FieldLabel>
-                <SimpleSelect
-                  options={CONCEPTOS}
-                  value={concepto}
-                  onChange={v => { setConcepto(v as Concepto); clearErr('concepto') }}
-                  placeholder="Selecciona un concepto"
-                />
-                {errors.concepto && <FieldError>{errors.concepto}</FieldError>}
-              </div>
+              <SelectField
+                label="Concepto"
+                required
+                value={concepto}
+                onChange={v => { setConcepto(v as Concepto); clearErr('concepto') }}
+                error={errors.concepto}
+                options={CONCEPTOS.map(c => ({ value: c, label: c }))}
+                placeholder="Selecciona un concepto"
+                className="col-span-12 sm:col-span-6"
+              />
               <div className="col-span-12 sm:col-span-6">
                 <FieldLabel required>Tipo de descuento</FieldLabel>
                 <div className="grid grid-cols-2 gap-3">
@@ -310,25 +263,17 @@ export default function AplicarDescuento() {
                 </div>
               </div>
             )}
-          </div>
+          </FormCard>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3">
-            <button
-              onClick={() => navigate('/admision')}
-              className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleAplicar}
-              className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-            >
-              <BadgePercent size={14} />Aplicar Descuento
-            </button>
-          </div>
+          <FormActions
+            isView={false}
+            onBack={() => navigate('/admision')}
+            onPrimary={handleAplicar}
+            primaryLabel="Aplicar Descuento"
+          />
         </>
       )}
-    </div>
+    </FormPage>
   )
 }

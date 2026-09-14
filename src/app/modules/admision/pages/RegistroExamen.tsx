@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { ChevronRight, Save } from 'lucide-react'
-import { FieldLabel, FieldError, DatePicker, inputCls } from '@app/core/components/ui'
+import { FieldLabel, FieldError, DatePicker, ReadField } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField, TextAreaField } from '@app/core/components/form'
+import { Breadcrumb } from '@app/core/components/list'
 import { mockCandidates } from '../data/mockData'
 import { EXAM_PASSING_SCORE, getExamResultLabel, type Candidate } from '../data/types'
 
@@ -32,16 +33,6 @@ import { EXAM_PASSING_SCORE, getExamResultLabel, type Candidate } from '../data/
  * submit only simulates the save via toast + redirect; it does not persist
  * `examen` for other screens to see.
  */
-
-/** Read-only summary field — mirrors the page-local `ReadField` pattern used across the Admisión Registro/Confirmar screens. */
-function ReadField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
-      <p className={`text-[13px] text-[#333333] ${mono ? 'font-mono' : 'font-medium'}`}>{value || '—'}</p>
-    </div>
-  )
-}
 
 interface FormErrors {
   fecha?: string
@@ -95,39 +86,33 @@ export default function RegistroExamen() {
   const resultado = showResultado ? getExamResultLabel(calificacionNum) : null
 
   return (
-    <div className="max-w-[900px] mx-auto px-8 py-8">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4 flex-wrap">
-        <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">Admisión</button>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/admision/candidatos')} className="hover:text-[#009574] transition-colors">Candidatos</button>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate(`/admision/candidatos/detalle?id=${candidate.id}`)} className="hover:text-[#009574] transition-colors">Detalle</button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Registrar Resultado de Examen</span>
-      </nav>
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/admision' },
+          { label: 'Admisión', to: '/admision' },
+          { label: 'Candidatos', to: '/admision/candidatos' },
+          { label: 'Detalle', to: `/admision/candidatos/detalle?id=${candidate.id}` },
+          { label: 'Registrar Resultado de Examen' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Registrar Resultado del Examen de Admisión</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Captura la calificación obtenida en el examen de admisión.
-        </p>
-      </div>
+      <FormHeader
+        title="Registrar Resultado del Examen de Admisión"
+        subtitle="Captura la calificación obtenida en el examen de admisión."
+      />
 
       {/* Informative card (read-only) */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg px-6 py-5 mb-6">
+      <FormCard>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
           <ReadField label="Candidato" value={candidate.nombre} />
           <ReadField label="Folio" value={candidate.folio} mono />
           <ReadField label="Programa Solicitado" value={candidate.programa} />
         </div>
-      </div>
+      </FormCard>
 
       {/* Form */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+      <FormCard>
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 sm:col-span-4">
             <FieldLabel required>Fecha del Examen</FieldLabel>
@@ -135,57 +120,50 @@ export default function RegistroExamen() {
             {errors.fecha && <FieldError>{errors.fecha}</FieldError>}
           </div>
           <div className="col-span-12 sm:col-span-4">
-            <FieldLabel required>Calificación Obtenida</FieldLabel>
-            <input
+            <TextField
+              label="Calificación Obtenida"
+              required
               type="number"
               min={0}
               max={100}
               step={1}
+              numeric
               value={calificacion}
-              onChange={e => { setCalificacion(e.target.value); clearErr('calificacion') }}
-              className={inputCls(false, !!errors.calificacion)}
+              onChange={v => { setCalificacion(v); clearErr('calificacion') }}
+              error={errors.calificacion}
               placeholder="0-100"
             />
-            {errors.calificacion && <FieldError>{errors.calificacion}</FieldError>}
             {resultado && (
               <p className={`mt-1.5 text-[12px] font-semibold ${resultado === 'Aprobado' ? 'text-emerald-600' : 'text-red-600'}`}>
                 Resultado: {resultado}
               </p>
             )}
           </div>
-          <div className="col-span-12 sm:col-span-4">
-            <FieldLabel>Calificación Mínima Aprobatoria</FieldLabel>
-            <input value={String(EXAM_PASSING_SCORE)} disabled className={inputCls(true, false)} />
-          </div>
+          <TextField
+            label="Calificación Mínima Aprobatoria"
+            value={String(EXAM_PASSING_SCORE)}
+            disabled
+            className="col-span-12 sm:col-span-4"
+          />
 
-          <div className="col-span-12">
-            <FieldLabel>Observaciones</FieldLabel>
-            <textarea
-              value={observaciones}
-              onChange={e => setObservaciones(e.target.value)}
-              rows={4}
-              className={inputCls(false, false) + ' resize-none'}
-              placeholder="Notas adicionales sobre el examen de admisión."
-            />
-          </div>
+          <TextAreaField
+            label="Observaciones"
+            value={observaciones}
+            onChange={setObservaciones}
+            rows={4}
+            placeholder="Notas adicionales sobre el examen de admisión."
+            className="col-span-12"
+          />
         </div>
-      </div>
+      </FormCard>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-3">
-        <button
-          onClick={() => navigate(`/admision/candidatos/detalle?id=${candidate.id}`)}
-          className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={handleGuardar}
-          className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Save size={14} />Guardar Resultado
-        </button>
-      </div>
-    </div>
+      <FormActions
+        isView={false}
+        onBack={() => navigate(`/admision/candidatos/detalle?id=${candidate.id}`)}
+        onPrimary={handleGuardar}
+        primaryLabel="Guardar Resultado"
+      />
+    </FormPage>
   )
 }
