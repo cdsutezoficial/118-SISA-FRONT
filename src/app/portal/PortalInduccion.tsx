@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { AlertCircle, GraduationCap, Loader2 } from 'lucide-react'
+import { GraduationCap, Loader2 } from 'lucide-react'
+import { Button, TextField } from '@app/core/components/form'
+import { ErrorBanner } from '@app/core/components/list'
 import { useRole } from '@app/core/infra/RoleContext'
 import { mockCandidates } from '@app/modules/admision/data/mockData'
 import type { Candidate } from '@app/modules/admision/data/types'
@@ -150,15 +152,15 @@ export default function PortalInduccion() {
               <p className="text-[12px] text-[#6B7280] mb-4">
                 Accede de forma segura con tu identidad digital LlaveMX.
               </p>
-              <button
+              <Button
                 type="button"
                 onClick={handleLlaveMX}
                 disabled={llaveLoading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold bg-[#009574] hover:bg-[#007a5e] active:scale-[0.99] text-white transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full py-2.5"
               >
                 {llaveLoading ? <Loader2 size={16} className="animate-spin" /> : <LlaveMXIcon />}
                 Acceder con LlaveMX
-              </button>
+              </Button>
             </div>
 
             {/* Separador */}
@@ -173,51 +175,37 @@ export default function PortalInduccion() {
               <p className="text-[13px] font-semibold text-[#333333] mb-3">Acceso con datos de ficha</p>
 
               <div className="mb-3">
-                <label htmlFor="folio" className="block text-[12px] font-medium text-[#333333] mb-1.5">
-                  Folio de candidato
-                </label>
-                <input
-                  id="folio"
+                <TextField
+                  label="Folio de candidato"
                   value={folio}
-                  onChange={e => {
-                    setFolio(e.target.value)
+                  onChange={v => {
+                    setFolio(v)
                     if (error) setError('')
                   }}
                   placeholder="ADM-2026-XXXX"
-                  className="w-full px-3.5 py-2.5 text-[14px] rounded-lg border border-[#E5E7EB] focus:outline-none focus:ring-2 focus:ring-[#009574]/25 focus:border-[#009574] hover:border-[#009574]/50 transition bg-white text-[#333333] placeholder-[#9CA3AF]"
+                  mono
                 />
               </div>
 
               <div className="mb-4">
-                <label htmlFor="curpSuffix" className="block text-[12px] font-medium text-[#333333] mb-1.5">
-                  Últimos 3 dígitos de tu CURP
-                </label>
-                <input
-                  id="curpSuffix"
+                <TextField
+                  label="Últimos 3 dígitos de tu CURP"
                   value={curpSuffix}
-                  onChange={e => {
-                    setCurpSuffix(e.target.value.slice(0, 3))
+                  onChange={v => {
+                    setCurpSuffix(v.slice(0, 3))
                     if (error) setError('')
                   }}
                   maxLength={3}
                   placeholder="ej. 007"
-                  className="w-full px-3.5 py-2.5 text-[14px] rounded-lg border border-[#E5E7EB] focus:outline-none focus:ring-2 focus:ring-[#009574]/25 focus:border-[#009574] hover:border-[#009574]/50 transition bg-white text-[#333333] placeholder-[#9CA3AF]"
+                  mono
                 />
               </div>
 
-              {error && (
-                <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700 mb-4">
-                  <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                  {error}
-                </div>
-              )}
+              {error && <ErrorBanner message={error} />}
 
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold border-2 border-[#009574] text-[#009574] hover:bg-[#e6f5f1] active:scale-[0.99] transition-all"
-              >
+              <Button variant="outline" type="submit" className="w-full py-2.5">
                 Acceder
-              </button>
+              </Button>
             </form>
 
             <p className="text-center text-[12px] text-[#9CA3AF] mt-6 leading-relaxed">
