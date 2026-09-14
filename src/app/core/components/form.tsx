@@ -101,6 +101,7 @@ const BTN_VARIANTS: Record<string, string> = {
   secondary: 'border border-[#E5E7EB] bg-white text-[#333333] hover:bg-[#F8F9FA]',
   danger: 'border border-red-200 bg-white text-red-500 hover:bg-red-50',
   ghost: 'text-[#009574] hover:text-[#007a5e]',
+  outline: 'border-2 border-[#009574] bg-white text-[#009574] hover:bg-[#e6f5f1]',
 }
 const BTN_SIZES: Record<string, string> = {
   sm: 'px-3 py-1.5 text-[12px]',
@@ -158,7 +159,7 @@ export function IconButton({ icon, onClick, danger = false, disabled, className 
 // Antes se escribía a mano con `inputCls(disabled, hasError)` en cada vista.
 
 // ─── TextField ────────────────────────────────────────────────────────────────
-export function TextField({ label, required, value, onChange, disabled, error, help, type = 'text', placeholder, placeholderHidden = false, mono, numeric, maxLength, min, max, step, readOnly, className }: {
+export function TextField({ label, required, value, onChange, disabled, error, help, type = 'text', placeholder, placeholderHidden = false, mono, numeric, maxLength, min, max, step, readOnly, autoFocus, className }: {
   label?: string
   required?: boolean
   value: string
@@ -168,7 +169,7 @@ export function TextField({ label, required, value, onChange, disabled, error, h
   /** Texto de error — se pinta en rojo reemplazando el help. */
   error?: string
   help?: string
-  type?: 'text' | 'number' | 'date' | 'email' | 'datetime-local' | 'password'
+  type?: 'text' | 'number' | 'date' | 'time' | 'email' | 'datetime-local' | 'password'
   placeholder?: string
   /** true → el placeholder queda oculto en modo view/disabled. */
   placeholderHidden?: boolean
@@ -179,6 +180,7 @@ export function TextField({ label, required, value, onChange, disabled, error, h
   max?: number | string
   step?: number | string
   readOnly?: boolean
+  autoFocus?: boolean
   className?: string
 }) {
   const isDisabled = disabled || placeholderHidden
@@ -192,6 +194,7 @@ export function TextField({ label, required, value, onChange, disabled, error, h
         onChange={e => onChange?.(e.target.value)}
         disabled={isDisabled}
         readOnly={readOnly}
+        autoFocus={autoFocus}
         placeholder={placeholderHidden ? '' : placeholder}
         maxLength={maxLength}
         min={min}
