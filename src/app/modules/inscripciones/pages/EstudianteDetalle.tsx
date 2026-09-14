@@ -1,14 +1,9 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import {
-  ChevronRight,
-  UserCheck,
-  GraduationCap,
-  History,
-  FileText,
-  ArrowLeftRight,
-} from 'lucide-react'
-import { Toast, SearchSelect, SimpleSelect, FieldLabel } from '@app/core/components/ui'
+import { UserCheck, GraduationCap, History, FileText, ArrowLeftRight } from 'lucide-react'
+import { Toast, Tabs, ReadField, SearchSelect, SimpleSelect, FieldLabel, Modal } from '@app/core/components/ui'
+import { FormHeader, FormCard, Button, MiniTable } from '@app/core/components/form'
+import { Breadcrumb, PageContainer, BadgePill, type BadgeStyle } from '@app/core/components/list'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { formatDate } from '@app/core/infra/utils'
 import {
@@ -21,6 +16,7 @@ import {
   STUDENT_STATUS_META,
   STUDENT_DOCUMENT_TYPE_LABELS,
   type Student,
+  type StudentStatus,
   type EnrollmentType,
   type EnrollmentStatus,
   type ProgramChangeType,
@@ -54,6 +50,29 @@ const TIPO_CAMBIO_LABELS: Record<ProgramChangeType, string> = {
   TSU_CONTINUIDAD: 'Continuidad TSU → Ingeniería',
 }
 
+// ─── Badge maps (para BadgePill core) ────────────────────────────────────────
+
+const studentStatusBadgeMap: Record<string, BadgeStyle> = Object.fromEntries(
+  (Object.keys(STUDENT_STATUS_META) as StudentStatus[]).map(s => [s, { label: STUDENT_STATUS_META[s].label, className: STUDENT_STATUS_META[s].badgeClass }]),
+)
+
+const enrollmentTypeBadgeMap: Record<string, BadgeStyle> = Object.fromEntries(
+  (Object.keys(ENROLLMENT_TYPE_META) as EnrollmentType[]).map(t => [t, { label: ENROLLMENT_TYPE_META[t].label, className: ENROLLMENT_TYPE_META[t].badgeClass }]),
+)
+
+const enrollmentStatusBadgeMap: Record<string, BadgeStyle> = Object.fromEntries(
+  (Object.keys(ENROLLMENT_STATUS_META) as EnrollmentStatus[]).map(s => [s, { label: ENROLLMENT_STATUS_META[s].label, className: ENROLLMENT_STATUS_META[s].badgeClass }]),
+)
+
+const actualBadgeMap: Record<string, BadgeStyle> = {
+  Actual: { label: 'Actual', className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+}
+
+const documentoEntregaBadgeMap: Record<string, BadgeStyle> = {
+  ENTREGADO: { label: 'Entregado', className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  PENDIENTE: { label: 'Pendiente', className: 'bg-gray-100 text-gray-600 border border-gray-200' },
+}
+
 // Motivo options for the Cambiar-Programa modal — excludes INGRESO, which is
 // only the first row every student gets (never a "change").
 const MOTIVO_OPTIONS: ProgramChangeType[] = ['CAMBIO_CARRERA', 'CAMBIO_PLAN', 'TSU_CONTINUIDAD']
@@ -70,17 +89,6 @@ const PLANES_POR_PROGRAMA: Record<string, string[]> = {
   'Ingeniería en Redes y Telecomunicaciones': ['IRT-2021', 'IRT-2022'],
   'Ingeniería Industrial': ['II-2021'],
   'Licenciatura en Administración': ['LADM-2015'],
-}
-
-// ─── Read-only field ────────────────────────────────────────────────────────
-
-function ReadField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
-      <p className={`text-[13px] text-[#333333] ${mono ? 'font-mono' : 'font-medium'}`}>{value || '—'}</p>
-    </div>
-  )
 }
 
 // ─── Cambiar Programa — inline modal, mirrors `CandidatoDetalle.tsx`'s
@@ -111,63 +119,60 @@ function CambiarProgramaModal({ student, currentPrograma, onSave, onCancel }: {
   const canConfirm = !!programa && !!plan && !!grupo && !!motivo
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
-      <div className="relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full max-w-md mx-4 p-6">
-        <h3 className="text-[15px] font-semibold text-[#333333] mb-1">Cambiar Programa</h3>
-        <p className="text-[13px] text-[#6B7280] mb-4">
-          Estudiante: <strong className="text-[#333333]">{student.nombre}</strong> · Programa actual:{' '}
-          <strong className="text-[#333333]">{currentPrograma}</strong>
-        </p>
-
-        <div className="space-y-4 mb-6">
-          <div>
-            <FieldLabel required>Programa destino</FieldLabel>
-            <SearchSelect options={programaOpciones} value={programa} onChange={handleProgramaChange} placeholder="Selecciona un programa" />
-          </div>
-          <div>
-            <FieldLabel required>Plan</FieldLabel>
-            <SearchSelect
-              options={planOpciones}
-              value={plan}
-              onChange={setPlan}
-              placeholder={programa ? 'Selecciona un plan' : 'Selecciona un programa primero'}
-              disabled={!programa}
-            />
-          </div>
-          <div>
-            <FieldLabel required>Grupo destino</FieldLabel>
-            <SearchSelect options={GRUPO_OPTIONS} value={grupo} onChange={setGrupo} placeholder="Selecciona un grupo" />
-          </div>
-          <div>
-            <FieldLabel required>Motivo</FieldLabel>
-            <SimpleSelect
-              options={MOTIVO_OPTIONS.map(m => TIPO_CAMBIO_LABELS[m])}
-              value={motivo ? TIPO_CAMBIO_LABELS[motivo] : ''}
-              onChange={label => setMotivo(MOTIVO_OPTIONS.find(m => TIPO_CAMBIO_LABELS[m] === label) ?? '')}
-              placeholder="Selecciona un motivo"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-2.5 mb-6 text-[12px] text-amber-700">
-          Este registro es informativo — no dispara ningún flujo de equivalencias entre módulos.
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button onClick={onCancel} className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+    <Modal
+      title="Cambiar Programa"
+      onClose={onCancel}
+      maxWidth="max-w-md"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onCancel}>
             Cancelar
-          </button>
-          <button
-            onClick={() => canConfirm && onSave({ programa, plan, grupo, motivo: motivo as ProgramChangeType })}
-            disabled={!canConfirm}
-            className="px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          </Button>
+          <Button onClick={() => canConfirm && onSave({ programa, plan, grupo, motivo: motivo as ProgramChangeType })} disabled={!canConfirm}>
             Confirmar cambio
-          </button>
+          </Button>
+        </>
+      }
+    >
+      <p className="text-[13px] text-[#6B7280] mb-4">
+        Estudiante: <strong className="text-[#333333]">{student.nombre}</strong> · Programa actual:{' '}
+        <strong className="text-[#333333]">{currentPrograma}</strong>
+      </p>
+
+      <div className="space-y-4 mb-6">
+        <div>
+          <FieldLabel required>Programa destino</FieldLabel>
+          <SearchSelect options={programaOpciones} value={programa} onChange={handleProgramaChange} placeholder="Selecciona un programa" />
+        </div>
+        <div>
+          <FieldLabel required>Plan</FieldLabel>
+          <SearchSelect
+            options={planOpciones}
+            value={plan}
+            onChange={setPlan}
+            placeholder={programa ? 'Selecciona un plan' : 'Selecciona un programa primero'}
+            disabled={!programa}
+          />
+        </div>
+        <div>
+          <FieldLabel required>Grupo destino</FieldLabel>
+          <SearchSelect options={GRUPO_OPTIONS} value={grupo} onChange={setGrupo} placeholder="Selecciona un grupo" />
+        </div>
+        <div>
+          <FieldLabel required>Motivo</FieldLabel>
+          <SimpleSelect
+            options={MOTIVO_OPTIONS.map(m => TIPO_CAMBIO_LABELS[m])}
+            value={motivo ? TIPO_CAMBIO_LABELS[motivo] : ''}
+            onChange={label => setMotivo(MOTIVO_OPTIONS.find(m => TIPO_CAMBIO_LABELS[m] === label) ?? '')}
+            placeholder="Selecciona un motivo"
+          />
         </div>
       </div>
-    </div>
+
+      <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-2.5 text-[12px] text-amber-700">
+        Este registro es informativo — no dispara ningún flujo de equivalencias entre módulos.
+      </div>
+    </Modal>
   )
 }
 
@@ -223,7 +228,7 @@ export default function EstudianteDetalle() {
   ]
 
   return (
-    <div className="max-w-[1100px] mx-auto px-8 py-8">
+    <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
       {showCambiarPrograma && (
@@ -235,29 +240,19 @@ export default function EstudianteDetalle() {
         />
       )}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/inscripciones')} className="hover:text-[#009574] transition-colors">
-          Inicio
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Inscripciones</span>
-        <ChevronRight size={13} />
-        <button onClick={() => navigate('/inscripciones/estudiantes')} className="hover:text-[#009574] transition-colors">
-          Estudiantes
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Detalle</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Inscripciones', to: '/inscripciones' },
+          { label: 'Estudiantes', to: '/inscripciones/estudiantes' },
+          { label: 'Detalle' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">{student.nombre}</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">Expediente completo del estudiante inscrito.</p>
-      </div>
+      <FormHeader title={student.nombre} subtitle="Expediente completo del estudiante inscrito." />
 
       {/* Summary card */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg px-6 py-5 mb-6">
+      <FormCard>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-6">
           <ReadField label="Matrícula" value={student.matricula} mono />
           <ReadField label="Programa" value={student.programa} />
@@ -265,34 +260,17 @@ export default function EstudianteDetalle() {
           <ReadField label="Grupo" value={student.grupo} />
           <div>
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Estado</p>
-            <span className={`inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${STUDENT_STATUS_META[student.status].badgeClass}`}>
-              {STUDENT_STATUS_META[student.status].label}
-            </span>
+            <BadgePill value={student.status} map={studentStatusBadgeMap} />
           </div>
         </div>
-      </div>
+      </FormCard>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[#E5E7EB] mb-6 flex-wrap">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === tab.key
-                ? 'border-[#009574] text-[#009574]'
-                : 'border-transparent text-[#6B7280] hover:text-[#333333] hover:border-[#E5E7EB]'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={tabs} active={activeTab} onSelect={k => setActiveTab(k as TabKey)} />
 
       {/* ── Tab 1: Información General ── */}
       {activeTab === 'info' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg p-8">
+        <FormCard>
           <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-6">Datos Personales</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
             <ReadField label="Nombre Completo" value={student.nombre} />
@@ -312,146 +290,93 @@ export default function EstudianteDetalle() {
             <ReadField label="Fecha de Inscripción" value={student.fechaInscripcion} />
             <ReadField label="Generación de Ingreso" value={student.generacionIngreso} />
           </div>
-        </div>
+        </FormCard>
       )}
 
       {/* ── Tab 2: Historial Académico ── */}
       {activeTab === 'academico' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
+        <FormCard>
           {enrollments.length === 0 ? (
-            <p className="px-8 py-10 text-[13px] text-[#6B7280] text-center">Aún no hay historial académico registrado.</p>
+            <p className="py-10 text-[13px] text-[#6B7280] text-center">Aún no hay historial académico registrado.</p>
           ) : (
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Periodo</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Materia</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Clave</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Créditos</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Grupo</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Tipo</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Estado</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Calif.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {enrollments.map(row => (
-                  <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                    <td className="px-4 py-3 text-[#333333]">{row.periodo}</td>
-                    <td className="px-4 py-3 font-medium text-[#333333]">{row.materia}</td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-[#6B7280]">{row.clave}</td>
-                    <td className="px-4 py-3 text-[#333333]">{row.creditos}</td>
-                    <td className="px-4 py-3 text-[#333333]">{row.grupo}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${ENROLLMENT_TYPE_META[row.type].badgeClass}`}>
-                        {ENROLLMENT_TYPE_META[row.type].label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${ENROLLMENT_STATUS_META[row.status].badgeClass}`}>
-                        {ENROLLMENT_STATUS_META[row.status].label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-[#333333]">{row.calificacionFinal ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <MiniTable
+              items={enrollments}
+              keyFor={row => row.id}
+              columns={[
+                { key: 'periodo', header: 'Periodo' },
+                {
+                  key: 'materia',
+                  header: 'Materia',
+                  render: row => <span className="font-medium text-[#333333]">{row.materia}</span>,
+                },
+                { key: 'clave', header: 'Clave', render: row => <span className="font-mono text-[12px] text-[#6B7280]">{row.clave}</span> },
+                { key: 'creditos', header: 'Créditos' },
+                { key: 'grupo', header: 'Grupo' },
+                { key: 'type', header: 'Tipo', render: row => <BadgePill value={row.type} map={enrollmentTypeBadgeMap} /> },
+                { key: 'status', header: 'Estado', render: row => <BadgePill value={row.status} map={enrollmentStatusBadgeMap} /> },
+                { key: 'calif', header: 'Calif.', render: row => (row.calificacionFinal ?? '—') },
+              ]}
+            />
           )}
-        </div>
+        </FormCard>
       )}
 
       {/* ── Tab 3: Historial de Programas ── */}
       {activeTab === 'programas' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB]">
+        <FormCard>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest">Bitácora de Programa/Plan</p>
-            <button
-              onClick={() => setShowCambiarPrograma(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-            >
+            <Button size="sm" variant="secondary" onClick={() => setShowCambiarPrograma(true)}>
               <ArrowLeftRight size={13} />Cambiar Programa
-            </button>
+            </Button>
           </div>
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Programa</th>
-                <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Plan</th>
-                <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Desde</th>
-                <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Hasta</th>
-                <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-40">Tipo de Cambio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historyRows.map(row => (
-                <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                  <td className="px-4 py-3 font-medium text-[#333333]">{row.programa}</td>
-                  <td className="px-4 py-3 font-mono text-[12px] text-[#6B7280]">{row.plan}</td>
-                  <td className="px-4 py-3 text-[#333333]">{row.desde}</td>
-                  <td className="px-4 py-3">
-                    {row.hasta === null ? (
-                      <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Actual</span>
-                    ) : (
-                      <span className="text-[#333333]">{row.hasta}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-[#333333]">{TIPO_CAMBIO_LABELS[row.tipoCambio]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          <MiniTable
+            items={historyRows}
+            keyFor={row => row.id}
+            columns={[
+              { key: 'programa', header: 'Programa', render: row => <span className="font-medium text-[#333333]">{row.programa}</span> },
+              { key: 'plan', header: 'Plan', render: row => <span className="font-mono text-[12px] text-[#6B7280]">{row.plan}</span> },
+              { key: 'desde', header: 'Desde' },
+              { key: 'hasta', header: 'Hasta', render: row => (row.hasta === null ? <BadgePill value="Actual" map={actualBadgeMap} /> : row.hasta) },
+              { key: 'tipoCambio', header: 'Tipo de Cambio', render: row => TIPO_CAMBIO_LABELS[row.tipoCambio] },
+            ]}
+          />
+        </FormCard>
       )}
 
       {/* ── Tab 4: Documentos ── */}
       {activeTab === 'documentos' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
+        <FormCard>
           {documents.length === 0 ? (
-            <p className="px-8 py-10 text-[13px] text-[#6B7280] text-center">Aún no hay documentos registrados en el expediente.</p>
+            <p className="py-10 text-[13px] text-[#6B7280] text-center">Aún no hay documentos registrados en el expediente.</p>
           ) : (
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Documento</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Estado</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Fecha Recepción</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Registrado por</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map(row => (
-                  <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                    <td className="px-4 py-3 font-medium text-[#333333]">{STUDENT_DOCUMENT_TYPE_LABELS[row.documentType]}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                        row.receivedAt ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
-                      }`}>
-                        {row.receivedAt ? 'Entregado' : 'Pendiente'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-[#333333]">{row.receivedAt ?? '—'}</td>
-                    <td className="px-4 py-3 text-[#333333]">{row.receivedBy ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <MiniTable
+              items={documents}
+              keyFor={row => row.id}
+              columns={[
+                {
+                  key: 'documentType',
+                  header: 'Documento',
+                  render: row => <span className="font-medium text-[#333333]">{STUDENT_DOCUMENT_TYPE_LABELS[row.documentType]}</span>,
+                },
+                { key: 'estado', header: 'Estado', render: row => <BadgePill value={row.receivedAt ? 'ENTREGADO' : 'PENDIENTE'} map={documentoEntregaBadgeMap} /> },
+                { key: 'receivedAt', header: 'Fecha Recepción', render: row => (row.receivedAt ?? '—') },
+                { key: 'receivedBy', header: 'Registrado por', render: row => (row.receivedBy ?? '—') },
+              ]}
+            />
           )}
-          <p className="px-6 py-3 border-t border-[#E5E7EB] bg-[#F8F9FA] text-[11px] text-[#6B7280]">
+          <p className="mt-4 text-[11px] text-[#6B7280]">
             El registro de entrega física se administra desde Expediente — Documentos Recibidos.
           </p>
-        </div>
+        </FormCard>
       )}
 
       {/* Action zone */}
-      <div className="flex items-center justify-end gap-3 mt-8">
-        <button
-          onClick={() => navigate('/inscripciones/estudiantes')}
-          className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-        >
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-8">
+        <Button variant="secondary" onClick={() => navigate('/inscripciones/estudiantes')}>
           Regresar
-        </button>
+        </Button>
       </div>
-    </div>
+    </PageContainer>
   )
 }

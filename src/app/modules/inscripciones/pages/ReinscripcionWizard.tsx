@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { ChevronRight, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
-import { FieldLabel, SearchSelect } from '@app/core/components/ui'
+import { FieldLabel, SearchSelect, ReadField, SuccessModal } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, MiniTable } from '@app/core/components/form'
+import { Breadcrumb, BadgePill, type BadgeStyle } from '@app/core/components/list'
 import { mockStudents, mockEnrollments, mockActiveDebts, ACTIVE_PERIOD } from '../data/mockData'
-import type { Student, EnrollmentType } from '../data/types'
+import type { Student } from '../data/types'
 
 /**
  * Screen 5 — Reinscripción: Wizard (3 pasos).
@@ -23,30 +25,12 @@ import type { Student, EnrollmentType } from '../data/types'
  * otherwise the search starts empty.
  */
 
-/** Read-only summary field — mirrors the page-local `ReadField` pattern already used in `NuevoIngresoWizard.tsx`/`EstudianteDetalle.tsx`. */
-function ReadField({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-[13px] text-[#333333] font-medium">{value || '—'}</p>
-    </div>
-  )
-}
-
-/** Badge for `EnrollmentType` — Recursamiento (amber, reuses `STUDENT_STATUS_META`'s amber intent) vs Regular (neutral gray). */
-function TipoMateriaBadge({ type }: { type: EnrollmentType }) {
-  if (type === 'RETAKE') {
-    return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-        Recursamiento
-      </span>
-    )
-  }
-  return (
-    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-      {type === 'ACCREDITED' ? 'Acreditada' : 'Regular'}
-    </span>
-  )
+// ─── Badge map para `EnrollmentType` (BadgePill core): Recursamiento (amber)
+// vs Regular/Acreditada (neutral gray). ───────────────────────────────────────
+const materiaTypeBadgeMap: Record<string, BadgeStyle> = {
+  REGULAR: { label: 'Regular', className: 'bg-gray-100 text-gray-600 border border-gray-200' },
+  RETAKE: { label: 'Recursamiento', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  ACCREDITED: { label: 'Acreditada', className: 'bg-gray-100 text-gray-600 border border-gray-200' },
 }
 
 // ─── Paso 1: pool of students eligible for reinscripción ────────────────────
@@ -72,54 +56,23 @@ function MateriasTable({ rows }: { rows: (typeof mockEnrollments)[number][] }) {
   }
   return (
     <div className="border border-[#E5E7EB] rounded-lg overflow-hidden">
-      <table className="w-full text-[13px]">
-        <thead className="bg-[#F8F9FA]">
-          <tr className="text-left text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">
-            <th className="px-4 py-2.5">Materia</th>
-            <th className="px-4 py-2.5">Clave</th>
-            <th className="px-4 py-2.5">Créditos</th>
-            <th className="px-4 py-2.5">Grupo</th>
-            <th className="px-4 py-2.5">Tipo</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(e => (
-            <tr key={e.id} className="border-t border-[#E5E7EB]">
-              <td className="px-4 py-2.5 text-[#333333]">{e.materia}</td>
-              <td className="px-4 py-2.5 text-[#6B7280] font-mono text-[12px]">{e.clave}</td>
-              <td className="px-4 py-2.5 text-[#6B7280]">{e.creditos}</td>
-              <td className="px-4 py-2.5 text-[#6B7280]">{e.grupo}</td>
-              <td className="px-4 py-2.5"><TipoMateriaBadge type={e.type} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <MiniTable
+        items={rows}
+        keyFor={e => e.id}
+        columns={[
+          { key: 'materia', header: 'Materia', render: e => <span className="text-[#333333]">{e.materia}</span> },
+          { key: 'clave', header: 'Clave', render: e => <span className="font-mono text-[12px] text-[#6B7280]">{e.clave}</span> },
+          { key: 'creditos', header: 'Créditos', render: e => <span className="text-[#6B7280]">{e.creditos}</span> },
+          { key: 'grupo', header: 'Grupo', render: e => <span className="text-[#6B7280]">{e.grupo}</span> },
+          { key: 'type', header: 'Tipo', render: e => <BadgePill value={e.type} map={materiaTypeBadgeMap} /> },
+        ]}
+      />
     </div>
   )
 }
 
-/** Success modal shown after "Confirmar Reinscripción" — mirrors `NuevoIngresoWizard.tsx`'s `SuccessModal`. */
-function SuccessModal({ nombre, onClose }: { nombre: string; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" />
-      <div className="relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full max-w-sm mx-4 p-6 text-center">
-        <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
-          <CheckCircle2 size={28} className="text-emerald-500" />
-        </div>
-        <h3 className="text-[16px] font-semibold text-[#333333] mb-1">Reinscripción registrada</h3>
-        <p className="text-[13px] text-[#6B7280] mb-6">{nombre} fue reinscrito(a) exitosamente para el periodo {ACTIVE_PERIOD}.</p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-        >
-          Ir a Estudiantes
-        </button>
-      </div>
-    </div>
-  )
-}
+// ─── Success modal shown after "Confirmar Reinscripción" — uses the core
+// `SuccessModal` (ui.tsx) shared with NuevoIngresoWizard. ────────────────
 
 export default function ReinscripcionWizard() {
   const navigate = useNavigate()
@@ -226,38 +179,33 @@ export default function ReinscripcionWizard() {
   const steps: WizardStep[] = [
     { id: 'estudiante', label: 'Estudiante', render: paso1Render, isValid: paso1Valid },
     { id: 'materias', label: 'Materias', render: paso2Render },
-    { id: 'confirmacion', label: 'Confirmación', render: paso3Render },
+    { id: 'confirmacion', label: 'Confirmación', render: paso3Render, gated: true },
   ]
 
   return (
-    <div className="max-w-[880px] mx-auto px-8 py-8">
+    <FormPage>
       {showSuccess && (
         <SuccessModal
-          nombre={selectedStudent?.nombre ?? ''}
+          title="Reinscripción registrada"
+          message={`${selectedStudent?.nombre ?? 'El estudiante'} fue reinscrito(a) exitosamente para el periodo ${ACTIVE_PERIOD}.`}
+          buttonLabel="Ir a Estudiantes"
           onClose={() => navigate('/inscripciones/estudiantes')}
         />
       )}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/inscripciones')} className="hover:text-[#009574] transition-colors">
-          Inicio
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Inscripciones</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Reinscripción</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Inscripciones', to: '/inscripciones' },
+          { label: 'Reinscripción' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Reinscripción</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">Reinscribe a un estudiante activo en 3 pasos.</p>
-      </div>
+      <FormHeader title="Reinscripción" subtitle="Reinscribe a un estudiante activo en 3 pasos." />
 
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-8">
+      <FormCard>
         <Wizard steps={steps} onComplete={handleComplete} finishLabel="Confirmar Reinscripción" />
-      </div>
-    </div>
+      </FormCard>
+    </FormPage>
   )
 }

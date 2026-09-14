@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { UserPlus, RotateCcw, Users, Clock3, UserCheck, Activity } from 'lucide-react'
 import { Toast } from '@app/core/components/ui'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { Breadcrumb, PageHeader, DataTable, type ColumnDef } from '@app/core/components/list'
+import { Breadcrumb, PageHeader, DataTable, PageContainer, type ColumnDef } from '@app/core/components/list'
 import { KpiCards, QuickAccess, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
 import { mockStudents, mockEnrollments, ACTIVE_PERIOD } from '../data/mockData'
 import type { Student } from '../data/types'
@@ -113,7 +113,7 @@ export default function InscripcionesDashboard() {
   const [toast, setToast] = useState(pendingToast ?? '')
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
+    <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
       <Breadcrumb items={[{ label: 'Inicio' }, { label: 'Inscripciones' }]} />
 
@@ -145,6 +145,6 @@ export default function InscripcionesDashboard() {
 
       {/* Acciones Rápidas */}
       <QuickAccess items={quickAccess} title="Acciones Rápidas" variant="inline" />
-    </div>
+    </PageContainer>
   )
 }

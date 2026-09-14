@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Plus as PlusIcon, ArrowLeftRight, BookOpen, Eye as EyeIcon } from 'lucide-react'
 import { Toast, ActionBtn } from '@app/core/components/ui'
+import { Button } from '@app/core/components/form'
 import {
   PageContainer,
   Breadcrumb,
@@ -161,25 +162,17 @@ export default function EstudiantesList() {
             <p className="text-[12px] text-[#6B7280] mb-1">{row.programa}</p>
             <p className="text-[12px] text-[#6B7280] mb-3">Nivel {row.nivelActual} · Grupo {row.grupo}</p>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#E5E7EB]">
-              <button
-                onClick={() => navigate(`/inscripciones/estudiantes/detalle?id=${row.id}`)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
-              >
+              <Button variant="outline" size="sm" onClick={() => navigate(`/inscripciones/estudiantes/detalle?id=${row.id}`)}>
                 <EyeIcon size={13} />Ver detalle
-              </button>
-              <button
-                onClick={() => navigate(`/inscripciones/reinscripcion?id=${row.id}`)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
-              >
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate(`/inscripciones/reinscripcion?id=${row.id}`)}>
                 <ArrowLeftRight size={13} />Reinscribir
-              </button>
-              <button
-                disabled
-                title={KARDEX_TOOLTIP}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[#6B7280] border border-[#E5E7EB] rounded-md opacity-60 cursor-not-allowed"
-              >
-                <BookOpen size={13} />Kardex
-              </button>
+              </Button>
+              <span title={KARDEX_TOOLTIP}>
+                <Button variant="secondary" size="sm" disabled>
+                  <BookOpen size={13} />Kardex
+                </Button>
+              </span>
             </div>
           </>
         )}
