@@ -1,7 +1,18 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import { ChevronRight, Search, Info } from 'lucide-react'
-import { SearchSelect, SimpleSelect, Switch, Toast } from '@app/core/components/ui'
+import { Info } from 'lucide-react'
+import { Switch, Toast } from '@app/core/components/ui'
+import { FormHeader } from '@app/core/components/form'
+import {
+  PageContainer,
+  Breadcrumb,
+  SearchInput,
+  FilterBar,
+  FilterSelect,
+  ResultCount,
+  DataTable,
+  MobileCards,
+  type ColumnDef,
+} from '@app/core/components/list'
 import { mockCandidates } from '../data/mockData'
 import type { Candidate, CandidateStatus } from '../data/types'
 
@@ -64,8 +75,10 @@ type Decision = 'ADMITIDO' | 'RECHAZADO'
 
 const DECISION_ORDER: Decision[] = ['ADMITIDO', 'RECHAZADO']
 const DECISION_LABEL: Record<Decision, string> = { ADMITIDO: 'Admitido', RECHAZADO: 'Rechazado' }
-const decisionOptions = DECISION_ORDER.map(d => DECISION_LABEL[d])
-const decisionLabelToDecision = new Map<string, Decision>(DECISION_ORDER.map(d => [DECISION_LABEL[d], d]))
+const OPCION_BADGES: Record<string, { label: string; className: string }> = {
+  '1ª opción': { label: '1ª opción', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  '2ª opción': { label: '2ª opción', className: 'bg-gray-100 text-gray-600 border border-gray-200' },
+}
 
 /** Statuses eligible to appear on this screen — see file-level comment. */
 const ELIGIBLE_STATUSES: CandidateStatus[] = ['PAID', 'EXAM_TAKEN', 'ACCEPTED', 'REJECTED']
@@ -81,20 +94,19 @@ function isFirstChoiceMock(candidate: Candidate): boolean {
 }
 
 export default function SeleccionCandidatos() {
-  const navigate = useNavigate()
   const [candidates, setCandidates] = useState<Candidate[]>(
     mockCandidates.filter(c => ELIGIBLE_STATUSES.includes(c.status)),
   )
   const [search, setSearch] = useState('')
   const [programaFilter, setProgramaFilter] = useState('')
-  const [decisionLabel, setDecisionLabel] = useState('')
+  const [decisionFilter, setDecisionFilter] = useState<Decision | ''>('')
   const [toast, setToast] = useState('')
 
   const programas = Array.from(new Set(mockCandidates.map(c => c.programa)))
 
   const filtered = candidates.filter(c => {
     const matchPrograma = !programaFilter || c.programa === programaFilter
-    const matchDecision = !decisionLabel || getDecision(c.status) === decisionLabelToDecision.get(decisionLabel)
+    const matchDecision = !decisionFilter || getDecision(c.status) === decisionFilter
     const q = search.trim().toLowerCase()
     const matchSearch = !q || c.nombre.toLowerCase().includes(q) || c.folio.toLowerCase().includes(q)
     return matchPrograma && matchDecision && matchSearch
@@ -109,34 +121,52 @@ export default function SeleccionCandidatos() {
     setToast(admitido ? `${target.nombre} fue admitido.` : `${target.nombre} fue rechazado.`)
   }
 
+  const columns: ColumnDef<Candidate>[] = [
+    { key: 'folio', header: 'Folio', type: 'code', className: 'w-40' },
+    { key: 'nombre', header: 'Nombre Completo', type: 'name' },
+    { key: 'opcion', header: 'Opción', type: 'badge', className: 'w-28', value: row => (isFirstChoiceMock(row) ? '1ª opción' : '2ª opción'), badge: OPCION_BADGES },
+    { key: 'examen', header: 'Examen', type: 'text', className: 'w-24', value: row => row.examen?.calificacion ?? '—' },
+    { key: 'induccion', header: 'Inducción', type: 'text', className: 'w-24', value: row => row.induccionResultado?.calificacion ?? '—' },
+    {
+      key: 'decision',
+      header: 'Decisión',
+      className: 'w-40',
+      render: row => {
+        const decision = getDecision(row.status)
+        const admitido = decision === 'ADMITIDO'
+        return (
+          <div className="flex items-center gap-2.5">
+            <Switch checked={admitido} onChange={v => handleToggle(row.id, v)} />
+            <span className={`text-[12px] font-semibold ${admitido ? 'text-emerald-700' : 'text-[#6B7280]'}`}>
+              {DECISION_LABEL[decision]}
+            </span>
+          </div>
+        )
+      },
+    },
+  ]
+
   return (
-    <div className="max-w-[1280px] mx-auto px-8 py-8">
+    <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">
-          Inicio
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Admisión</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Selección de Candidatos</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/admision' },
+          { label: 'Admisión' },
+          { label: 'Selección de Candidatos' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">Selección de Candidatos</h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">
-            Revisa los candidatos de tus programas con sus resultados disponibles y marca cada uno como admitido o
-            rechazado. Solo puedes actuar sobre candidatos de tu división.
-          </p>
-        </div>
-        <span className="text-[12px] font-semibold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap mt-1">
-          Selección Abierta
-        </span>
-      </div>
+      <FormHeader
+        title="Selección de Candidatos"
+        subtitle="Revisa los candidatos de tus programas con sus resultados disponibles y marca cada uno como admitido o rechazado. Solo puedes actuar sobre candidatos de tu división."
+        right={
+          <span className="text-[12px] font-semibold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap mt-1">
+            Selección Abierta
+          </span>
+        }
+      />
 
       {/* Info banner */}
       <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3.5 mb-6">
@@ -148,106 +178,75 @@ export default function SeleccionCandidatos() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <div className="w-64">
-          <SearchSelect
-            options={programas}
-            value={programaFilter}
-            onChange={setProgramaFilter}
-            placeholder="Todos los programas"
-          />
-        </div>
-        <div className="w-48">
-          <SimpleSelect
-            options={decisionOptions}
-            value={decisionLabel}
-            onChange={setDecisionLabel}
-            placeholder="Todos"
-          />
-        </div>
-        <div className="relative flex-1 min-w-[220px]">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre o folio..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition"
-          />
-        </div>
-      </div>
+      <FilterBar>
+        <FilterSelect
+          value={programaFilter}
+          onChange={setProgramaFilter}
+          allLabel="Todos los programas"
+          options={programas.map(p => ({ value: p, label: p }))}
+          className="sm:w-64"
+        />
+        <FilterSelect
+          value={decisionFilter}
+          onChange={v => setDecisionFilter(v as Decision | '')}
+          allLabel="Todas las decisiones"
+          options={DECISION_ORDER.map(d => ({ value: d, label: DECISION_LABEL[d] }))}
+          className="sm:w-48"
+        />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o folio..." />
+        <ResultCount count={filtered.length} />
+      </FilterBar>
 
-      {/* Table */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-40">Folio</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Nombre Completo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Opción</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Examen</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Inducción</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-40">Decisión</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-                    <Search size={36} className="text-[#E5E7EB]" />
-                    <p className="text-[13px] font-medium">No se encontraron candidatos</p>
-                    <p className="text-[12px]">Intenta ajustar los filtros de búsqueda</p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              filtered.map(row => {
-                const decision = getDecision(row.status)
-                const admitido = decision === 'ADMITIDO'
-                const firstChoice = isFirstChoiceMock(row)
-                return (
-                  <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                    <td className="px-4 py-3 font-mono text-[12px] text-[#6B7280]">{row.folio}</td>
-                    <td className="px-4 py-3 font-medium text-[#333333]">{row.nombre}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                          firstChoice
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'bg-gray-100 text-gray-600 border border-gray-200'
-                        }`}
-                      >
-                        {firstChoice ? '1ª opción' : '2ª opción'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-[#333333]">{row.examen?.calificacion ?? '—'}</td>
-                    <td className="px-4 py-3 text-[#333333]">{row.induccionResultado?.calificacion ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <Switch checked={admitido} onChange={v => handleToggle(row.id, v)} />
-                        <span className={`text-[12px] font-semibold ${admitido ? 'text-emerald-700' : 'text-[#6B7280]'}`}>
-                          {DECISION_LABEL[decision]}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
+      {/* ── Desktop table (md+) ─────────────────────────────────────────────── */}
+      <DataTable
+        columns={columns}
+        status="idle"
+        items={filtered}
+        keyFor={row => row.id}
+        loadingLabel="Cargando candidatos..."
+        emptyTitle="No se encontraron candidatos"
+        emptyHint="Intenta ajustar los filtros de búsqueda"
+      />
 
-        {/* Pagination — static footer, mock data fits a single page (mirrors
-            `CandidatosList.tsx`'s convention; no real pagination logic yet). */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[#E5E7EB] bg-[#F8F9FA]">
-          <p className="text-[12px] text-[#6B7280]">
-            {filtered.length === 0
-              ? 'Sin resultados para los filtros aplicados'
-              : `Mostrando 1–${filtered.length} de ${filtered.length} registros`}
-          </p>
-        </div>
-      </div>
-    </div>
+      {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
+      <MobileCards
+        status="idle"
+        items={filtered}
+        keyFor={row => row.id}
+        renderItem={row => {
+          const decision = getDecision(row.status)
+          const admitido = decision === 'ADMITIDO'
+          const firstChoice = isFirstChoiceMock(row)
+          return (
+            <>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[13px] font-medium text-[#333333]">{row.nombre}</span>
+                <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                  firstChoice
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : 'bg-gray-100 text-gray-600 border border-gray-200'
+                }`}>
+                  {firstChoice ? '1ª opción' : '2ª opción'}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#6B7280] mb-3">
+                <span>Folio: <span className="font-mono font-medium text-[#333333]">{row.folio}</span></span>
+                <span>Examen: <span className="font-medium text-[#333333]">{row.examen?.calificacion ?? '—'}</span></span>
+                <span>Inducción: <span className="font-medium text-[#333333]">{row.induccionResultado?.calificacion ?? '—'}</span></span>
+              </div>
+              <div className="flex items-center gap-2.5 pt-2 border-t border-[#E5E7EB]">
+                <Switch checked={admitido} onChange={v => handleToggle(row.id, v)} />
+                <span className={`text-[12px] font-semibold ${admitido ? 'text-emerald-700' : 'text-[#6B7280]'}`}>
+                  {DECISION_LABEL[decision]}
+                </span>
+              </div>
+            </>
+          )
+        }}
+        loadingLabel="Cargando candidatos..."
+        emptyTitle="No se encontraron candidatos"
+        emptyHint="Intenta ajustar los filtros de búsqueda"
+      />
+    </PageContainer>
   )
 }

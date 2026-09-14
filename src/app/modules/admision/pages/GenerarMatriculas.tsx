@@ -1,7 +1,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight, Info, CheckCircle2 } from 'lucide-react'
+import { Info, CheckCircle2 } from 'lucide-react'
 import { ConfirmModal, Toast } from '@app/core/components/ui'
+import { Button } from '@app/core/components/form'
+import {
+  PageContainer,
+  Breadcrumb,
+  PageHeader,
+  DataTable,
+  MobileCards,
+  type ColumnDef,
+} from '@app/core/components/list'
 import { mockCandidates } from '../data/mockData'
 import type { Candidate } from '../data/types'
 
@@ -90,6 +99,32 @@ export default function GenerarMatriculas() {
   const pendingPrograms = summary.filter(s => s.admitidos > 0)
   const allCompleted = summary.length > 0 && pendingPrograms.length === 0
 
+  const columns: ColumnDef<ProgramaSummary>[] = [
+    { key: 'programa', header: 'Programa', type: 'name' },
+    { key: 'admitidos', header: 'Admitidos', type: 'count', className: 'w-32' },
+    { key: 'generadas', header: 'Matrículas Generadas', type: 'count', className: 'w-44' },
+    {
+      key: 'accion',
+      header: 'Acción',
+      className: 'w-56',
+      render: row =>
+        row.admitidos > 0 ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setScope({ kind: 'program', programa: row.programa })}
+            className="text-[#009574] border-[#009574]/30 hover:bg-[#e6f5f1]"
+          >
+            Generar para {row.programa}
+          </Button>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 size={12} /> Completado
+          </span>
+        ),
+    },
+  ]
+
   function pendingCountForScope(s: Scope): number {
     if (s.kind === 'all') return pendingPrograms.reduce((acc, p) => acc + p.admitidos, 0)
     return summary.find(p => p.programa === s.programa)?.admitidos ?? 0
@@ -110,7 +145,7 @@ export default function GenerarMatriculas() {
   }
 
   return (
-    <div className="max-w-[1280px] mx-auto px-8 py-8">
+    <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
       {scope && (
@@ -123,25 +158,18 @@ export default function GenerarMatriculas() {
         />
       )}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">
-          Inicio
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Admisión</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Generar Matrículas</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/admision' },
+          { label: 'Admisión' },
+          { label: 'Generar Matrículas' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Generar Matrículas</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Genera la matrícula, asigna grupo y crea la cuenta de acceso para cada candidato admitido. Este paso se
-          ejecuta antes de publicar los resultados — la lista publicada debe incluir folio y matrícula asignada.
-        </p>
-      </div>
+      <PageHeader
+        title="Generar Matrículas"
+        subtitle="Genera la matrícula, asigna grupo y crea la cuenta de acceso para cada candidato admitido. Este paso se ejecuta antes de publicar los resultados — la lista publicada debe incluir folio y matrícula asignada."
+      />
 
       {/* Info banner */}
       <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3.5 mb-6">
@@ -152,73 +180,74 @@ export default function GenerarMatriculas() {
         </p>
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden mb-6">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Programa</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Admitidos</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-44">Matrículas Generadas</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-56">Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summary.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-16 text-center text-[13px] text-[#6B7280]">
-                  No hay programas con candidatos admitidos.
-                </td>
-              </tr>
-            ) : (
-              summary.map(row => (
-                <tr key={row.programa} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                  <td className="px-4 py-3 font-medium text-[#333333]">{row.programa}</td>
-                  <td className="px-4 py-3 text-[#333333]">{row.admitidos}</td>
-                  <td className="px-4 py-3 text-[#333333]">{row.generadas}</td>
-                  <td className="px-4 py-3">
-                    {row.admitidos > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => setScope({ kind: 'program', programa: row.programa })}
-                        className="px-3 py-1.5 text-[12px] font-semibold border border-[#009574] text-[#009574] rounded-md hover:bg-[#e6f5f1] transition-colors"
-                      >
-                        Generar para {row.programa}
-                      </button>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <CheckCircle2 size={12} /> Completado
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      {/* ── Desktop table (md+) ─────────────────────────────────────────────── */}
+      <DataTable
+        columns={columns}
+        status="idle"
+        items={summary}
+        keyFor={row => row.programa}
+        loadingLabel="Cargando programas..."
+        emptyTitle="No hay programas con candidatos admitidos"
+        emptyHint="Vuelve a intentarlo en unos momentos."
+      />
+
+      {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
+      <MobileCards
+        status="idle"
+        items={summary}
+        keyFor={row => row.programa}
+        renderItem={row => (
+          <>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-[13px] font-medium text-[#333333]">{row.programa}</span>
+              {row.admitidos > 0 && (
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  {row.admitidos} pendiente{row.admitidos !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[#6B7280] mb-3">
+              <span>Admitidos: <span className="font-medium text-[#333333]">{row.admitidos}</span></span>
+              <span>Matrículas generadas: <span className="font-medium text-[#333333]">{row.generadas}</span></span>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+              {row.admitidos > 0 ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setScope({ kind: 'program', programa: row.programa })}
+                  className="flex-1 text-[#009574] border-[#009574]/30 hover:bg-[#e6f5f1]"
+                >
+                  Generar para {row.programa}
+                </Button>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <CheckCircle2 size={12} /> Completado
+                </span>
+              )}
+            </div>
+          </>
+        )}
+        loadingLabel="Cargando programas..."
+        emptyTitle="No hay programas con candidatos admitidos"
+        emptyHint="Vuelve a intentarlo en unos momentos."
+      />
+
+      <div className='mt-6'>
+        {/* Bulk action — only shown while at least one program is still pending */}
+        {pendingPrograms.length > 0 && (
+          <Button onClick={() => setScope({ kind: 'all' })}>
+            Generar Matrículas para Todos los Programas Pendientes
+          </Button>
+        )}
+
+        {/* Publish nav — only once every program is Completado (forward pointer to Screen 9, task 2.13) */}
+        {allCompleted && (
+          <Button onClick={() => navigate('/admision/publicar')}>
+            Publicar resultados de admisión
+          </Button>
+        )}
       </div>
-
-      {/* Bulk action — only shown while at least one program is still pending */}
-      {pendingPrograms.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setScope({ kind: 'all' })}
-          className="px-4 py-2.5 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-        >
-          Generar Matrículas para Todos los Programas Pendientes
-        </button>
-      )}
-
-      {/* Publish nav — only once every program is Completado (forward pointer to Screen 9, task 2.13) */}
-      {allCompleted && (
-        <button
-          type="button"
-          onClick={() => navigate('/admision/publicar')}
-          className="px-4 py-2.5 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-        >
-          Publicar resultados de admisión
-        </button>
-      )}
-    </div>
+    </PageContainer>
   )
 }
