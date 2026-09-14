@@ -1,8 +1,17 @@
-import { Fragment, useState } from 'react'
-import { useNavigate } from 'react-router'
-import { ChevronRight, ChevronDown, ChevronUp, Plus, Pencil } from 'lucide-react'
-import { Toast, ActionBtn, SearchSelect, SimpleSelect, DatePicker, Switch, FieldLabel, inputCls } from '@app/core/components/ui'
+import { useState } from 'react'
+import { ChevronDown, ChevronUp, Plus, Pencil } from 'lucide-react'
+import { Toast, SearchSelect, SimpleSelect, DatePicker, Switch, FieldLabel, Modal } from '@app/core/components/ui'
+import { Button, TextField } from '@app/core/components/form'
 import { FileUpload, type UploadedFile } from '@app/core/components/FileUpload'
+import {
+  PageContainer,
+  Breadcrumb,
+  PageHeader,
+  DataTable,
+  MobileCards,
+  BadgePill,
+  type ColumnDef,
+} from '@app/core/components/list'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { mockInstitutionalDocuments, mockDocumentAcceptances, mockStudents } from '../data/mockData'
 import type { InstitutionalDocument, InstitutionalDocumentType, InstitutionalDocumentScope } from '../data/types'
@@ -140,93 +149,78 @@ function DocumentoModal({ mode, initial, onSave, onCancel }: {
   }
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
-      <div className="relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-[15px] font-semibold text-[#333333] mb-4">
-          {mode === 'create' ? 'Registrar Documento Institucional' : 'Editar Documento Institucional'}
-        </h3>
+    <Modal
+      title={mode === 'create' ? 'Registrar Documento Institucional' : 'Editar Documento Institucional'}
+      onClose={onCancel}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} disabled={!canSave}>
+            Guardar documento
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <TextField label="Nombre del documento" required value={name} onChange={setName} placeholder="Ej. Reglamento Escolar 2026" />
+        <TextField label="Descripción" value={description} onChange={setDescription} placeholder="Opcional" />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <FieldLabel required>Tipo</FieldLabel>
+            <SimpleSelect
+              options={Object.values(DOC_TYPE_LABELS)}
+              value={type ? DOC_TYPE_LABELS[type] : ''}
+              onChange={label => setType((Object.keys(DOC_TYPE_LABELS) as InstitutionalDocumentType[]).find(k => DOC_TYPE_LABELS[k] === label) ?? '')}
+              placeholder="Selecciona un tipo"
+            />
+          </div>
+          <div>
+            <TextField label="Versión" required value={version} onChange={setVersion} placeholder="Ej. v1.0" />
+          </div>
+        </div>
 
-        <div className="space-y-4 mb-6">
-          <div>
-            <FieldLabel required>Nombre del documento</FieldLabel>
-            <input value={name} onChange={e => setName(e.target.value)} className={inputCls(false, false)} placeholder="Ej. Reglamento Escolar 2026" />
-          </div>
-          <div>
-            <FieldLabel>Descripción</FieldLabel>
-            <input value={description} onChange={e => setDescription(e.target.value)} className={inputCls(false, false)} placeholder="Opcional" />
-          </div>
+        <div>
+          <FieldLabel required>Alcance</FieldLabel>
+          <SimpleSelect options={Object.values(SCOPE_LABELS)} value={SCOPE_LABELS[scope]} onChange={handleScopeChange} placeholder="Selecciona un alcance" />
+        </div>
+
+        {scope !== 'GLOBAL' && (
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <FieldLabel required>Tipo</FieldLabel>
-              <SimpleSelect
-                options={Object.values(DOC_TYPE_LABELS)}
-                value={type ? DOC_TYPE_LABELS[type] : ''}
-                onChange={label => setType((Object.keys(DOC_TYPE_LABELS) as InstitutionalDocumentType[]).find(k => DOC_TYPE_LABELS[k] === label) ?? '')}
-                placeholder="Selecciona un tipo"
-              />
+              <FieldLabel required>División</FieldLabel>
+              <SearchSelect options={DIVISIONES_CATALOGO} value={divisionId} onChange={handleDivisionChange} placeholder="Selecciona una división" />
             </div>
-            <div>
-              <FieldLabel required>Versión</FieldLabel>
-              <input value={version} onChange={e => setVersion(e.target.value)} className={inputCls(false, false)} placeholder="Ej. v1.0" />
-            </div>
-          </div>
-
-          <div>
-            <FieldLabel required>Alcance</FieldLabel>
-            <SimpleSelect options={Object.values(SCOPE_LABELS)} value={SCOPE_LABELS[scope]} onChange={handleScopeChange} placeholder="Selecciona un alcance" />
-          </div>
-
-          {scope !== 'GLOBAL' && (
-            <div className="grid grid-cols-2 gap-4">
+            {scope === 'PROGRAM' && (
               <div>
-                <FieldLabel required>División</FieldLabel>
-                <SearchSelect options={DIVISIONES_CATALOGO} value={divisionId} onChange={handleDivisionChange} placeholder="Selecciona una división" />
+                <FieldLabel required>Programa</FieldLabel>
+                <SearchSelect
+                  options={programOptions}
+                  value={programId}
+                  onChange={setProgramId}
+                  placeholder={divisionId ? 'Selecciona un programa' : 'Selecciona una división primero'}
+                  disabled={!divisionId}
+                />
               </div>
-              {scope === 'PROGRAM' && (
-                <div>
-                  <FieldLabel required>Programa</FieldLabel>
-                  <SearchSelect
-                    options={programOptions}
-                    value={programId}
-                    onChange={setProgramId}
-                    placeholder={divisionId ? 'Selecciona un programa' : 'Selecciona una división primero'}
-                    disabled={!divisionId}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          <div>
-            <FieldLabel required>Vigente desde</FieldLabel>
-            <DatePicker value={vigenteDesde} onChange={setVigenteDesde} />
+            )}
           </div>
+        )}
 
-          <FileUpload label="Documento (PDF)" accept=".pdf" required={mode === 'create'} value={file} onChange={setFile} />
+        <div>
+          <FieldLabel required>Vigente desde</FieldLabel>
+          <DatePicker value={vigenteDesde} onChange={setVigenteDesde} />
         </div>
 
-        <div className="flex justify-end gap-3">
-          <button onClick={onCancel} className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!canSave}
-            className="px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Guardar documento
-          </button>
-        </div>
+        <FileUpload label="Documento (PDF)" accept=".pdf" required={mode === 'create'} value={file} onChange={setFile} />
       </div>
-    </div>
+    </Modal>
   )
 }
 
 // ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function DocumentosInstitucionales() {
-  const navigate = useNavigate()
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
   const [documents, setDocuments] = useState<InstitutionalDocument[]>(mockInstitutionalDocuments)
@@ -235,6 +229,10 @@ export default function DocumentosInstitucionales() {
 
   function handleToggleStatus(id: string) {
     setDocuments(prev => prev.map(d => (d.id === id ? { ...d, status: d.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' } : d)))
+  }
+
+  function handleToggleRowStatus(doc: InstitutionalDocument) {
+    handleToggleStatus(doc.id)
   }
 
   function handleSaveDocument(doc: InstitutionalDocument) {
@@ -249,93 +247,91 @@ export default function DocumentosInstitucionales() {
     return `Programa: ${doc.programId}`
   }
 
+  const columns: ColumnDef<InstitutionalDocument>[] = [
+    { key: 'name', header: 'Documento', type: 'name', sub: d => d.description ?? '' },
+    { key: 'type', header: 'Tipo', type: 'text', value: d => DOC_TYPE_LABELS[d.type], className: 'w-36' },
+    { key: 'scope', header: 'Alcance', type: 'text', value: scopeDisplay, className: 'w-56' },
+    { key: 'version', header: 'Versión', render: d => <span className="font-mono text-[12px] text-[#6B7280]">{d.version}</span>, className: 'w-24' },
+    { key: 'aceptaciones', header: 'Aceptaciones', type: 'count', value: d => d.aceptaciones.toLocaleString('es-MX'), className: 'w-24' },
+    { key: 'status', header: 'Estado', type: 'status', className: 'w-36', activeLabel: 'Activo', inactiveLabel: 'Inactivo' },
+  ]
+
   return (
-    <div className="max-w-[1200px] mx-auto px-8 py-8">
+    <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
       {modal && <DocumentoModal mode={modal.mode} initial={modal.doc} onSave={handleSaveDocument} onCancel={() => setModal(null)} />}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/inscripciones')} className="hover:text-[#009574] transition-colors">Inicio</button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Inscripciones</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Documentos Institucionales</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Inscripciones', to: '/inscripciones' },
+          { label: 'Documentos Institucionales' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#333333]">Documentos Institucionales</h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">Gestiona los reglamentos y avisos que los estudiantes deben aceptar al inscribirse.</p>
-        </div>
-        <button
-          onClick={() => setModal({ mode: 'create' })}
-          className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors whitespace-nowrap mt-1"
-        >
-          <Plus size={15} />Registrar Documento
-        </button>
-      </div>
+      <PageHeader
+        title="Documentos Institucionales"
+        subtitle="Gestiona los reglamentos y avisos que los estudiantes deben aceptar al inscribirse."
+        actions={[{ label: 'Registrar Documento', icon: <Plus size={15} />, onClick: () => setModal({ mode: 'create' })}]}
+      />
 
-      {/* Table */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Documento</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-36">Tipo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-56">Alcance</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Versión</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-28">Aceptaciones</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-36">Estado</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {documents.map(doc => (
-              <Fragment key={doc.id}>
-                <tr className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-[#333333]">{doc.name}</p>
-                    {doc.description && <p className="text-[12px] text-[#6B7280]">{doc.description}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-[#333333]">{DOC_TYPE_LABELS[doc.type]}</td>
-                  <td className="px-4 py-3 text-[#333333]">{scopeDisplay(doc)}</td>
-                  <td className="px-4 py-3 font-mono text-[12px] text-[#6B7280]">{doc.version}</td>
-                  <td className="px-4 py-3 text-[#333333]">{doc.aceptaciones.toLocaleString('es-MX')}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Switch checked={doc.status === 'ACTIVE'} onChange={() => handleToggleStatus(doc.id)} />
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                        doc.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
-                      }`}>
-                        {doc.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-0.5">
-                      <ActionBtn
-                        icon={expandedId === doc.id ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                        tooltip="Ver aceptaciones"
-                        onClick={() => setExpandedId(expandedId === doc.id ? null : doc.id)}
-                      />
-                      <ActionBtn icon={<Pencil size={15} />} tooltip="Editar" onClick={() => setModal({ mode: 'edit', doc })} />
-                    </div>
-                  </td>
-                </tr>
-                {expandedId === doc.id && (
-                  <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-                    <td colSpan={7} className="p-0">
-                      <AcceptanceList documentId={doc.id} />
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      {/* Tabla desktop (md+) */}
+      <DataTable
+        columns={columns}
+        status="idle"
+        items={documents}
+        keyFor={d => d.id}
+        loadingLabel="Cargando documentos..."
+        emptyTitle="Sin documentos registrados"
+        emptyHint="Registra un documento institucional para comenzar."
+        onToggleStatus={handleToggleRowStatus}
+        actions={{ edit: row => setModal({ mode: 'edit', doc: row }), editTooltip: 'Editar' }}
+        detail={{
+          expandedId,
+          onExpand: setExpandedId,
+          tooltip: 'Ver aceptaciones',
+          render: doc => <AcceptanceList documentId={doc.id} />,
+        }}
+      />
+
+      {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
+      <MobileCards
+        status="idle"
+        items={documents}
+        keyFor={d => d.id}
+        renderItem={doc => (
+          <>
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <span className="font-medium text-[13px] text-[#333333]">{doc.name}</span>
+              <BadgePill value={doc.status} active={doc.status === 'ACTIVE'} activeLabel="Activo" inactiveLabel="Inactivo" />
+            </div>
+            {doc.description && <p className="text-[12px] text-[#6B7280] mb-1">{doc.description}</p>}
+            <p className="text-[12px] text-[#6B7280] mb-1">{DOC_TYPE_LABELS[doc.type]} · {scopeDisplay(doc)}</p>
+            <p className="text-[12px] text-[#6B7280] mb-1">Versión {doc.version}</p>
+            <p className="text-[12px] text-[#6B7280] mb-3">{doc.aceptaciones.toLocaleString('es-MX')} aceptaciones</p>
+            <div className="flex items-center gap-2 mb-3">
+              <Switch checked={doc.status === 'ACTIVE'} onChange={() => handleToggleStatus(doc.id)} />
+              <span className="text-[12px] text-[#6B7280]">{doc.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+              <Button variant="outline" size="sm" onClick={() => setExpandedId(expandedId === doc.id ? null : doc.id)}>
+                {expandedId === doc.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}Aceptaciones
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setModal({ mode: 'edit', doc })}>
+                <Pencil size={13} />Editar
+              </Button>
+            </div>
+            {expandedId === doc.id && (
+              <div className="mt-3 border-t border-[#E5E7EB] pt-1">
+                <AcceptanceList documentId={doc.id} />
+              </div>
+            )}
+          </>
+        )}
+        loadingLabel="Cargando documentos..."
+        emptyTitle="Sin documentos registrados"
+        emptyHint="Registra un documento institucional para comenzar."
+      />
+    </PageContainer>
   )
 }
