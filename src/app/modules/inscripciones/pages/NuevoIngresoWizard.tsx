@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight, CheckCircle2, Circle, ExternalLink, Gift, AlertTriangle } from 'lucide-react'
+import { ExternalLink, Gift, AlertTriangle } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
-import { FieldLabel, FieldError, SearchSelect, SimpleSelect, Switch, inputCls } from '@app/core/components/ui'
+import { FieldLabel, SearchSelect, SimpleSelect, Switch, ReadField, RadioCard, SuccessModal } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, Button, TextField, MiniTable } from '@app/core/components/form'
+import { Breadcrumb } from '@app/core/components/list'
+import { Checkbox } from '@app/core/ui/checkbox'
 import { mockCandidates } from '../../admision/data/mockData'
 import type { Candidate } from '../../admision/data/types'
 import { mockStudents, MUNICIPIOS_POR_ESTADO, mockGroups, mockInstitutionalDocuments } from '../data/mockData'
@@ -21,16 +24,6 @@ import { mockStudents, MUNICIPIOS_POR_ESTADO, mockGroups, mockInstitutionalDocum
  * parent-driven with one shared form object, so a partial-wizard split across
  * PRs would ship a non-functional intermediate state.
  */
-
-/** Read-only summary field — mirrors the page-local `ReadField` pattern already used in `CandidatoRegistro.tsx`/`EstudianteDetalle.tsx`. */
-function ReadField({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-[13px] text-[#333333] font-medium">{value || '—'}</p>
-    </div>
-  )
-}
 
 // ─── Paso 1: pool of candidates this wizard can enroll ──────────────────────
 // Only `ACCEPTED` candidates (Admisión's terminal "admitted" state) that
@@ -61,45 +54,6 @@ const ESTADOS_CATALOGO = [
 ]
 const TIPOS_SANGRE = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 const TIPOS_TRABAJO = ['Tiempo completo', 'Medio tiempo', 'Freelance', 'Negocio propio']
-
-/** Radio card — shared visual for Nacionalidad, matching `CandidatoRegistro.tsx`'s pattern. */
-function RadioCard({ selected, title, onSelect }: { selected: boolean; title: string; onSelect: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`w-full text-left flex items-center gap-3 px-4 py-3 border rounded-lg transition-colors ${
-        selected ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
-      }`}
-    >
-      <span className={`flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${selected ? 'border-[#009574]' : 'border-[#E5E7EB]'}`}>
-        {selected && <span className="w-2 h-2 rounded-full bg-[#009574]" />}
-      </span>
-      <span className="text-[13px] font-semibold text-[#333333]">{title}</span>
-    </button>
-  )
-}
-
-/** Plain text input paired with `FieldLabel`/`FieldError`, styled via `inputCls`. */
-function TextField({ label, required, value, onChange, placeholder, error, maxLength, type = 'text' }: {
-  label: string; required?: boolean; value: string; onChange: (v: string) => void
-  placeholder?: string; error?: string; maxLength?: number; type?: 'text' | 'time'
-}) {
-  return (
-    <div>
-      <FieldLabel required={required}>{label}</FieldLabel>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        className={inputCls(false, !!error)}
-      />
-      {error && <FieldError>{error}</FieldError>}
-    </div>
-  )
-}
 
 /** Required Sí/No question row — mirrors `CandidatoRegistro.tsx`'s `SwitchField`. */
 function SwitchField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
@@ -228,29 +182,8 @@ function nextMatricula(): string {
   return `${prefix}${String(lastNum + 1).padStart(4, '0')}`
 }
 
-/** Success modal shown after "Finalizar Inscripción" — mirrors `ConfirmModal`'s visual language with a success accent. */
-function SuccessModal({ nombre, matricula, onClose }: { nombre: string; matricula: string; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" />
-      <div className="relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full max-w-sm mx-4 p-6 text-center">
-        <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
-          <CheckCircle2 size={28} className="text-emerald-500" />
-        </div>
-        <h3 className="text-[16px] font-semibold text-[#333333] mb-1">Inscripción registrada</h3>
-        <p className="text-[13px] text-[#6B7280] mb-4">{nombre} fue inscrito(a) exitosamente. Matrícula asignada:</p>
-        <p className="text-[20px] font-bold text-[#009574] mb-6">{matricula}</p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-        >
-          Ir a Estudiantes
-        </button>
-      </div>
-    </div>
-  )
-}
+// ─── Success modal shown after "Finalizar Inscripción" — uses the core
+// `SuccessModal` (ui.tsx) shared with ReinscripcionWizard. ────────────
 
 export default function NuevoIngresoWizard() {
   const navigate = useNavigate()
@@ -627,29 +560,21 @@ export default function NuevoIngresoWizard() {
       )}
 
       {!paso3.manualOverrideOpen ? (
-        <button
-          type="button"
-          onClick={() => setPaso3(p => ({ ...p, manualOverrideOpen: true }))}
-          className="text-[12px] text-[#6B7280] hover:text-[#009574] underline underline-offset-2 mb-8"
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={() => setPaso3(p => ({ ...p, manualOverrideOpen: true }))} className="mb-8">
           ¿Necesitas reasignar el grupo manualmente?
-        </button>
+        </Button>
       ) : (
         <div className="mb-8">
           <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-2">Reasignación manual (excepción)</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {mockGroups.map(g => (
-              <button
+              <RadioCard
                 key={g.grupo}
-                type="button"
-                onClick={() => setPaso3(p => ({ ...p, manualGrupo: g.grupo }))}
-                className={`text-left px-4 py-3 border rounded-lg transition-colors ${
-                  paso3.manualGrupo === g.grupo ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
-                }`}
-              >
-                <p className="text-[14px] font-semibold text-[#333333]">{g.grupo}</p>
-                <p className="text-[12px] text-[#6B7280] mt-0.5">{g.nivel} · Turno {g.turno} · Capacidad {g.capacidad}</p>
-              </button>
+                selected={paso3.manualGrupo === g.grupo}
+                title={g.grupo}
+                description={`${g.nivel} · Turno ${g.turno} · Capacidad ${g.capacidad}`}
+                onSelect={() => setPaso3(p => ({ ...p, manualGrupo: g.grupo }))}
+              />
             ))}
           </div>
         </div>
@@ -659,26 +584,16 @@ export default function NuevoIngresoWizard() {
         <>
           <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Materias del Grupo</p>
           <div className="border border-[#E5E7EB] rounded-lg overflow-hidden">
-            <table className="w-full text-[13px]">
-              <thead className="bg-[#F8F9FA]">
-                <tr className="text-left text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">
-                  <th className="px-4 py-2.5">Materia</th>
-                  <th className="px-4 py-2.5">Clave</th>
-                  <th className="px-4 py-2.5">Créditos</th>
-                  <th className="px-4 py-2.5">Horario</th>
-                </tr>
-              </thead>
-              <tbody>
-                {effectiveGroup.materias.map(m => (
-                  <tr key={m.clave} className="border-t border-[#E5E7EB]">
-                    <td className="px-4 py-2.5 text-[#333333]">{m.materia}</td>
-                    <td className="px-4 py-2.5 text-[#6B7280] font-mono text-[12px]">{m.clave}</td>
-                    <td className="px-4 py-2.5 text-[#6B7280]">{m.creditos}</td>
-                    <td className="px-4 py-2.5 text-[#6B7280]">{m.horario}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <MiniTable
+              items={effectiveGroup.materias}
+              keyFor={m => m.clave}
+              columns={[
+                { key: 'materia', header: 'Materia', render: m => <span className="text-[#333333]">{m.materia}</span> },
+                { key: 'clave', header: 'Clave', render: m => <span className="font-mono text-[12px] text-[#6B7280]">{m.clave}</span> },
+                { key: 'creditos', header: 'Créditos', render: m => <span className="text-[#6B7280]">{m.creditos}</span> },
+                { key: 'horario', header: 'Horario', render: m => <span className="text-[#6B7280]">{m.horario}</span> },
+              ]}
+            />
           </div>
         </>
       )}
@@ -696,9 +611,7 @@ export default function NuevoIngresoWizard() {
           const accepted = paso4.acceptedIds.includes(doc.id)
           return (
             <div key={doc.id} className={`flex items-start gap-3 px-4 py-3 border rounded-lg transition-colors ${accepted ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white'}`}>
-              <button type="button" onClick={() => toggleDocAccepted(doc.id)} className="flex-shrink-0 mt-0.5">
-                {accepted ? <CheckCircle2 size={19} className="text-[#009574]" /> : <Circle size={19} className="text-[#6B7280]" />}
-              </button>
+              <Checkbox checked={accepted} onCheckedChange={() => toggleDocAccepted(doc.id)} className="flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[13px] font-semibold text-[#333333]">{doc.name}</p>
@@ -708,15 +621,9 @@ export default function NuevoIngresoWizard() {
                   Ver documento <ExternalLink size={11} />
                 </a>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleDocAccepted(doc.id)}
-                className={`flex-shrink-0 px-3 py-1.5 text-[12px] font-semibold rounded-md transition-colors ${
-                  accepted ? 'bg-white border border-[#009574] text-[#009574]' : 'bg-[#009574] hover:bg-[#007a5e] text-white'
-                }`}
-              >
+              <Button size="sm" variant={accepted ? 'outline' : 'primary'} onClick={() => toggleDocAccepted(doc.id)}>
                 {accepted ? 'Aceptado' : 'He leído y acepto'}
-              </button>
+              </Button>
             </div>
           )
         })}
@@ -763,37 +670,33 @@ export default function NuevoIngresoWizard() {
     { id: 'complementarios', label: 'Datos Complementarios', render: paso2Render, isValid: paso2Valid },
     { id: 'grupo', label: 'Grupo Asignado', render: paso3Render, isValid: paso3Valid },
     { id: 'documentos', label: 'Documentos Institucionales', render: paso4Render, isValid: paso4Valid },
-    { id: 'pago', label: 'Pago', render: paso5Render, isValid: paso5Valid },
+    { id: 'pago', label: 'Pago', render: paso5Render, isValid: paso5Valid, gated: true },
   ]
 
   return (
-    <div className="max-w-[960px] mx-auto px-8 py-8">
+    <FormPage>
       {showSuccess && (
         <SuccessModal
-          nombre={selectedCandidate?.nombre ?? ''}
-          matricula={matricula}
+          title="Inscripción registrada"
+          message={`${selectedCandidate?.nombre ?? 'El estudiante'} fue inscrito(a) exitosamente. Matrícula asignada: ${matricula}`}
+          buttonLabel="Ir a Estudiantes"
           onClose={() => navigate('/inscripciones/estudiantes')}
         />
       )}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/inscripciones')} className="hover:text-[#009574] transition-colors">
-          Inicio
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Inscripción — Nuevo Ingreso</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Inscripciones', to: '/inscripciones' },
+          { label: 'Inscripción — Nuevo Ingreso' },
+        ]}
+      />
 
-      {/* Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Inscripción — Nuevo Ingreso</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">Registra la inscripción de un candidato admitido en 5 pasos.</p>
-      </div>
+      <FormHeader title="Inscripción — Nuevo Ingreso" subtitle="Registra la inscripción de un candidato admitido en 5 pasos." />
 
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-8">
+      <FormCard>
         <Wizard steps={steps} onComplete={handleComplete} finishLabel="Finalizar Inscripción" />
-      </div>
-    </div>
+      </FormCard>
+    </FormPage>
   )
 }
