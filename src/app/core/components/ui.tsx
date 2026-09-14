@@ -36,6 +36,17 @@ export function FieldError({ children }: { children: React.ReactNode }) {
   return <p className="mt-1 text-[11px] text-red-500">{children}</p>
 }
 
+// ─── ReadField ───────────────────────────────────────────────────────────────
+// Campo de solo lectura para fichas/detalle: label + valor legible.
+export function ReadField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
+      <p className={`text-[13px] text-[#333333] ${mono ? 'font-mono' : 'font-medium'}`}>{value || '—'}</p>
+    </div>
+  )
+}
+
 // ─── SearchSelect ─────────────────────────────────────────────────────────────
 interface SearchSelectProps {
   options: string[]
@@ -660,6 +671,39 @@ export function Switch({ checked, onChange, disabled = false }: { checked: boole
   )
 }
 
+// ─── RadioCard ────────────────────────────────────────────────────────────────
+// Tarjeta de selección visual (radio) — compartida por `CandidatoRegistro`
+// (Nacionalidad, isFirstChoice, método de pago), `AplicarDescuento` (tipo de
+// descuento) y `NuevoIngresoWizard`. `description` es opcional.
+export function RadioCard({ selected, title, description, onSelect }: {
+  selected: boolean
+  title: string
+  description?: string
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full text-left flex items-start gap-3 px-4 py-3 border rounded-lg transition-colors ${
+        selected ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
+      }`}
+    >
+      <span
+        className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+          selected ? 'border-[#009574]' : 'border-[#E5E7EB]'
+        }`}
+      >
+        {selected && <span className="w-2 h-2 rounded-full bg-[#009574]" />}
+      </span>
+      <span>
+        <span className="block text-[13px] font-semibold text-[#333333]">{title}</span>
+        {description && <span className="block text-[12px] text-[#6B7280] mt-0.5">{description}</span>}
+      </span>
+    </button>
+  )
+}
+
 // ─── Tabs ──────────────────────────────────────────────────────────────────────
 // Barra de pestañas sin scroll: el contenido define su propia altura (solo se
 // alterna la pestaña activa). Útil para detalle/fichas con sub-vistas.
@@ -788,6 +832,65 @@ export function ConfirmModal({ title, message, confirmLabel = 'Confirmar', onCon
             {confirmLabel}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Modal ───────────────────────────────────────────────────────────────────
+// Modal genérico: overlay + panel scrollable con título, contenido y footer.
+export function Modal({ title, subtitle, onClose, children, footer, maxWidth = 'max-w-lg' }: {
+  title: string
+  subtitle?: string
+  onClose: () => void
+  children: ReactNode
+  footer?: ReactNode
+  maxWidth?: string
+}) {
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className={`relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full ${maxWidth} mx-4 max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-[#E5E7EB]">
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#333333]" style={{ whiteSpace: 'pre-wrap' }}>{title}</h3>
+            {subtitle && <p className="text-[13px] text-[#6B7280] mt-1">{subtitle}</p>}
+          </div>
+          <button onClick={onClose} className="text-[#6B7280] hover:text-[#333333] transition-colors" aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+        {footer && (
+          <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] bg-[#F8F9FA] rounded-b-xl">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── SuccessModal ─────────────────────────────────────────────────────────────
+// Confirmación de éxito (check verde) con un único botón de acción.
+export function SuccessModal({ title, message, buttonLabel = 'Continuar', onClose }: {
+  title: string
+  message: string
+  buttonLabel?: string
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full max-w-sm mx-4 p-6 text-center">
+        <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+          <CheckCircle size={28} className="text-emerald-500" />
+        </div>
+        <h3 className="text-[16px] font-semibold text-[#333333] mb-2">{title}</h3>
+        <p className="text-[13px] text-[#6B7280] mb-6">{message}</p>
+        <button onClick={onClose} className="w-full px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+          {buttonLabel}
+        </button>
       </div>
     </div>
   )
