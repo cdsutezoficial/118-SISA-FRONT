@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { Toast } from '@app/core/components/ui'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { Breadcrumb, PageHeader, DataTable, type ColumnDef } from '@app/core/components/list'
+import { Breadcrumb, PageContainer, PageHeader, DataTable, type ColumnDef } from '@app/core/components/list'
 import { KpiCards, QuickAccess, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
 import { mockCandidates } from '../data/mockData'
 import type { Candidate } from '../data/types'
@@ -100,7 +100,7 @@ export default function AdmisionDashboard() {
   const [toast, setToast] = useState(pendingToast ?? '')
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
+    <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
       <Breadcrumb items={[{ label: 'Inicio' }, { label: 'Admisión' }]} />
 
@@ -167,6 +167,6 @@ export default function AdmisionDashboard() {
 
       {/* Acciones Rápidas */}
       <QuickAccess items={quickAccess} title="Acciones Rápidas" variant="inline" />
-    </div>
+    </PageContainer>
   )
 }

@@ -1,7 +1,19 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import { ChevronRight, Search } from 'lucide-react'
-import { Toast, SearchSelect, SimpleSelect } from '@app/core/components/ui'
+import { Toast } from '@app/core/components/ui'
+import { Button } from '@app/core/components/form'
+import { Checkbox } from '@app/core/ui/checkbox'
+import {
+  PageContainer,
+  Breadcrumb,
+  PageHeader,
+  SearchInput,
+  FilterBar,
+  FilterSelect,
+  ResultCount,
+  DataTable,
+  MobileCards,
+  type ColumnDef,
+} from '@app/core/components/list'
 import { mockCandidates } from '../data/mockData'
 import type { Candidate } from '../data/types'
 
@@ -46,14 +58,18 @@ const INDUCCION_ESTADO_META: Record<InduccionEstado, { label: string; badgeClass
   EXENTO: { label: 'Exento', badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
 }
 
+const INDUCCION_BADGES: Record<string, { label: string; className: string }> = {
+  Pendiente: { label: 'Pendiente', className: 'bg-gray-100 text-gray-600 border border-gray-200' },
+  Habilitado: { label: 'Habilitado', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  Exento: { label: 'Exento', className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+}
+
 /** Filter dropdown wording follows the UX prompt literally (differs from the badge's own shorter "Pendiente" label). */
 const ESTADO_FILTER_ORDER: { value: InduccionEstado; label: string }[] = [
   { value: 'PENDIENTE', label: 'Pendiente de habilitar' },
   { value: 'HABILITADO', label: 'Habilitado' },
   { value: 'EXENTO', label: 'Exento' },
 ]
-const estadoFilterOptions = ESTADO_FILTER_ORDER.map(e => e.label)
-const estadoFilterLabelToValue = new Map<string, InduccionEstado>(ESTADO_FILTER_ORDER.map(e => [e.label, e.value]))
 
 /** Candidates eligible for this screen — see file-level comment. */
 function isFichaPagada(c: Candidate): boolean {
@@ -67,11 +83,10 @@ function getInduccionEstado(c: Candidate): InduccionEstado {
 }
 
 export default function HabilitarInduccion() {
-  const navigate = useNavigate()
   const [candidates, setCandidates] = useState<Candidate[]>(mockCandidates.filter(isFichaPagada))
   const [search, setSearch] = useState('')
   const [programaFilter, setProgramaFilter] = useState('')
-  const [estadoFilterLabel, setEstadoFilterLabel] = useState('')
+  const [estadoFilter, setEstadoFilter] = useState<InduccionEstado | ''>('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState('')
 
@@ -79,8 +94,7 @@ export default function HabilitarInduccion() {
 
   const filtered = candidates.filter(c => {
     const matchPrograma = !programaFilter || c.programa === programaFilter
-    const estadoValue = estadoFilterLabelToValue.get(estadoFilterLabel)
-    const matchEstado = !estadoValue || getInduccionEstado(c) === estadoValue
+    const matchEstado = !estadoFilter || getInduccionEstado(c) === estadoFilter
     const q = search.trim().toLowerCase()
     const matchSearch = !q || c.nombre.toLowerCase().includes(q) || c.folio.toLowerCase().includes(q)
     return matchPrograma && matchEstado && matchSearch
@@ -108,145 +122,136 @@ export default function HabilitarInduccion() {
     setToast(`${ids.length} candidato(s) habilitado(s) para el curso de inducción.`)
   }
 
+  const columns: ColumnDef<Candidate>[] = [
+    {
+      key: '__select__',
+      header: '',
+      className: 'w-10',
+      render: row => {
+        const pendiente = getInduccionEstado(row) === 'PENDIENTE'
+        return pendiente ? (
+          <Checkbox
+            checked={selectedIds.has(row.id)}
+            onCheckedChange={() => toggleSelected(row.id)}
+          />
+        ) : null
+      },
+    },
+    { key: 'folio', header: 'Folio', type: 'code', className: 'w-40' },
+    { key: 'nombre', header: 'Nombre Completo', type: 'name' },
+    { key: 'programa', header: 'Programa', type: 'text' },
+    { key: 'examen', header: 'Examen', type: 'text', className: 'w-24', value: row => row.examen?.calificacion ?? '—' },
+    { key: 'estado', header: 'Estado Inducción', type: 'badge', className: 'w-36', value: row => INDUCCION_ESTADO_META[getInduccionEstado(row)].label, badge: INDUCCION_BADGES },
+    {
+      key: 'acciones',
+      header: 'Acciones',
+      className: 'w-32',
+      render: row =>
+        getInduccionEstado(row) === 'PENDIENTE' ? (
+          <Button size="sm" onClick={() => habilitar([row.id])}>
+            Habilitar
+          </Button>
+        ) : null,
+    },
+  ]
+
   return (
-    <div className="max-w-[1280px] mx-auto px-8 py-8">
+    <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">
-          Inicio
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Admisión</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Habilitación para Inducción</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/admision' },
+          { label: 'Admisión' },
+          { label: 'Habilitación para Inducción' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Habilitación para Inducción</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">Solo aparecen candidatos con ficha pagada.</p>
-      </div>
+      <PageHeader
+        title="Habilitación para Inducción"
+        subtitle="Solo aparecen candidatos con ficha pagada."
+      />
 
       {/* Filters */}
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <div className="w-64">
-          <SearchSelect
-            options={programas}
-            value={programaFilter}
-            onChange={setProgramaFilter}
-            placeholder="Todos los programas"
-          />
-        </div>
-        <div className="w-52">
-          <SimpleSelect
-            options={estadoFilterOptions}
-            value={estadoFilterLabel}
-            onChange={setEstadoFilterLabel}
-            placeholder="Todos"
-          />
-        </div>
-        <div className="relative flex-1 min-w-[220px]">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre o folio..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition"
-          />
-        </div>
-      </div>
+      <FilterBar>
+        <FilterSelect
+          value={programaFilter}
+          onChange={setProgramaFilter}
+          allLabel="Todos los programas"
+          options={programas.map(p => ({ value: p, label: p }))}
+          className="sm:w-64"
+        />
+        <FilterSelect
+          value={estadoFilter}
+          onChange={v => setEstadoFilter(v as InduccionEstado | '')}
+          allLabel="Todos"
+          options={ESTADO_FILTER_ORDER.map(e => ({ value: e.value, label: e.label }))}
+          className="sm:w-52"
+        />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o folio..." />
+        <ResultCount count={filtered.length} />
+      </FilterBar>
 
-      {/* Table */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg overflow-hidden">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
-              <th className="px-4 py-3 w-10" />
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-40">Folio</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Nombre Completo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Programa</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-24">Examen</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-36">Estado Inducción</th>
-              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider w-32">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-                    <Search size={36} className="text-[#E5E7EB]" />
-                    <p className="text-[13px] font-medium">No se encontraron candidatos</p>
-                    <p className="text-[12px]">Intenta ajustar los filtros de búsqueda</p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              filtered.map(row => {
-                const estado = getInduccionEstado(row)
-                const pendiente = estado === 'PENDIENTE'
-                return (
-                  <tr key={row.id} className="border-b border-[#E5E7EB] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                    <td className="px-4 py-3">
-                      {pendiente && (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(row.id)}
-                          onChange={() => toggleSelected(row.id)}
-                          className="h-4 w-4 rounded border-[#E5E7EB] text-[#009574] focus:ring-[#009574]/30 cursor-pointer"
-                        />
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-[#6B7280]">{row.folio}</td>
-                    <td className="px-4 py-3 font-medium text-[#333333]">{row.nombre}</td>
-                    <td className="px-4 py-3 text-[#333333]">{row.programa}</td>
-                    <td className="px-4 py-3 text-[#333333]">{row.examen?.calificacion ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${INDUCCION_ESTADO_META[estado].badgeClass}`}>
-                        {INDUCCION_ESTADO_META[estado].label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {pendiente && (
-                        <button
-                          onClick={() => habilitar([row.id])}
-                          className="px-3 py-1.5 text-[12px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors"
-                        >
-                          Habilitar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
+      {/* ── Desktop table (md+) ─────────────────────────────────────────────── */}
+      <DataTable
+        columns={columns}
+        status="idle"
+        items={filtered}
+        keyFor={row => row.id}
+        loadingLabel="Cargando candidatos..."
+        emptyTitle="No se encontraron candidatos"
+        emptyHint="Intenta ajustar los filtros de búsqueda"
+      />
 
-        {/* Pagination — static footer, mock data fits a single page (mirrors
-            `CandidatosList.tsx`'s convention; no real pagination logic yet). */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[#E5E7EB] bg-[#F8F9FA]">
-          <p className="text-[12px] text-[#6B7280]">
-            {filtered.length === 0
-              ? 'Sin resultados para los filtros aplicados'
-              : `Mostrando 1–${filtered.length} de ${filtered.length} registros`}
-          </p>
-        </div>
-      </div>
+      {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
+      <MobileCards
+        status="idle"
+        items={filtered}
+        keyFor={row => row.id}
+        renderItem={row => {
+          const estado = getInduccionEstado(row)
+          const pendiente = estado === 'PENDIENTE'
+          return (
+            <>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <span className="text-[13px] font-medium text-[#333333]">{row.nombre}</span>
+                {pendiente && (
+                  <Checkbox
+                    checked={selectedIds.has(row.id)}
+                    onCheckedChange={() => toggleSelected(row.id)}
+                    className="flex-shrink-0"
+                  />
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#6B7280] mb-3">
+                <span>Folio: <span className="font-mono font-medium text-[#333333]">{row.folio}</span></span>
+                <span>Programa: <span className="font-medium text-[#333333]">{row.programa}</span></span>
+                <span>Examen: <span className="font-medium text-[#333333]">{row.examen?.calificacion ?? '—'}</span></span>
+                <span className={`inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${INDUCCION_ESTADO_META[estado].badgeClass}`}>
+                  {INDUCCION_ESTADO_META[estado].label}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+                {pendiente ? (
+                  <Button size="sm" onClick={() => habilitar([row.id])}>
+                    Habilitar
+                  </Button>
+                ) : null}
+              </div>
+            </>
+          )
+        }}
+        loadingLabel="Cargando candidatos..."
+        emptyTitle="No se encontraron candidatos"
+        emptyHint="Intenta ajustar los filtros de búsqueda"
+      />
 
       {/* Bulk action */}
       <div className="flex justify-end mt-5">
-        <button
-          onClick={() => habilitar(Array.from(selectedIds))}
-          disabled={selectedCount === 0}
-          className="px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <Button onClick={() => habilitar(Array.from(selectedIds))} disabled={selectedCount === 0}>
           Habilitar seleccionados ({selectedCount})
-        </button>
+        </Button>
       </div>
-    </div>
+    </PageContainer>
   )
 }

@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight, AlertTriangle, XCircle, Megaphone } from 'lucide-react'
+import { AlertTriangle, XCircle } from 'lucide-react'
 import { ConfirmModal, Toast, Switch } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions } from '@app/core/components/form'
+import { Breadcrumb } from '@app/core/components/list'
 import { mockCandidates } from '../data/mockData'
 
 /**
@@ -69,7 +71,7 @@ export default function PublicarResultados() {
   }
 
   return (
-    <div className="max-w-[900px] mx-auto px-8 py-8">
+    <FormPage>
       {toast && <Toast message={toast} onClose={() => { setToast(''); navigate('/admision') }} />}
 
       {confirming && (
@@ -82,25 +84,18 @@ export default function PublicarResultados() {
         />
       )}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-        <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">
-          Inicio
-        </button>
-        <ChevronRight size={13} />
-        <span className="text-[#6B7280]">Admisión</span>
-        <ChevronRight size={13} />
-        <span className="text-[#333333] font-medium">Publicar Resultados</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/admision' },
+          { label: 'Admisión' },
+          { label: 'Publicar Resultados' },
+        ]}
+      />
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#333333]">Publicar Resultados de Admisión</h1>
-        <p className="text-[14px] text-[#6B7280] mt-1">
-          Publica la lista oficial de admitidos con el folio y la matrícula asignada. Este paso se ejecuta después de
-          que todas las matrículas han sido generadas.
-        </p>
-      </div>
+      <FormHeader
+        title="Publicar Resultados de Admisión"
+        subtitle="Publica la lista oficial de admitidos con el folio y la matrícula asignada. Este paso se ejecuta después de que todas las matrículas han sido generadas."
+      />
 
       {/* Warning alert */}
       <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3.5 mb-6">
@@ -112,7 +107,7 @@ export default function PublicarResultados() {
       </div>
 
       {/* Summary card */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg px-6 py-5 mb-6">
+      <FormCard>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-6">
           <SummaryField label="Periodo" value={PERIODO_ACTIVO} />
           <SummaryField label="Total Procesados" value={String(totalProcesados)} />
@@ -120,7 +115,7 @@ export default function PublicarResultados() {
           <SummaryField label="Rechazados" value={String(rechazados)} />
           <SummaryField label="Matrículas Generadas" value={String(matriculasGeneradas)} highlight={matriculasCompletas} />
         </div>
-      </div>
+      </FormCard>
 
       {/* Blocking error alert — pending ACCEPTED candidates without a matrícula */}
       {!canPublicar && (
@@ -134,31 +129,22 @@ export default function PublicarResultados() {
       )}
 
       {/* Configuración de la Publicación */}
-      <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
+      <FormCard>
         <h2 className="text-[14px] font-semibold text-[#333333] mb-4">Configuración de la Publicación</h2>
         <div className="flex items-center justify-between max-w-sm">
           <span className="text-[13px] font-medium text-[#333333]">¿Notificar por correo electrónico?</span>
           <Switch checked={notificarEmail} onChange={setNotificarEmail} />
         </div>
-      </div>
+      </FormCard>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-3">
-        <button
-          onClick={() => navigate('/admision')}
-          className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={() => setConfirming(true)}
-          disabled={!canPublicar}
-          className="flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] disabled:bg-[#9CA3AF] disabled:cursor-not-allowed text-white rounded-md transition-colors"
-        >
-          <Megaphone size={14} />
-          Publicar Resultados
-        </button>
-      </div>
-    </div>
+      <FormActions
+        isView={false}
+        onBack={() => navigate('/admision')}
+        onPrimary={() => setConfirming(true)}
+        primaryLabel="Publicar Resultados"
+        primaryDisabled={!canPublicar}
+      />
+    </FormPage>
   )
 }
