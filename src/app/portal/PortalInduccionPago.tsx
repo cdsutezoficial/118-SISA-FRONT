@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { Building2, CheckCircle2, CreditCard, GraduationCap, Loader2 } from 'lucide-react'
+import { Button } from '@app/core/components/form'
+import { Tabs, ReadField } from '@app/core/components/ui'
+import { BadgePill } from '@app/core/components/list'
 import { useRole } from '@app/core/infra/RoleContext'
 import { mockCandidates } from '@app/modules/admision/data/mockData'
 import type { Candidate } from '@app/modules/admision/data/types'
@@ -39,16 +42,6 @@ function buildReferencia(folio: string): string {
   const mm = String(today.getMonth() + 1).padStart(2, '0')
   const dd = String(today.getDate()).padStart(2, '0')
   return `REF-IND-${yyyy}${mm}${dd}-${suffix}`
-}
-
-/** Read-only summary field — mirrors the page-local `ReadField` pattern already used in `FichaConfirmacion.tsx`/`CandidatoDetalle.tsx`. */
-function ReadField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
-      <p className={`text-[13px] text-[#333333] ${mono ? 'font-mono' : 'font-medium'}`}>{value || '—'}</p>
-    </div>
-  )
 }
 
 export default function PortalInduccionPago() {
@@ -162,9 +155,12 @@ export default function PortalInduccionPago() {
               <ReadField label="Fecha de confirmación" value={candidate.pagoInduccion.fecha ?? '—'} />
               <ReadField label="Folio de comprobante" value={referencia} mono />
             </div>
-            <span className="inline-block px-3 py-1 text-[12px] font-bold bg-emerald-600 text-white rounded-full uppercase tracking-wide mb-3">
-              Pagado
-            </span>
+            <BadgePill
+              value="Pagado"
+              map={{
+                Pagado: { label: 'Pagado', className: 'bg-emerald-600 text-white' },
+              }}
+            />
             <p className="text-[12px] text-emerald-700">
               Presenta este comprobante al ingresar al curso de inducción.
             </p>
@@ -172,38 +168,20 @@ export default function PortalInduccionPago() {
         ) : (
           <div className="bg-white border border-[#E5E7EB] rounded-lg p-6">
             <p className="text-[13px] font-semibold text-[#333333] mb-4">Instrucciones de pago</p>
-            <div className="flex items-center gap-1 border-b border-[#E5E7EB] mb-5">
-              <button
-                type="button"
-                onClick={() => setActiveTab('ONLINE')}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
-                  activeTab === 'ONLINE' ? 'border-[#009574] text-[#009574]' : 'border-transparent text-[#6B7280] hover:text-[#333333]'
-                }`}
-              >
-                <CreditCard size={14} />Pagar en línea
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('VENTANILLA')}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
-                  activeTab === 'VENTANILLA' ? 'border-[#009574] text-[#009574]' : 'border-transparent text-[#6B7280] hover:text-[#333333]'
-                }`}
-              >
-                <Building2 size={14} />Pagar en ventanilla
-              </button>
-            </div>
+            <Tabs
+              tabs={[
+                { key: 'ONLINE', label: 'Pagar en línea', icon: <CreditCard size={14} /> },
+                { key: 'VENTANILLA', label: 'Pagar en ventanilla', icon: <Building2 size={14} /> },
+              ]}
+              active={activeTab}
+              onSelect={k => setActiveTab(k as MetodoPago)}
+            />
 
             {activeTab === 'ONLINE' ? (
               <div>
-                <button
-                  type="button"
-                  onClick={handlePagarEnLinea}
-                  disabled={payingOverlay}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-[14px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                  {payingOverlay && <Loader2 size={16} className="animate-spin" />}
+                <Button onClick={handlePagarEnLinea} loading={payingOverlay} className="w-full sm:w-auto">
                   Pagar en línea — ${candidate.pagoInduccion.monto.toFixed(2)}
-                </button>
+                </Button>
                 <p className="text-[12px] text-[#6B7280] mt-3">
                   Serás redirigido a Evo Payments para completar tu pago.
                 </p>
