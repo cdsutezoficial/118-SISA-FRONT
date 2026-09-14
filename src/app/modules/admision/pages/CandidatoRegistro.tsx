@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight, ShieldCheck, CheckCircle2, GraduationCap, Loader2, Lock } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, GraduationCap, Loader2, Lock } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
-import { FieldLabel, FieldHelp, FieldError, SearchSelect, SimpleSelect, Switch, inputCls } from '@app/core/components/ui'
+import { FieldLabel, FieldHelp, FieldError, SearchSelect, SimpleSelect, Switch, RadioCard, inputCls, ReadField } from '@app/core/components/ui'
+import { FormPage, FormHeader, Button } from '@app/core/components/form'
+import { Breadcrumb } from '@app/core/components/list'
 import { formatDate } from '@app/core/infra/utils'
 import { mockCandidates } from '../data/mockData'
 import type {
@@ -233,33 +235,6 @@ function nextFolio(): string {
 
 // ─── Shared field helpers ─────────────────────────────────────────────────────
 
-/** Radio card — shared visual for Nacionalidad, isFirstChoice, and método de pago. */
-function RadioCard({ selected, title, description, onSelect }: {
-  selected: boolean; title: string; description?: string; onSelect: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`w-full text-left flex items-start gap-3 px-4 py-3 border rounded-lg transition-colors ${
-        selected ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
-      }`}
-    >
-      <span
-        className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-          selected ? 'border-[#009574]' : 'border-[#E5E7EB]'
-        }`}
-      >
-        {selected && <span className="w-2 h-2 rounded-full bg-[#009574]" />}
-      </span>
-      <span>
-        <span className="block text-[13px] font-semibold text-[#333333]">{title}</span>
-        {description && <span className="block text-[12px] text-[#6B7280] mt-0.5">{description}</span>}
-      </span>
-    </button>
-  )
-}
-
 /** Plain text/number/time input paired with `FieldLabel`/`FieldError`, styled via `inputCls`. */
 function TextField({ label, required, value, onChange, placeholder, error, maxLength, type = 'text' }: {
   label: string; required?: boolean; value: string; onChange: (v: string) => void
@@ -306,16 +281,6 @@ function SwitchField({ label, checked, onChange, help }: { label: string; checke
         <span className="text-[12px] text-[#6B7280] w-6 text-right">{checked ? 'Sí' : 'No'}</span>
         <Switch checked={checked} onChange={onChange} />
       </div>
-    </div>
-  )
-}
-
-/** Read-only summary row for Paso 4's confirmation card. */
-function ReadField({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-[13px] text-[#333333] font-medium">{value || '—'}</p>
     </div>
   )
 }
@@ -589,15 +554,15 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             </p>
 
             {!isVerified ? (
-              <button
+              <Button
                 type="button"
                 onClick={handleVerify}
                 disabled={identityStatus === 'verifying'}
-                className="mt-4 flex items-center gap-2 px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                className="mt-4"
               >
                 {identityStatus === 'verifying' && <Loader2 size={14} className="animate-spin" />}
                 {identityStatus === 'verifying' ? 'Verificando...' : 'Verificar con LlaveMX'}
-              </button>
+              </Button>
             ) : (
               <div className="mt-4 flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1105,7 +1070,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     { id: 'datos-generales', label: 'Datos Generales', render: paso1Render, isValid: paso1Valid },
     { id: 'informacion-complementaria', label: 'Información Complementaria', render: paso2Render, isValid: paso2Valid },
     { id: 'seleccion-carrera', label: 'Selección de Carrera', render: paso3Render, isValid: paso3Valid },
-    { id: 'confirmacion', label: 'Confirmación', render: paso4Render, isValid: paso4Valid },
+    { id: 'confirmacion', label: 'Confirmación', render: paso4Render, isValid: paso4Valid, gated: true },
   ]
 
   const content = (
@@ -1114,27 +1079,26 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     </div>
   )
 
-  // ── Staff mount — AppLayout shell, sidebar/breadcrumb present ──
+  // ── Staff mount — AppLayout shell, sidebar present; chrome aligned to core ──
   if (origin === 'staff') {
     return (
-      <div className="max-w-[960px] mx-auto px-8 py-8">
-        <nav className="flex items-center gap-1.5 text-[13px] text-[#6B7280] mb-4">
-          <button onClick={() => navigate('/admision')} className="hover:text-[#009574] transition-colors">Inicio</button>
-          <ChevronRight size={13} />
-          <span className="text-[#6B7280]">Admisión</span>
-          <ChevronRight size={13} />
-          <button onClick={() => navigate('/admision/candidatos')} className="hover:text-[#009574] transition-colors">Candidatos</button>
-          <ChevronRight size={13} />
-          <span className="text-[#333333] font-medium">Registrar Candidato</span>
-        </nav>
+      <FormPage>
+        <Breadcrumb
+          items={[
+            { label: 'Inicio', to: '/admision' },
+            { label: 'Admisión', to: '/admision' },
+            { label: 'Candidatos', to: '/admision/candidatos' },
+            { label: 'Registrar Candidato' },
+          ]}
+        />
 
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-[#333333]">Registrar Candidato</h1>
-          <p className="text-[14px] text-[#6B7280] mt-1">Completa los cuatro pasos para registrar al aspirante en el proceso de admisión.</p>
-        </div>
+        <FormHeader
+          title="Registrar Candidato"
+          subtitle="Completa los cuatro pasos para registrar al aspirante en el proceso de admisión."
+        />
 
         {content}
-      </div>
+      </FormPage>
     )
   }
 
