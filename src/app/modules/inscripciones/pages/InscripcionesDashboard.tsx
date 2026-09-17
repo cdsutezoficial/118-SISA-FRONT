@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { UserPlus, RotateCcw, Users, Clock3, UserCheck, Activity, FileText, Archive } from 'lucide-react'
+import { UserPlus, RotateCcw, Clock3, UserCheck, Activity } from 'lucide-react'
 import { Toast } from '@app/core/components/ui'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { Breadcrumb, PageHeader, DataTable, PageContainer, type ColumnDef } from '@app/core/components/list'
-import { KpiCards, QuickAccess, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
+import { KpiCards, type KpiCardData } from '@app/core/components/dashboard'
 import { mockStudents, mockEnrollments, ACTIVE_PERIOD } from '../data/mockData'
 import type { Student } from '../data/types'
 
@@ -102,14 +102,6 @@ const avanceColumns: ColumnDef<ProgramaAvance>[] = [
   { key: 'total', header: 'Total', type: 'count', value: r => r.nuevoIngresoTotal + r.reinscripcionesTotal, className: 'w-20' },
 ]
 
-const quickAccess: QuickAccessItem[] = [
-  { label: 'Inscribir Nuevo Ingreso', icon: <UserPlus size={16} />, url: '/inscripciones/nuevo-ingreso' },
-  { label: 'Procesar Reinscripción', icon: <RotateCcw size={16} />, url: '/inscripciones/reinscripcion' },
-  { label: 'Ver Todos los Estudiantes', icon: <Users size={16} />, url: '/inscripciones/estudiantes' },
-  { label: 'Documentos Institucionales', icon: <FileText size={16} />, url: '/inscripciones/documentos' },
-  { label: 'Expediente (Recibidos)', icon: <Archive size={16} />, url: '/inscripciones/expediente' },
-]
-
 export default function InscripcionesDashboard() {
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
@@ -145,8 +137,6 @@ export default function InscripcionesDashboard() {
         }
       />
 
-      {/* Acciones Rápidas */}
-      <QuickAccess items={quickAccess} title="Acciones Rápidas" variant="inline" />
     </PageContainer>
   )
 }

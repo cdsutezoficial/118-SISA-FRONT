@@ -3,18 +3,12 @@ import {
   Users,
   CreditCard,
   ClipboardList,
-  ClipboardCheck,
   CheckCircle2,
-  UserPlus,
-  Megaphone,
-  BadgePercent,
-  Unlock,
-  IdCard,
 } from 'lucide-react'
 import { Toast } from '@app/core/components/ui'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { Breadcrumb, PageContainer, PageHeader, DataTable, type ColumnDef } from '@app/core/components/list'
-import { KpiCards, QuickAccess, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
+import { KpiCards, type KpiCardData } from '@app/core/components/dashboard'
 import { mockCandidates } from '../data/mockData'
 import type { Candidate } from '../data/types'
 
@@ -28,9 +22,6 @@ const pagosConfirmados = mockCandidates.filter(c => c.pagoFicha.status !== 'PEND
 const examenesAplicados = mockCandidates.filter(c => c.examen !== null).length
 const induccionCompletada = mockCandidates.filter(c => c.induccionResultado !== null).length
 const admitidos = mockCandidates.filter(c => c.status === 'ACCEPTED' || c.status === 'ENROLLED').length
-
-/** Per the nav prompt: "Generar Matrículas" quick access is visible only while there's pending work (candidatos aceptados sin matrícula). */
-const hayMatriculasPendientes = mockCandidates.some(c => c.status === 'ACCEPTED')
 
 const funnelStages: { label: string; count: number; color: string }[] = [
   { label: 'Registrados', count: totalFichasRegistradas, color: 'bg-gray-400' },
@@ -83,17 +74,6 @@ const estadoProgramasColumns: ColumnDef<ProgramaStat>[] = [
   { key: 'completados', header: 'Completados', type: 'count', value: r => r.completados, className: 'w-24' },
 ]
 
-const quickAccess: QuickAccessItem[] = [
-  { label: 'Ver Candidatos', icon: <Users size={16} />, url: '/admision/candidatos' },
-  { label: 'Registrar Candidato', icon: <UserPlus size={16} />, url: '/admision/candidatos/registrar' },
-  { label: 'Canales de Difusión', icon: <Megaphone size={16} />, url: '/admision/canales' },
-  { label: 'Selección de Candidatos', icon: <ClipboardCheck size={16} />, url: '/admision/seleccion' },
-  { label: 'Aplicar Descuentos', icon: <BadgePercent size={16} />, url: '/admision/descuentos' },
-  { label: 'Habilitar Inducción', icon: <Unlock size={16} />, url: '/admision/habilitacion' },
-  ...(hayMatriculasPendientes ? [{ label: 'Generar Matrículas', icon: <IdCard size={16} />, url: '/admision/matriculas' }] : []),
-  { label: 'Publicar Resultados', icon: <Megaphone size={16} />, url: '/admision/publicar' },
-]
-
 export default function AdmisionDashboard() {
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
@@ -131,7 +111,7 @@ export default function AdmisionDashboard() {
       </div>
 
       {/* Candidatos por Programa */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <DataTable
           columns={topProgramasColumns}
           status="idle"
@@ -163,9 +143,6 @@ export default function AdmisionDashboard() {
           }
         />
       </div>
-
-      {/* Acciones Rápidas */}
-      <QuickAccess items={quickAccess} title="Acciones Rápidas" variant="inline" />
     </PageContainer>
   )
 }
