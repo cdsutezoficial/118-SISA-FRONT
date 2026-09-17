@@ -27,6 +27,16 @@ export const ADMIN_SERVICIOS_ROLES: Role[] = [
   'ADMINISTRADOR', 'SERVICIOS_ESCOLARES',
 ]
 
+/**
+ * Todos los roles de staff (los que montan el shell). Los ítems de los módulos
+ * cuyo rol dueño todavía no está definido (Admisión/Inscripciones) se muestran
+ * a cualquiera de estos roles; las guardas de ruta (`RequireRole` por pantalla)
+ * siguen redirigiendo si el rol no puede abrirla.
+ */
+export const ALL_STAFF_ROLES: Role[] = [
+  'ADMINISTRADOR', 'GESTOR_ACADEMICO', 'SERVICIOS_ESCOLARES', 'FINANZAS', 'DIRECTOR_DIVISION',
+]
+
 export const ROLE_LABELS: Record<Role, string> = {
   ADMINISTRADOR: 'Administrador',
   GESTOR_ACADEMICO: 'Gestor Académico',
