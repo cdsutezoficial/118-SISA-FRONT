@@ -89,6 +89,10 @@ import UsuarioDetalle from '@app/modules/identity/pages/UsuarioDetalle'
 import AsignarRol from '@app/modules/identity/pages/AsignarRol'
 import CambiarPassword from '@app/modules/identity/pages/CambiarPassword'
 
+// Roles y permisos (solo front — mock)
+import RolesList from '@app/modules/identity/pages/RolesList'
+import RolPermisos from '@app/modules/identity/pages/RolPermisos'
+
 const router = createBrowserRouter([
   // Root redirect — goes to /login (no auth guard yet)
   { path: '/', element: <Navigate to="/login" replace /> },
@@ -436,6 +440,16 @@ const router = createBrowserRouter([
       { path: 'usuarios/detalle',            element: <UsuarioDetalle /> },
       { path: 'usuarios/asignar-rol',        element: <AsignarRol /> },
       { path: 'usuarios/cambiar-password',   element: <CambiarPassword /> },
+
+      // Roles y permisos (solo front — catálogo mock, read-only)
+      {
+        path: 'roles',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RolesList /></RequireRole>,
+      },
+      {
+        path: 'roles/permisos',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RolPermisos /></RequireRole>,
+      },
     ],
   },
 ])

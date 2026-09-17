@@ -6,7 +6,7 @@ import {
   CalendarRange, Users, CreditCard, IdCard, UserPlus,
   ClipboardCheck, ChevronLeft, ChevronRight, ChevronDown,
   LogOut, UserCog, X, Settings, Tags, Users2, Ticket,
-  Megaphone, BadgePercent, Unlock, RotateCcw, FileText, Archive,
+  Megaphone, BadgePercent, Unlock, RotateCcw, FileText, Archive, ShieldCheck,
 } from 'lucide-react'
 import { useRole } from '../infra/RoleContext'
 import type { Role } from '../infra/RoleContext'
@@ -60,6 +60,7 @@ export const SYSTEM_NAV: NavEntry[] = [
     id: 'admin', icon: <UserCog size={18} />, label: 'Administración',
     children: [
       { icon: <IdCard size={18} />, label: 'Usuarios', base: 'usuarios', path: '/usuarios', roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <ShieldCheck size={18} />, label: 'Roles', base: 'roles', path: '/roles', roles: ADMIN_SERVICIOS_ROLES },
     ],
   },
   {
