@@ -3,6 +3,7 @@ import { ArrowLeft, Check, ChevronDown, Loader2, Pencil, Save, Search, X } from 
 import { FieldLabel, FieldHelp, FieldError, inputCls } from './ui'
 import type { SelectOption } from './ui'
 import { PageContainer } from './list'
+import { useOpenDirection } from '@app/core/infra/hooks'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary: #009574, hover: #007a5e
@@ -159,7 +160,7 @@ export function IconButton({ icon, onClick, danger = false, disabled, className 
 // Antes se escribía a mano con `inputCls(disabled, hasError)` en cada vista.
 
 // ─── TextField ────────────────────────────────────────────────────────────────
-export function TextField({ label, required, value, onChange, disabled, error, help, type = 'text', placeholder, placeholderHidden = false, mono, numeric, maxLength, min, max, step, readOnly, autoFocus, className }: {
+export function TextField({ label, required, value, onChange, disabled, error, help, type = 'text', placeholder, placeholderHidden = false, mono, numeric, maxLength, min, max, step, readOnly, autoFocus, inputMode, prefix, className }: {
   label?: string
   required?: boolean
   value: string
@@ -181,28 +182,196 @@ export function TextField({ label, required, value, onChange, disabled, error, h
   step?: number | string
   readOnly?: boolean
   autoFocus?: boolean
+  /** Teclado móvil sugerido (p.ej. 'numeric' para montos). */
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
+  /** Símbolo fijo a la izquierda del input (p.ej. "$" para montos). */
+  prefix?: string
   className?: string
 }) {
   const isDisabled = disabled || placeholderHidden
-  const cls = `${inputCls(disabled ?? false, !!error)}${mono ? ' font-mono' : ''}${numeric ? ' tabular-nums' : ''}`
+  const cls = `${inputCls(disabled ?? false, !!error)}${mono ? ' font-mono' : ''}${numeric ? ' tabular-nums' : ''}${prefix ? ' pl-7' : ''}`
   return (
     <div className={className}>
       {label && <FieldLabel required={required}>{label}</FieldLabel>}
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange?.(e.target.value)}
-        disabled={isDisabled}
-        readOnly={readOnly}
-        autoFocus={autoFocus}
-        placeholder={placeholderHidden ? '' : placeholder}
-        maxLength={maxLength}
-        min={min}
-        max={max}
-        step={step}
-        className={cls}
-      />
+      <div className="relative">
+        {prefix && (
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B7280] pointer-events-none select-none">
+            {prefix}
+          </span>
+        )}
+        <input
+          type={type}
+          inputMode={inputMode}
+          value={value}
+          onChange={e => onChange?.(e.target.value)}
+          disabled={isDisabled}
+          readOnly={readOnly}
+          autoFocus={autoFocus}
+          placeholder={placeholderHidden ? '' : placeholder}
+          maxLength={maxLength}
+          min={min}
+          max={max}
+          step={step}
+          className={cls}
+        />
+      </div>
       {error ? <FieldError>{error}</FieldError> : help ? <FieldHelp>{help}</FieldHelp> : null}
+    </div>
+  )
+}
+
+// ─── TimeField ──────────────────────────────────────────────────────────────
+// Selector de hora custom (mismo lenguaje visual que SelectField): dos dropdowns
+// Hora (00-23) y Minutos (00-59), sin granulosidad. Reemplaza al <input
+// type="time"> nativo, que mostraba "--:--" en Chrome/Edge. El valor se mantiene
+// como string "HH:MM" (mismo contrato que antes).
+export function TimeField({ label, required, value, onChange, disabled, error, className }: {
+  label?: string
+  required?: boolean
+  value: string
+  onChange?: (v: string) => void
+  disabled?: boolean
+  error?: string
+  className?: string
+}) {
+  const [openUnit, setOpenUnit] = useState<'H' | 'M' | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const { openUp, measureAndSet } = useOpenDirection(ref)
+
+  const [h, m] = value ? value.split(':') : ['', '']
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+  const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
+
+  useEffect(() => {
+    if (disabled) setOpenUnit(null)
+  }, [disabled])
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpenUnit(null)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function toggle(unit: 'H' | 'M') {
+    if (openUnit === unit) {
+      setOpenUnit(null)
+      return
+    }
+    measureAndSet()
+    setOpenUnit(unit)
+  }
+
+  function select(unit: 'H' | 'M', v: string) {
+    if (unit === 'H') {
+      onChange?.(`${v}:${m !== '' ? m : '00'}`)
+    } else {
+      onChange?.(`${h !== '' ? h : '00'}:${v}`)
+    }
+    setOpenUnit(null)
+  }
+
+  const triggerCls = (active: boolean, filled: boolean) =>
+    `w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${
+      error
+        ? 'border-red-400'
+        : 'border-[#E5E7EB] hover:border-[#009574]/50 focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]'
+    } ${filled ? 'text-[#333333]' : 'text-[#6B7280]'} ${active ? 'ring-2 ring-[#009574]/30 border-[#009574] text-[#333333]' : ''}`
+
+  return (
+    <div className={className}>
+      {label && <FieldLabel required={required}>{label}</FieldLabel>}
+      {disabled ? (
+        <div className="w-full flex items-center gap-1.5">
+          <div className="flex-1 px-3 py-2 text-[13px] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md text-[#6B7280] select-none">
+            {h !== '' ? h : 'Hora'}
+          </div>
+          <span className="text-[#9CA3AF] flex-shrink-0">:</span>
+          <div className="flex-1 px-3 py-2 text-[13px] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md text-[#6B7280] select-none">
+            {m !== '' ? m : 'Min'}
+          </div>
+        </div>
+      ) : (
+        <div ref={ref} className="flex items-center gap-1.5">
+          <div className="relative flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => toggle('H')}
+              className={triggerCls(openUnit === 'H', h !== '')}
+              title="Selecciona la hora"
+            >
+              <span className="truncate">{h !== '' ? h : 'Hora'}</span>
+              <ChevronDown size={14} className={`text-[#6B7280] transition-transform flex-shrink-0 ${openUnit === 'H' ? 'rotate-180' : ''}`} />
+            </button>
+            {openUnit === 'H' &&
+              (() => {
+                const cur = h
+                return (
+                  <div className={`absolute ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden`}>
+                    <ul className="max-h-52 overflow-y-auto py-1">
+                      {hours.map(x => (
+                        <li key={x}>
+                          <button
+                            type="button"
+                            onClick={() => select('H', x)}
+                            className={`w-full text-left px-3 py-2 text-[13px] transition-colors flex items-center justify-between ${
+                              x === cur
+                                ? 'bg-[#e6f5f1] text-[#009574] font-medium'
+                                : 'text-[#333333] hover:bg-[#e6f5f1] hover:text-[#009574]'
+                            }`}
+                          >
+                            {x}
+                            {x === cur && <Check size={13} className="flex-shrink-0" />}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()}
+          </div>
+          <span className="text-[#9CA3AF] flex-shrink-0">:</span>
+          <div className="relative flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => toggle('M')}
+              className={triggerCls(openUnit === 'M', m !== '')}
+              title="Selecciona los minutos"
+            >
+              <span className="truncate">{m !== '' ? m : 'Min'}</span>
+              <ChevronDown size={14} className={`text-[#6B7280] transition-transform flex-shrink-0 ${openUnit === 'M' ? 'rotate-180' : ''}`} />
+            </button>
+            {openUnit === 'M' &&
+              (() => {
+                const cur = m
+                return (
+                  <div className={`absolute ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden`}>
+                    <ul className="max-h-52 overflow-y-auto py-1">
+                      {minutes.map(x => (
+                        <li key={x}>
+                          <button
+                            type="button"
+                            onClick={() => select('M', x)}
+                            className={`w-full text-left px-3 py-2 text-[13px] transition-colors flex items-center justify-between ${
+                              x === cur
+                                ? 'bg-[#e6f5f1] text-[#009574] font-medium'
+                                : 'text-[#333333] hover:bg-[#e6f5f1] hover:text-[#009574]'
+                            }`}
+                          >
+                            {x}
+                            {x === cur && <Check size={13} className="flex-shrink-0" />}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()}
+          </div>
+        </div>
+      )}
+      {error && <FieldError>{error}</FieldError>}
     </div>
   )
 }
@@ -253,6 +422,7 @@ export function SelectField({ label, required, value, onChange, disabled, error,
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const { openUp, measureAndSet } = useOpenDirection(ref)
 
   useEffect(() => {
     if (disabled) setOpen(false)
@@ -280,7 +450,7 @@ export function SelectField({ label, required, value, onChange, disabled, error,
         <div ref={ref} className="relative">
           <button
             type="button"
-            onClick={() => setOpen(o => !o)}
+            onClick={() => { if (!open) measureAndSet(); setOpen(o => !o) }}
             className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${
               error
                 ? 'border-red-400'
@@ -306,7 +476,7 @@ export function SelectField({ label, required, value, onChange, disabled, error,
             </div>
           </button>
           {open && (
-            <div className="absolute top-full mt-1 left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden">
+            <div className={`absolute ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden`}>
               <ul className="max-h-52 overflow-y-auto py-1">
                 {options.map(o => (
                   <li key={o.value}>

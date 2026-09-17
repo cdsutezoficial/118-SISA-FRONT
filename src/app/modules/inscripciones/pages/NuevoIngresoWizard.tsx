@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { ExternalLink, Gift, AlertTriangle } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
-import { FieldLabel, SearchSelect, SimpleSelect, Switch, ReadField, RadioCard, SuccessModal } from '@app/core/components/ui'
-import { FormPage, FormHeader, FormCard, Button, TextField, MiniTable } from '@app/core/components/form'
+import { FieldLabel, SearchSelect, Switch, ReadField, RadioCard, SuccessModal } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, Button, TextField, MiniTable, SelectField, TimeField } from '@app/core/components/form'
 import { Breadcrumb } from '@app/core/components/list'
 import { Checkbox } from '@app/core/ui/checkbox'
 import { mockCandidates } from '../../admision/data/mockData'
@@ -474,8 +474,14 @@ export default function NuevoIngresoWizard() {
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Salud</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12 md:col-span-4">
-          <FieldLabel required>Tipo de Sangre</FieldLabel>
-          <SimpleSelect options={TIPOS_SANGRE} value={paso2.tipoSangre} onChange={v => setPaso2({ ...paso2, tipoSangre: v })} placeholder="Seleccionar" />
+          <SelectField
+            label="Tipo de Sangre"
+            required
+            options={TIPOS_SANGRE.map(v => ({ value: v, label: v }))}
+            value={paso2.tipoSangre}
+            onChange={v => setPaso2({ ...paso2, tipoSangre: v })}
+            placeholder="Seleccionar…"
+          />
         </div>
         <div className="col-span-12 md:col-span-8 flex items-end">
           <div className="w-full">
@@ -497,8 +503,14 @@ export default function NuevoIngresoWizard() {
         {paso2.trabaja && (
           <>
             <div className="col-span-12 md:col-span-4">
-              <FieldLabel required>Tipo de Trabajo</FieldLabel>
-              <SimpleSelect options={TIPOS_TRABAJO} value={paso2.tipoTrabajo} onChange={v => setPaso2({ ...paso2, tipoTrabajo: v })} placeholder="Seleccionar" />
+              <SelectField
+                label="Tipo de Trabajo"
+                required
+                options={TIPOS_TRABAJO.map(v => ({ value: v, label: v }))}
+                value={paso2.tipoTrabajo}
+                onChange={v => setPaso2({ ...paso2, tipoTrabajo: v })}
+                placeholder="Seleccionar…"
+              />
             </div>
             <div className="col-span-12 md:col-span-4">
               <TextField label="Nombre de la Empresa" required value={paso2.empresa} onChange={v => setPaso2({ ...paso2, empresa: v })} />
@@ -507,10 +519,10 @@ export default function NuevoIngresoWizard() {
               <TextField label="Puesto" required value={paso2.puesto} onChange={v => setPaso2({ ...paso2, puesto: v })} />
             </div>
             <div className="col-span-6 md:col-span-3">
-              <TextField label="Hora de Inicio" required type="time" value={paso2.horaInicio} onChange={v => setPaso2({ ...paso2, horaInicio: v })} />
+              <TimeField label="Hora de Inicio" required value={paso2.horaInicio} onChange={v => setPaso2({ ...paso2, horaInicio: v })} />
             </div>
             <div className="col-span-6 md:col-span-3">
-              <TextField label="Hora de Fin" required type="time" value={paso2.horaFin} onChange={v => setPaso2({ ...paso2, horaFin: v })} />
+              <TimeField label="Hora de Fin" required value={paso2.horaFin} onChange={v => setPaso2({ ...paso2, horaFin: v })} />
             </div>
           </>
         )}
