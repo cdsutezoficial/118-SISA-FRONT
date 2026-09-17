@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Building2, GraduationCap, BookOpen, BookMarked, CalendarRange, Users, CreditCard, ClipboardList, CheckCircle2, Activity } from 'lucide-react'
+import { Building2, GraduationCap, BookOpen, BookMarked, CalendarRange, Users, CreditCard, Tags, Users2, CheckCircle2, Activity } from 'lucide-react'
 import { usePendingToast } from '../infra/hooks'
 import { Breadcrumb, PageHeader, DataTable, type ColumnDef, type BadgeStyle } from '@app/core/components/list'
 import { KpiCards, QuickAccess, InitialAvatar, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
@@ -15,11 +15,11 @@ const quickAccess: QuickAccessItem[] = [
   { label: 'Divisiones', icon: <Building2 size={20} />, url: '/divisiones' },
   { label: 'Programas', icon: <GraduationCap size={20} />, url: '/programas' },
   { label: 'Planes de Estudio', icon: <BookOpen size={20} />, url: '/planes' },
-  { label: 'Materias', icon: <BookMarked size={20} />, url: '/materias' },
+  { label: 'Clasificaciones', icon: <Tags size={20} />, url: '/clasificaciones' },
   { label: 'Periodos', icon: <CalendarRange size={20} />, url: '/periodos' },
   { label: 'Grupos', icon: <Users size={20} />, url: '/grupos' },
   { label: 'Conceptos de Pago', icon: <CreditCard size={20} />, url: '/conceptos' },
-  { label: 'Escalas de Cal.', icon: <ClipboardList size={20} />, url: '/escalas' },
+  { label: 'Generaciones', icon: <Users2 size={20} />, url: '/generaciones' },
 ]
 
 const recentActivity = [

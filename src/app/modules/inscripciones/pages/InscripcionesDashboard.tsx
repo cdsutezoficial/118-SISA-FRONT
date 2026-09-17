@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { UserPlus, RotateCcw, Users, Clock3, UserCheck, Activity } from 'lucide-react'
+import { UserPlus, RotateCcw, Users, Clock3, UserCheck, Activity, FileText, Archive } from 'lucide-react'
 import { Toast } from '@app/core/components/ui'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { Breadcrumb, PageHeader, DataTable, PageContainer, type ColumnDef } from '@app/core/components/list'
@@ -106,6 +106,8 @@ const quickAccess: QuickAccessItem[] = [
   { label: 'Inscribir Nuevo Ingreso', icon: <UserPlus size={16} />, url: '/inscripciones/nuevo-ingreso' },
   { label: 'Procesar Reinscripción', icon: <RotateCcw size={16} />, url: '/inscripciones/reinscripcion' },
   { label: 'Ver Todos los Estudiantes', icon: <Users size={16} />, url: '/inscripciones/estudiantes' },
+  { label: 'Documentos Institucionales', icon: <FileText size={16} />, url: '/inscripciones/documentos' },
+  { label: 'Expediente (Recibidos)', icon: <Archive size={16} />, url: '/inscripciones/expediente' },
 ]
 
 export default function InscripcionesDashboard() {
