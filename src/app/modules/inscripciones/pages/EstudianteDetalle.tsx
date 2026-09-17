@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { UserCheck, GraduationCap, History, FileText, ArrowLeftRight } from 'lucide-react'
-import { Toast, Tabs, ReadField, SearchSelect, SimpleSelect, FieldLabel, Modal } from '@app/core/components/ui'
-import { FormHeader, FormCard, Button, MiniTable } from '@app/core/components/form'
+import { Toast, Tabs, ReadField, SearchSelect, FieldLabel, Modal } from '@app/core/components/ui'
+import { FormHeader, FormCard, Button, MiniTable, SelectField } from '@app/core/components/form'
 import { Breadcrumb, PageContainer, BadgePill, type BadgeStyle } from '@app/core/components/list'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { formatDate } from '@app/core/infra/utils'
@@ -159,9 +159,10 @@ function CambiarProgramaModal({ student, currentPrograma, onSave, onCancel }: {
           <SearchSelect options={GRUPO_OPTIONS} value={grupo} onChange={setGrupo} placeholder="Selecciona un grupo" />
         </div>
         <div>
-          <FieldLabel required>Motivo</FieldLabel>
-          <SimpleSelect
-            options={MOTIVO_OPTIONS.map(m => TIPO_CAMBIO_LABELS[m])}
+          <SelectField
+            label="Motivo"
+            required
+            options={MOTIVO_OPTIONS.map(m => ({ value: TIPO_CAMBIO_LABELS[m], label: TIPO_CAMBIO_LABELS[m] }))}
             value={motivo ? TIPO_CAMBIO_LABELS[motivo] : ''}
             onChange={label => setMotivo(MOTIVO_OPTIONS.find(m => TIPO_CAMBIO_LABELS[m] === label) ?? '')}
             placeholder="Selecciona un motivo"

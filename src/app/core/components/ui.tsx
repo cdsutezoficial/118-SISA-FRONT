@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router'
 import { ChevronDown, X, Check, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Pencil, Eye, RotateCcw, Search } from 'lucide-react'
 import { formatDate, MONTHS, DAYS } from '../infra/utils'
+import { useOpenDirection } from '@app/core/infra/hooks'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary: #009574, hover: #007a5e
@@ -60,6 +61,7 @@ export function SearchSelect({ options, value, onChange, placeholder = 'Seleccio
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+  const { openUp, measureAndSet } = useOpenDirection(ref)
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -84,7 +86,7 @@ export function SearchSelect({ options, value, onChange, placeholder = 'Seleccio
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => { setOpen(!open); setQuery('') }}
+        onClick={() => { if (!open) measureAndSet(); setOpen(!open); setQuery('') }}
         className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] flex items-center justify-between"
       >
         <span className={value ? 'text-[#333333]' : 'text-[#6B7280]'}>{value || placeholder}</span>
@@ -98,7 +100,7 @@ export function SearchSelect({ options, value, onChange, placeholder = 'Seleccio
         </div>
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-[#E5E7EB] rounded-md shadow-lg">
+        <div className={`absolute z-50 ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} w-full bg-white border border-[#E5E7EB] rounded-md shadow-lg`}>
           <div className="p-2 border-b border-[#E5E7EB]">
             <input
               autoFocus
@@ -161,6 +163,7 @@ export function SearchSelectField({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+  const { openUp, measureAndSet } = useOpenDirection(ref)
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -194,7 +197,7 @@ export function SearchSelectField({
     <div ref={ref} className="relative w-full">
       <button
         type="button"
-        onClick={() => { setOpen(o => !o); setQuery('') }}
+        onClick={() => { if (!open) measureAndSet(); setOpen(o => !o); setQuery('') }}
         className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${triggerBorder}`}
       >
         <span className={`truncate ${selected ? 'text-[#333333]' : 'text-[#6B7280]'}`}>
@@ -216,7 +219,7 @@ export function SearchSelectField({
         </div>
       </button>
       {open && (
-        <div className="absolute top-full mt-1 left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden">
+        <div className={`absolute ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden`}>
           <div className="p-2 border-b border-[#E5E7EB]">
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6B7280]" />

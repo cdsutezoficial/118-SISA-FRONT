@@ -2,8 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { ShieldCheck, CheckCircle2, GraduationCap, Loader2, Lock } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
-import { FieldLabel, FieldHelp, FieldError, SearchSelect, SimpleSelect, Switch, RadioCard, inputCls, ReadField } from '@app/core/components/ui'
-import { FormPage, FormHeader, Button } from '@app/core/components/form'
+import { FieldLabel, FieldHelp, SearchSelect, Switch, RadioCard, inputCls, ReadField } from '@app/core/components/ui'
+import { FormPage, FormHeader, Button, SelectField, TextField, TimeField } from '@app/core/components/form'
 import { Breadcrumb } from '@app/core/components/list'
 import { formatDate } from '@app/core/infra/utils'
 import { mockCandidates } from '../data/mockData'
@@ -235,27 +235,6 @@ function nextFolio(): string {
 
 // ─── Shared field helpers ─────────────────────────────────────────────────────
 
-/** Plain text/number/time input paired with `FieldLabel`/`FieldError`, styled via `inputCls`. */
-function TextField({ label, required, value, onChange, placeholder, error, maxLength, type = 'text' }: {
-  label: string; required?: boolean; value: string; onChange: (v: string) => void
-  placeholder?: string; error?: string; maxLength?: number; type?: 'text' | 'email' | 'number' | 'time'
-}) {
-  return (
-    <div>
-      <FieldLabel required={required}>{label}</FieldLabel>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        className={inputCls(false, !!error)}
-      />
-      {error && <FieldError>{error}</FieldError>}
-    </div>
-  )
-}
-
 /** LlaveMX-locked, read-only field — Nombre(s)/Apellidos/CURP/Fecha de Nacimiento/Sexo/Estado de Nacimiento. */
 function LockedField({ label, value, required = true }: { label: string; value: string; required?: boolean }) {
   return (
@@ -287,14 +266,11 @@ function SwitchField({ label, checked, onChange, help }: { label: string; checke
 
 const boolLabel = (v: boolean) => (v ? 'Sí' : 'No')
 
-/** Conditional follow-up text input shown right below a SwitchField when its answer is "Sí". */
-function ConditionalDetailField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <div className="pb-2.5 -mt-1 border-b border-[#E5E7EB] last:border-0">
-      <FieldLabel required>{label}</FieldLabel>
-      <input className={inputCls(false, false)} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-    </div>
-  )
+/** Mantiene solo dígitos y un único punto decimal (para montos con prefix "$"). */
+const sanitizeAmount = (v: string) => {
+  const clean = v.replace(/[^0-9.]/g, '')
+  const firstDot = clean.indexOf('.')
+  return firstDot === -1 ? clean : clean.slice(0, firstDot + 1) + clean.slice(firstDot + 1).replace(/\./g, '')
 }
 
 /** Section wrapper for the full ficha review in Paso 4. */
@@ -640,12 +616,24 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         )}
 
         <div className="col-span-12 md:col-span-4">
-          <FieldLabel required>Estado Civil</FieldLabel>
-          <SimpleSelect options={ESTADOS_CIVILES} value={paso1.estadoCivil} onChange={v => setPaso1({ ...paso1, estadoCivil: v as EstadoCivil })} placeholder="Seleccionar" />
+          <SelectField
+            label="Estado Civil"
+            required
+            options={ESTADOS_CIVILES.map(v => ({ value: v, label: v }))}
+            value={paso1.estadoCivil}
+            onChange={v => setPaso1({ ...paso1, estadoCivil: v as EstadoCivil })}
+            placeholder="Seleccionar…"
+          />
         </div>
         <div className="col-span-12 md:col-span-4">
-          <FieldLabel required>Lengua Natal</FieldLabel>
-          <SimpleSelect options={LENGUAS_NATALES} value={paso1.lenguaNatal} onChange={v => setPaso1({ ...paso1, lenguaNatal: v as LenguaNatal })} placeholder="Seleccionar" />
+          <SelectField
+            label="Lengua Natal"
+            required
+            options={LENGUAS_NATALES.map(v => ({ value: v, label: v }))}
+            value={paso1.lenguaNatal}
+            onChange={v => setPaso1({ ...paso1, lenguaNatal: v as LenguaNatal })}
+            placeholder="Seleccionar…"
+          />
         </div>
         <div className="col-span-12 md:col-span-4 flex items-end">
           <div className="w-full">
@@ -742,19 +730,19 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       <div className="mb-8">
         <SwitchField label="¿Tienes alguna enfermedad o diagnóstico preexistente?" checked={paso2.tieneEnfermedadPreexistente} onChange={v => setPaso2({ ...paso2, tieneEnfermedadPreexistente: v })} />
         {paso2.tieneEnfermedadPreexistente && (
-          <ConditionalDetailField label="Nombre de la enfermedad o diagnóstico" value={paso2.descripcionEnfermedad} onChange={v => setPaso2({ ...paso2, descripcionEnfermedad: v })} />
+          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="Nombre de la enfermedad o diagnóstico" required value={paso2.descripcionEnfermedad} onChange={v => setPaso2({ ...paso2, descripcionEnfermedad: v })} />
         )}
         <SwitchField label="¿Tienes alguna discapacidad?" checked={paso2.tieneDiscapacidad} onChange={v => setPaso2({ ...paso2, tieneDiscapacidad: v })} />
         {paso2.tieneDiscapacidad && (
-          <ConditionalDetailField label="¿Cuál discapacidad?" value={paso2.descripcionDiscapacidad} onChange={v => setPaso2({ ...paso2, descripcionDiscapacidad: v })} />
+          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="¿Cuál discapacidad?" required value={paso2.descripcionDiscapacidad} onChange={v => setPaso2({ ...paso2, descripcionDiscapacidad: v })} />
         )}
         <SwitchField label="¿Tu mamá o papá hablan alguna lengua indígena?" checked={paso2.padresHablanLenguaIndigena} onChange={v => setPaso2({ ...paso2, padresHablanLenguaIndigena: v })} />
         {paso2.padresHablanLenguaIndigena && (
-          <ConditionalDetailField label="¿Cuál lengua?" value={paso2.lenguaIndigenaPadres} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPadres: v })} />
+          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="¿Cuál lengua?" required value={paso2.lenguaIndigenaPadres} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPadres: v })} />
         )}
         <SwitchField label="¿Hablas alguna lengua indígena?" checked={paso2.hablaLenguaIndigena} onChange={v => setPaso2({ ...paso2, hablaLenguaIndigena: v })} />
         {paso2.hablaLenguaIndigena && (
-          <ConditionalDetailField label="¿Cuál lengua?" value={paso2.lenguaIndigenaPropia} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPropia: v })} />
+          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="¿Cuál lengua?" required value={paso2.lenguaIndigenaPropia} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPropia: v })} />
         )}
         <SwitchField label="¿Te identificas como indígena?" checked={paso2.seIdentificaIndigena} onChange={v => setPaso2({ ...paso2, seIdentificaIndigena: v })} />
         <SwitchField label="¿Te identificas como No binario?" checked={paso2.seIdentificaNoBinario} onChange={v => setPaso2({ ...paso2, seIdentificaNoBinario: v })} />
@@ -776,10 +764,11 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           <TextField
             label="Ingreso Mensual Familiar"
             required
-            type="number"
             value={paso2.ingresoMensualFamiliar}
-            onChange={v => setPaso2({ ...paso2, ingresoMensualFamiliar: v })}
-            placeholder="$"
+            onChange={v => setPaso2({ ...paso2, ingresoMensualFamiliar: sanitizeAmount(v) })}
+            prefix="$"
+            inputMode="numeric"
+            placeholder="0.00"
             error={paso2.ingresoMensualFamiliar !== '' && !ingresoFamiliarValid ? 'Ingresa un monto válido.' : undefined}
           />
         </div>
@@ -806,7 +795,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               />
             </div>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="Ingreso Mensual" required type="number" value={paso2.ingresoMensual} onChange={v => setPaso2({ ...paso2, ingresoMensual: v })} placeholder="$" />
+              <TextField label="Ingreso Mensual" required value={paso2.ingresoMensual} onChange={v => setPaso2({ ...paso2, ingresoMensual: sanitizeAmount(v) })} prefix="$" inputMode="numeric" placeholder="0.00" />
             </div>
 
             <div className="col-span-12 md:col-span-6">
@@ -817,10 +806,10 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             </div>
 
             <div className="col-span-6 md:col-span-3">
-              <TextField label="Hora de Inicio" required type="time" value={paso2.horaInicio} onChange={v => setPaso2({ ...paso2, horaInicio: v })} />
+              <TimeField label="Hora de Inicio" required value={paso2.horaInicio} onChange={v => setPaso2({ ...paso2, horaInicio: v })} />
             </div>
             <div className="col-span-6 md:col-span-3">
-              <TextField label="Hora de Fin" required type="time" value={paso2.horaFin} onChange={v => setPaso2({ ...paso2, horaFin: v })} />
+              <TimeField label="Hora de Fin" required value={paso2.horaFin} onChange={v => setPaso2({ ...paso2, horaFin: v })} />
             </div>
           </>
         )}
@@ -834,8 +823,14 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Selección de Carrera</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12 md:col-span-4">
-          <FieldLabel required>Modalidad</FieldLabel>
-          <SimpleSelect options={MODALIDADES} value={paso3.modalidad} onChange={v => setPaso3({ ...paso3, modalidad: v as ModalidadPrograma })} placeholder="Seleccionar" />
+          <SelectField
+            label="Modalidad"
+            required
+            options={MODALIDADES.map(v => ({ value: v, label: v }))}
+            value={paso3.modalidad}
+            onChange={v => setPaso3({ ...paso3, modalidad: v as ModalidadPrograma })}
+            placeholder="Seleccionar…"
+          />
         </div>
         <div className="col-span-12 md:col-span-8">
           <FieldLabel required>Carrera</FieldLabel>
@@ -870,8 +865,14 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           <TextField label="Nombre de la Preparatoria de Procedencia" required value={paso3.nombrePreparatoria} onChange={v => setPaso3({ ...paso3, nombrePreparatoria: v })} />
         </div>
         <div className="col-span-12 md:col-span-4">
-          <FieldLabel required>Tipo de Bachillerato</FieldLabel>
-          <SimpleSelect options={TIPOS_BACHILLERATO} value={paso3.tipoBachillerato} onChange={v => setPaso3({ ...paso3, tipoBachillerato: v as TipoBachillerato })} placeholder="Seleccionar" />
+          <SelectField
+            label="Tipo de Bachillerato"
+            required
+            options={TIPOS_BACHILLERATO.map(v => ({ value: v, label: v }))}
+            value={paso3.tipoBachillerato}
+            onChange={v => setPaso3({ ...paso3, tipoBachillerato: v as TipoBachillerato })}
+            placeholder="Seleccionar…"
+          />
         </div>
 
         <div className="col-span-12">

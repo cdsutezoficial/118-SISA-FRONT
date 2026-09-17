@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, Plus, Pencil } from 'lucide-react'
-import { Toast, SearchSelect, SimpleSelect, DatePicker, Switch, FieldLabel, Modal } from '@app/core/components/ui'
-import { Button, TextField } from '@app/core/components/form'
+import { Toast, SearchSelect, DatePicker, Switch, FieldLabel, Modal } from '@app/core/components/ui'
+import { Button, TextField, SelectField } from '@app/core/components/form'
 import { FileUpload, type UploadedFile } from '@app/core/components/FileUpload'
 import {
   PageContainer,
@@ -168,13 +168,14 @@ function DocumentoModal({ mode, initial, onSave, onCancel }: {
         <TextField label="Descripción" value={description} onChange={setDescription} placeholder="Opcional" />
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <FieldLabel required>Tipo</FieldLabel>
-            <SimpleSelect
-              options={Object.values(DOC_TYPE_LABELS)}
-              value={type ? DOC_TYPE_LABELS[type] : ''}
-              onChange={label => setType((Object.keys(DOC_TYPE_LABELS) as InstitutionalDocumentType[]).find(k => DOC_TYPE_LABELS[k] === label) ?? '')}
-              placeholder="Selecciona un tipo"
-            />
+            <SelectField
+            label="Tipo"
+            required
+            options={Object.values(DOC_TYPE_LABELS).map(l => ({ value: l, label: l }))}
+            value={type ? DOC_TYPE_LABELS[type] : ''}
+            onChange={label => setType((Object.keys(DOC_TYPE_LABELS) as InstitutionalDocumentType[]).find(k => DOC_TYPE_LABELS[k] === label) ?? '')}
+            placeholder="Selecciona un tipo"
+          />
           </div>
           <div>
             <TextField label="Versión" required value={version} onChange={setVersion} placeholder="Ej. v1.0" />
@@ -182,8 +183,14 @@ function DocumentoModal({ mode, initial, onSave, onCancel }: {
         </div>
 
         <div>
-          <FieldLabel required>Alcance</FieldLabel>
-          <SimpleSelect options={Object.values(SCOPE_LABELS)} value={SCOPE_LABELS[scope]} onChange={handleScopeChange} placeholder="Selecciona un alcance" />
+          <SelectField
+          label="Alcance"
+          required
+          options={Object.values(SCOPE_LABELS).map(l => ({ value: l, label: l }))}
+          value={SCOPE_LABELS[scope]}
+          onChange={handleScopeChange}
+          placeholder="Selecciona un alcance"
+        />
         </div>
 
         {scope !== 'GLOBAL' && (
