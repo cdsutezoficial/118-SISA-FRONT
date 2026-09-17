@@ -3,9 +3,12 @@ import {
   Users,
   CreditCard,
   ClipboardList,
+  ClipboardCheck,
   CheckCircle2,
   UserPlus,
   Megaphone,
+  BadgePercent,
+  Unlock,
   IdCard,
 } from 'lucide-react'
 import { Toast } from '@app/core/components/ui'
@@ -26,15 +29,7 @@ const examenesAplicados = mockCandidates.filter(c => c.examen !== null).length
 const induccionCompletada = mockCandidates.filter(c => c.induccionResultado !== null).length
 const admitidos = mockCandidates.filter(c => c.status === 'ACCEPTED' || c.status === 'ENROLLED').length
 
-/**
- * Publish shortcut gating per the spec's CORRECTED scenario ("Dashboard publish
- * shortcut gated by matrícula completion"): visible only when every ACCEPTED
- * candidate has already been ENROLLED (matrícula generated) — NOT gated by an
- * induction-completion count, which was the original (superseded) UX prompt rule.
- */
-const canPublicarResultados = !mockCandidates.some(c => c.status === 'ACCEPTED')
-
-/** Per the nav prompt: "Generar Matrículas" quick access is visible only while there's pending work — i.e. the mirror condition of `canPublicarResultados`. */
+/** Per the nav prompt: "Generar Matrículas" quick access is visible only while there's pending work (candidatos aceptados sin matrícula). */
 const hayMatriculasPendientes = mockCandidates.some(c => c.status === 'ACCEPTED')
 
 const funnelStages: { label: string; count: number; color: string }[] = [
@@ -91,8 +86,12 @@ const estadoProgramasColumns: ColumnDef<ProgramaStat>[] = [
 const quickAccess: QuickAccessItem[] = [
   { label: 'Ver Candidatos', icon: <Users size={16} />, url: '/admision/candidatos' },
   { label: 'Registrar Candidato', icon: <UserPlus size={16} />, url: '/admision/candidatos/registrar' },
+  { label: 'Canales de Difusión', icon: <Megaphone size={16} />, url: '/admision/canales' },
+  { label: 'Selección de Candidatos', icon: <ClipboardCheck size={16} />, url: '/admision/seleccion' },
+  { label: 'Aplicar Descuentos', icon: <BadgePercent size={16} />, url: '/admision/descuentos' },
+  { label: 'Habilitar Inducción', icon: <Unlock size={16} />, url: '/admision/habilitacion' },
   ...(hayMatriculasPendientes ? [{ label: 'Generar Matrículas', icon: <IdCard size={16} />, url: '/admision/matriculas' }] : []),
-  ...(canPublicarResultados ? [{ label: 'Publicar Resultados', icon: <Megaphone size={16} />, url: '/admision/publicar' }] : []),
+  { label: 'Publicar Resultados', icon: <Megaphone size={16} />, url: '/admision/publicar' },
 ]
 
 export default function AdmisionDashboard() {
