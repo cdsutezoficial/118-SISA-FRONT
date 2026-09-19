@@ -53,6 +53,7 @@ export const SYSTEM_NAV: NavEntry[] = [
       { icon: <Users2 size={18} />,        label: 'Generaciones',            base: 'generaciones', path: '/generaciones', roles: ADMIN_SERVICIOS_ROLES },
       { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: ADMIN_SERVICIOS_ROLES },
       { icon: <Ticket size={18} />,        label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <Building2 size={18} />,     label: 'Áreas de Facturación',     base: 'areas',      path: '/areas',      roles: ADMIN_SERVICIOS_ROLES },
       { icon: <CreditCard size={18} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: ADMIN_SERVICIOS_ROLES },
     ],
   },

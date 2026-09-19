@@ -75,6 +75,10 @@ import ConceptosList from '@app/modules/config-academica/pages/ConceptosList'
 import ConceptosForm from '@app/modules/config-academica/pages/ConceptosForm'
 import ConceptosTarifaForm from '@app/modules/config-academica/pages/ConceptosTarifaForm'
 
+// Áreas de conceptos de pago
+import AreasList from '@app/modules/config-academica/pages/AreasList'
+import AreasForm from '@app/modules/config-academica/pages/AreasForm'
+
 // Planes
 import PlanesList from '@app/modules/config-academica/pages/PlanesList'
 import PlanForm from '@app/modules/config-academica/pages/PlanForm'
@@ -400,6 +404,15 @@ const router = createBrowserRouter([
       { path: 'conceptos/new',        element: <ConceptosForm /> },
       { path: 'conceptos/form',       element: <ConceptosForm /> },
       { path: 'conceptos/tarifa/form', element: <ConceptosTarifaForm /> },
+
+      // Áreas de conceptos de pago
+      //
+      // Catálogo compañero de `conceptos` — misma convención: la lista lleva
+      // RoleGuard (los verbos `/payment-areas` los exige ADMIN o
+      // SERVICIOS_ESCOLARES en el backend) y el form queda abierto.
+      { path: 'areas',            element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><AreasList /></RequireRole> },
+      { path: 'areas/new',        element: <AreasForm /> },
+      { path: 'areas/form',       element: <AreasForm /> },
 
       // Planes (includes extras: detalle + materia + escala)
       //
