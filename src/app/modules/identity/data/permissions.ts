@@ -1,42 +1,4 @@
-/**
- * Mock front-only de roles → permisos para la vista "Roles" / "Permisos"
- * (Administración). No hay endpoint de roles/permisos en el backend: el
- * catálogo son los 11 `RoleType` de `identity/data/roles.ts` y los permisos
- * reflejan las reglas REALES de acceso de `SecurityFilterConfig.java`
- * (GET/POST/PUT/PATCH por aggregate) traducidas a acciones de UI.
- *
- * Se define como matriz `resource → rol → acciones` y se invierte a
- * `ROLE_PERMISSIONS` para no repetir la misma información 11 veces.
- */
-
-import { ROLE_LABELS } from './roles'
 import type { RoleType } from './roles'
-
-export type PermissionAction = 'VER' | 'CREAR' | 'EDITAR' | 'ELIMINAR'
-
-export const ACTION_LABELS: Record<PermissionAction, string> = {
-  VER: 'Ver',
-  CREAR: 'Crear',
-  EDITAR: 'Editar',
-  ELIMINAR: 'Eliminar',
-}
-
-export const ACTION_BADGE_STYLE: Record<PermissionAction, string> = {
-  VER: 'bg-blue-50 text-blue-700 border border-blue-200',
-  CREAR: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  EDITAR: 'bg-amber-50 text-amber-700 border border-amber-200',
-  ELIMINAR: 'bg-red-50 text-red-700 border border-red-200',
-}
-
-export interface PermissionItem {
-  resource: string
-  actions: PermissionAction[]
-}
-
-export interface PermissionGroup {
-  module: string
-  items: PermissionItem[]
-}
 
 /** Descripción corta por rol (columna "Descripción" de la tablita). */
 export const ROLE_DESCRIPTIONS: Record<RoleType, string> = {
@@ -53,89 +15,144 @@ export const ROLE_DESCRIPTIONS: Record<RoleType, string> = {
   EGRESADO: 'Consulta catálogos e información de su trayectoria.',
 }
 
-// ─── Matriz de acceso (espejo de SecurityFilterConfig) ─────────────────────────
+const MODULE_ORDER: Record<string, number> = {
+  Identidad: 1,
+  'Configuración Académica': 2,
+  'Pagos y Finanzas': 3,
+  Admisión: 4,
+  Catálogos: 5,
+}
 
-const RW: PermissionAction[] = ['VER', 'CREAR', 'EDITAR']
-const FULL: PermissionAction[] = ['VER', 'CREAR', 'EDITAR', 'ELIMINAR']
-const RO: PermissionAction[] = ['VER']
+const RESOURCE_META: Record<string, { module: string; resource: string; resourceOrder: number }> = {
+  ROLES: { module: 'Identidad', resource: 'Roles', resourceOrder: 10 },
+  PERMISSIONS: { module: 'Identidad', resource: 'Permisos', resourceOrder: 20 },
+  USERS: { module: 'Identidad', resource: 'Usuarios', resourceOrder: 30 },
+  PERSONS: { module: 'Identidad', resource: 'Personas', resourceOrder: 40 },
+  DIVISIONS: { module: 'Configuración Académica', resource: 'Divisiones Académicas', resourceOrder: 10 },
+  PROGRAMS: { module: 'Configuración Académica', resource: 'Programas Educativos', resourceOrder: 20 },
+  PLANS: { module: 'Configuración Académica', resource: 'Planes de Estudio', resourceOrder: 30 },
+  SUBJECT_CLASSIFICATIONS: { module: 'Configuración Académica', resource: 'Clasificaciones de Materias', resourceOrder: 40 },
+  PERIODS: { module: 'Configuración Académica', resource: 'Periodos Académicos', resourceOrder: 50 },
+  GENERATIONS: { module: 'Configuración Académica', resource: 'Generaciones', resourceOrder: 60 },
+  GROUPS: { module: 'Configuración Académica', resource: 'Grupos', resourceOrder: 70 },
+  PROGRAM_ADMISSION_CONFIGS: { module: 'Configuración Académica', resource: 'Configuración de Admisión', resourceOrder: 80 },
+  PAYMENT_AREAS: { module: 'Pagos y Finanzas', resource: 'Áreas de Facturación', resourceOrder: 5 },
+  PAYMENT_CONCEPTS: { module: 'Pagos y Finanzas', resource: 'Conceptos de Pago', resourceOrder: 10 },
+  PAYMENT_RATES: { module: 'Pagos y Finanzas', resource: 'Tarifas de Pago', resourceOrder: 20 },
+  OUTREACH_CHANNELS: { module: 'Admisión', resource: 'Canales de Difusión', resourceOrder: 10 },
+  HIGH_SCHOOL_TYPES: { module: 'Admisión', resource: 'Tipos de Bachillerato', resourceOrder: 20 },
+  STATES: { module: 'Catálogos', resource: 'Estados', resourceOrder: 10 },
+  MUNICIPALITIES: { module: 'Catálogos', resource: 'Municipios', resourceOrder: 20 },
+}
 
-const ACADEMIC_CONFIG: RoleType[] = ['ADMIN', 'SERVICIOS_ESCOLARES']
-const ADMISSION: RoleType[] = ['ADMIN', 'SERVICIOS_ESCOLARES']
-const FINANCE: RoleType[] = ['ADMIN', 'PERSONAL_FINANZAS']
-const ALL_STAFF_ROLES: RoleType[] = [
-  'ADMIN', 'SERVICIOS_ESCOLARES', 'GESTOR_ACADEMICO', 'DIRECTOR_DIVISION',
-  'JEFATURA_ESTADIAS', 'ASISTENTE_ESTADIAS', 'COORDINACION_ESTADIAS_DIVISION',
-  'PERSONAL_FINANZAS', 'DOCENTE', 'ESTUDIANTE', 'EGRESADO',
-]
+const ACTION_META = [
+  { suffix: 'READ', label: 'Ver', actionOrder: 10 },
+  { suffix: 'CREATE', label: 'Crear', actionOrder: 20 },
+  { suffix: 'UPDATE', label: 'Editar', actionOrder: 30 },
+  { suffix: 'DELETE', label: 'Eliminar', actionOrder: 40 },
+  { suffix: 'CHANGE_STATUS', label: 'Cambiar estado', actionOrder: 50 },
+  { suffix: 'ASSIGN_PERMISSIONS', label: 'Asignar permisos', actionOrder: 60 },
+  { suffix: 'ASSIGN_ROLE', label: 'Asignar rol', actionOrder: 70 },
+  { suffix: 'REVOKE_ROLE', label: 'Revocar rol', actionOrder: 80 },
+  { suffix: 'UNLOCK', label: 'Desbloquear usuario', actionOrder: 90 },
+  { suffix: 'ADVANCE_BY_DATE', label: 'Avanzar por fecha', actionOrder: 100 },
+] as const
 
-interface ResourceDef {
+export interface PermissionCatalogItem {
+  id: string
+  name: string
+  key: string
+  status: 'ACTIVE' | 'INACTIVE'
+}
+
+export interface PermissionDisplayItem extends PermissionCatalogItem {
   module: string
   resource: string
-  access: Partial<Record<RoleType, PermissionAction[]>>
+  actionLabel: string
+  actionSuffix: string
+  moduleOrder: number
+  resourceOrder: number
+  actionOrder: number
 }
 
-function rw(roles: RoleType[]): Partial<Record<RoleType, PermissionAction[]>> {
-  return Object.fromEntries(roles.map(r => [r, RW])) as Partial<Record<RoleType, PermissionAction[]>>
+export interface PermissionDisplayGroup {
+  module: string
+  items: PermissionDisplayItem[]
+  resources: PermissionResourceGroup[]
 }
 
-function full(roles: RoleType[]): Partial<Record<RoleType, PermissionAction[]>> {
-  return Object.fromEntries(roles.map(r => [r, FULL])) as Partial<Record<RoleType, PermissionAction[]>>
+export interface PermissionResourceGroup {
+  resource: string
+  items: PermissionDisplayItem[]
 }
 
-function ro(roles: RoleType[]): Partial<Record<RoleType, PermissionAction[]>> {
-  return Object.fromEntries(roles.map(r => [r, RO])) as Partial<Record<RoleType, PermissionAction[]>>
+function titleizeKey(value: string): string {
+  return value
+    .toLowerCase()
+    .split('_')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
-/** Admin siempre tiene acceso total salvo que la regla lo restrinja. */
-const RESOURCES: ResourceDef[] = [
-  // Configuración Académica
-  { module: 'Configuración Académica', resource: 'Divisiones Académicas',   access: rw(ACADEMIC_CONFIG) },
-  { module: 'Configuración Académica', resource: 'Programas Educativos',    access: rw(ACADEMIC_CONFIG) },
-  { module: 'Configuración Académica', resource: 'Planes de Estudio',       access: full(ACADEMIC_CONFIG) },
-  { module: 'Configuración Académica', resource: 'Clasificaciones de Materias', access: rw(ACADEMIC_CONFIG) },
-  { module: 'Configuración Académica', resource: 'Periodos Académicos',     access: rw(ACADEMIC_CONFIG) },
-  { module: 'Configuración Académica', resource: 'Generaciones',            access: rw(ACADEMIC_CONFIG) },
-  { module: 'Configuración Académica', resource: 'Grupos',                  access: rw(ACADEMIC_CONFIG) },
-  { module: 'Configuración Académica', resource: 'Configuración de Admisión', access: rw(ACADEMIC_CONFIG) },
-  { module: 'Configuración Académica', resource: 'Conceptos de Pago',       access: rw(FINANCE) },
+export function isRoleType(roleKey: string): roleKey is RoleType {
+  return roleKey in ROLE_DESCRIPTIONS
+}
 
-  // Admisión
-  { module: 'Admisión', resource: 'Canales de Difusión',  access: rw(ADMISSION) },
-  { module: 'Admisión', resource: 'Tipos de Bachillerato', access: rw(ADMISSION) },
+export function describeRole(roleKey: string, fallbackDescription: string): string {
+  return isRoleType(roleKey) ? ROLE_DESCRIPTIONS[roleKey] : fallbackDescription
+}
 
-  // Identidad
-  { module: 'Identidad', resource: 'Usuarios', access: { ...full(['ADMIN']), ...ro(['SERVICIOS_ESCOLARES']) } },
-  { module: 'Identidad', resource: 'Personas', access: { ...rw(['ADMIN']), ...ro(['SERVICIOS_ESCOLARES']) } },
+export function getPermissionDisplayItem(permission: PermissionCatalogItem): PermissionDisplayItem {
+  const actionMeta = ACTION_META.find(candidate => permission.key.endsWith(`_${candidate.suffix}`))
+  const resourceKey = actionMeta
+    ? permission.key.slice(0, -(actionMeta.suffix.length + 1))
+    : permission.key
+  const resourceMeta = RESOURCE_META[resourceKey]
 
-  // Catálogos (cualquier usuario autenticado, solo lectura)
-  { module: 'Catálogos', resource: 'Estados',     access: ro(ALL_STAFF_ROLES) },
-  { module: 'Catálogos', resource: 'Municipios',  access: ro(ALL_STAFF_ROLES) },
-]
-
-function buildRolePermissions(): Record<RoleType, PermissionGroup[]> {
-  const byRole = Object.fromEntries(
-    (Object.keys(ROLE_LABELS) as RoleType[]).map(role => [role, [] as PermissionGroup[]]),
-  ) as Record<RoleType, PermissionGroup[]>
-
-  for (const resource of RESOURCES) {
-    for (const [role, actions] of Object.entries(resource.access) as [RoleType, PermissionAction[]][]) {
-      let group = byRole[role].find(g => g.module === resource.module)
-      if (!group) {
-        group = { module: resource.module, items: [] }
-        byRole[role].push(group)
-      }
-      group.items.push({ resource: resource.resource, actions })
-    }
+  return {
+    ...permission,
+    module: resourceMeta?.module ?? 'Otros',
+    resource: resourceMeta?.resource ?? titleizeKey(resourceKey),
+    actionLabel: actionMeta?.label ?? permission.name,
+    actionSuffix: actionMeta?.suffix ?? 'OTHER',
+    moduleOrder: MODULE_ORDER[resourceMeta?.module ?? 'Otros'] ?? 99,
+    resourceOrder: resourceMeta?.resourceOrder ?? 99,
+    actionOrder: actionMeta?.actionOrder ?? 999,
   }
-  return byRole
 }
 
-export const ROLE_PERMISSIONS: Record<RoleType, PermissionGroup[]> = buildRolePermissions()
+export function groupPermissionCatalog(permissions: PermissionCatalogItem[]): PermissionDisplayGroup[] {
+  const displayItems = permissions
+    .map(getPermissionDisplayItem)
+    .sort((left, right) => (
+      left.moduleOrder - right.moduleOrder ||
+      left.resourceOrder - right.resourceOrder ||
+      left.actionOrder - right.actionOrder ||
+      left.name.localeCompare(right.name)
+    ))
 
-/** Total de permisos (acciones) de un rol — columna "Permisos" de la tablita. */
-export function permissionCountFor(role: RoleType): number {
-  return ROLE_PERMISSIONS[role].reduce(
-    (total, group) => total + group.items.reduce((sum, item) => sum + item.actions.length, 0),
-    0,
-  )
+  const groups = new Map<string, PermissionDisplayItem[]>()
+  for (const item of displayItems) {
+    const current = groups.get(item.module)
+    if (current) current.push(item)
+    else groups.set(item.module, [item])
+  }
+
+  return Array.from(groups.entries()).map(([module, items]) => {
+    const resources = new Map<string, PermissionDisplayItem[]>()
+    for (const item of items) {
+      const current = resources.get(item.resource)
+      if (current) current.push(item)
+      else resources.set(item.resource, [item])
+    }
+
+    return {
+      module,
+      items,
+      resources: Array.from(resources.entries()).map(([resource, resourceItems]) => ({
+        resource,
+        items: resourceItems,
+      })),
+    }
+  })
 }

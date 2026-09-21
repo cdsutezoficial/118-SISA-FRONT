@@ -23,8 +23,20 @@ import type { Role } from '../infra/RoleContext'
  * Finanzas o Director llega a su propio módulo por `ROLE_DEFAULT_PATHS`, y no
  * ve este ítem en el sidebar.
  */
-export const ADMIN_SERVICIOS_ROLES: Role[] = [
-  'ADMINISTRADOR', 'SERVICIOS_ESCOLARES',
+export const ACADEMIC_CONFIG_ROLES: Role[] = [
+  'SERVICIOS_ESCOLARES',
+]
+
+export const ADMINISTRATION_ROLES: Role[] = [
+  'ADMINISTRADOR',
+]
+
+export const ADMISSION_ROLES: Role[] = [
+  'SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION',
+]
+
+export const ENROLLMENT_ROLES: Role[] = [
+  'SERVICIOS_ESCOLARES',
 ]
 
 /**
@@ -58,9 +70,9 @@ export const ROLE_LABELS: Record<Role, string> = {
  * sidebar no longer showed for the new role).
  */
 export const ROLE_DEFAULT_PATHS: Record<Role, string> = {
-  ADMINISTRADOR: '/dashboard',
+  ADMINISTRADOR: '/usuarios',
   GESTOR_ACADEMICO: '/inscripciones',
-  SERVICIOS_ESCOLARES: '/admision',
+  SERVICIOS_ESCOLARES: '/dashboard',
   FINANZAS: '/admision',
   DIRECTOR_DIVISION: '/admision',
   CANDIDATO: '/portal/induccion',

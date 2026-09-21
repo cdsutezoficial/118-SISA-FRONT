@@ -29,6 +29,14 @@ export const ROLE_MAP: Record<string, Role> = {
   DIRECTOR_DIVISION: 'DIRECTOR_DIVISION',
 }
 
+export const FRONTEND_ROLE_KEY_MAP: Partial<Record<Role, string>> = {
+  ADMINISTRADOR: 'ADMIN',
+  FINANZAS: 'PERSONAL_FINANZAS',
+  SERVICIOS_ESCOLARES: 'SERVICIOS_ESCOLARES',
+  GESTOR_ACADEMICO: 'GESTOR_ACADEMICO',
+  DIRECTOR_DIVISION: 'DIRECTOR_DIVISION',
+}
+
 /** First entry in `roles` that has a frontend `Role` mapping wins; `null` if none do. */
 export function mapRole(roles: string[]): Role | null {
   for (const backendRole of roles) {
@@ -55,6 +63,11 @@ export function mapRoles(roles: string[]): Role[] {
     }
   }
   return out
+}
+
+export function mapFrontendRoleKey(role: Role | null): string | null {
+  if (role === null) return null
+  return FRONTEND_ROLE_KEY_MAP[role] ?? null
 }
 
 export interface JwtClaims {

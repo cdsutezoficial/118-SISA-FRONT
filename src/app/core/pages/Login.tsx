@@ -99,6 +99,12 @@ export default function Login() {
       login(res)
       const target = res.mustChangePassword ? '/usuarios/cambiar-password' : '/dashboard'
       const roles = mapRoles(decodeJwtPayload(res.accessToken)?.roles ?? [])
+      if (roles.length === 0) {
+        logout()
+        setStatus('error')
+        setErrorMsg('Tu cuenta no tiene un rol compatible con este frontend. Contacta a soporte técnico.')
+        return
+      }
       if (roles.length > 1) {
         // Multi-role account → the user picks which role to enter with NOW,
         // then keeps switching from the shell selector anytime afterwards.
@@ -114,6 +120,8 @@ export default function Login() {
         setErrorMsg('Credenciales incorrectas. Verifica tu usuario y contraseña.')
       } else if (apiErr.status === 423) {
         setErrorMsg('Esta cuenta está bloqueada. Contacta a soporte técnico.')
+      } else if (apiErr.status === 403) {
+        setErrorMsg(apiErr.message ?? 'Tu cuenta no tiene acceso a este sistema.')
       } else {
         // Network failure (fetch threw before reaching the server) or an
         // unmapped status — same generic banner either way.

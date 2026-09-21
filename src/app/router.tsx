@@ -3,6 +3,7 @@ import AuthLayout from '@app/core/layout/AuthLayout'
 import AppLayout from '@app/core/layout/AppLayout'
 import { RequireRole } from '@app/core/infra/RequireRole'
 import { RequireAuth } from '@app/core/infra/RequireAuth'
+import { RequirePermission } from '@app/core/infra/RequirePermission'
 
 // Auth pages
 import Login from '@app/core/pages/Login'
@@ -141,7 +142,7 @@ const router = createBrowserRouter([
           // módulos, igual que el ítem del sidebar. Los roles sin acceso se
           // redirigen a SU vista principal (ROLE_DEFAULT_PATHS), nunca a un
           // destino cross-module que pueda ciclar. Ver `RequireRole.tsx`.
-          <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectToRoleMain>
+          <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain>
             <Dashboard />
           </RequireRole>
         ),
@@ -164,7 +165,7 @@ const router = createBrowserRouter([
             index: true,
             element: (
               <RequireRole
-                allowedRoles={['SERVICIOS_ESCOLARES', 'FINANZAS', 'DIRECTOR_DIVISION']}
+                allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}
                 redirectTo="/dashboard"
               >
                 <AdmisionDashboard />
@@ -251,7 +252,7 @@ const router = createBrowserRouter([
             index: true,
             element: (
               <RequireRole
-                allowedRoles={['GESTOR_ACADEMICO', 'ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}
+                allowedRoles={['SERVICIOS_ESCOLARES']}
                 redirectTo="/dashboard"
               >
                 <InscripcionesDashboard />
@@ -260,23 +261,23 @@ const router = createBrowserRouter([
           },
           {
             path: 'estudiantes',
-            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><EstudiantesList /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><EstudiantesList /></RequireRole>,
           },
           {
             path: 'estudiantes/detalle',
-            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><EstudianteDetalle /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><EstudianteDetalle /></RequireRole>,
           },
           {
             path: 'nuevo-ingreso',
-            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><NuevoIngresoWizard /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><NuevoIngresoWizard /></RequireRole>,
           },
           {
             path: 'reinscripcion',
-            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><ReinscripcionWizard /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><ReinscripcionWizard /></RequireRole>,
           },
           {
             path: 'documentos',
-            element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectTo="/inscripciones"><DocumentosInstitucionales /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><DocumentosInstitucionales /></RequireRole>,
           },
           {
             path: 'expediente',
@@ -295,7 +296,7 @@ const router = createBrowserRouter([
       // untouched — out of scope for this change.
       {
         path: 'divisiones',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><DivisionesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['DIVISIONS_READ']} redirectTo="/dashboard"><DivisionesList /></RequirePermission></RequireRole>,
       },
       { path: 'divisiones/new',  element: <DivisionesForm /> },
       { path: 'divisiones/form', element: <DivisionesForm /> },
@@ -310,7 +311,7 @@ const router = createBrowserRouter([
       // untouched — out of scope for this change.
       {
         path: 'clasificaciones',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><ClasificacionesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['SUBJECT_CLASSIFICATIONS_READ']} redirectTo="/dashboard"><ClasificacionesList /></RequirePermission></RequireRole>,
       },
       { path: 'clasificaciones/new',  element: <ClasificacionesForm /> },
       { path: 'clasificaciones/form', element: <ClasificacionesForm /> },
@@ -324,7 +325,7 @@ const router = createBrowserRouter([
       // redirect to `/dashboard` instead of a raw 403/blank state for any
       // other role. `programas/new`/`programas/form` are untouched — out of
       // scope for this change.
-      { path: 'programas', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><ProgramasList /></RequireRole> },
+      { path: 'programas', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PROGRAMS_READ']} redirectTo="/dashboard"><ProgramasList /></RequirePermission></RequireRole> },
       { path: 'programas/new',  element: <ProgramasForm /> },
       { path: 'programas/form', element: <ProgramasForm /> },
 
@@ -338,7 +339,7 @@ const router = createBrowserRouter([
       // scope for this change.
       {
         path: 'periodos',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><PeriodosList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PERIODS_READ']} redirectTo="/dashboard"><PeriodosList /></RequirePermission></RequireRole>,
       },
       { path: 'periodos/new',  element: <PeriodosForm /> },
       { path: 'periodos/form', element: <PeriodosForm /> },
@@ -353,7 +354,7 @@ const router = createBrowserRouter([
       // `generaciones/form` are untouched — out of scope for this change.
       {
         path: 'generaciones',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><GeneracionesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GENERATIONS_READ']} redirectTo="/dashboard"><GeneracionesList /></RequirePermission></RequireRole>,
       },
       { path: 'generaciones/new',  element: <GeneracionesForm /> },
       { path: 'generaciones/form', element: <GeneracionesForm /> },
@@ -367,7 +368,7 @@ const router = createBrowserRouter([
       // redirect to `/dashboard` instead of a raw 403/blank state for any
       // other role. `grupos/new`/`grupos/form` are untouched — out of scope
       // for this change.
-      { path: 'grupos', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><GruposList /></RequireRole> },
+      { path: 'grupos', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_READ']} redirectTo="/dashboard"><GruposList /></RequirePermission></RequireRole> },
       { path: 'grupos/new',  element: <GruposForm /> },
       { path: 'grupos/form', element: <GruposForm /> },
 
@@ -382,7 +383,7 @@ const router = createBrowserRouter([
       // untouched — out of scope for this change.
       {
         path: 'configuracion-admision',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><ConfiguracionAdmisionList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PROGRAM_ADMISSION_CONFIGS_READ']} redirectTo="/dashboard"><ConfiguracionAdmisionList /></RequirePermission></RequireRole>,
       },
       { path: 'configuracion-admision/new',  element: <ConfiguracionAdmisionForm /> },
       { path: 'configuracion-admision/form', element: <ConfiguracionAdmisionForm /> },
@@ -400,7 +401,7 @@ const router = createBrowserRouter([
       // `?conceptId=`. Unlike those two, there is no `?mode=` here: `PaymentRate`
       // is an append-only history with no edit, so this route is ALWAYS
       // registration (2026-07-28 wiring plan, Fase 4 of 4).
-      { path: 'conceptos',            element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><ConceptosList /></RequireRole> },
+      { path: 'conceptos',            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_CONCEPTS_READ']} redirectTo="/dashboard"><ConceptosList /></RequirePermission></RequireRole> },
       { path: 'conceptos/new',        element: <ConceptosForm /> },
       { path: 'conceptos/form',       element: <ConceptosForm /> },
       { path: 'conceptos/tarifa/form', element: <ConceptosTarifaForm /> },
@@ -410,7 +411,7 @@ const router = createBrowserRouter([
       // Catálogo compañero de `conceptos` — misma convención: la lista lleva
       // RoleGuard (los verbos `/payment-areas` los exige ADMIN o
       // SERVICIOS_ESCOLARES en el backend) y el form queda abierto.
-      { path: 'areas',            element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><AreasList /></RequireRole> },
+      { path: 'areas',            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_AREAS_READ']} redirectTo="/dashboard"><AreasList /></RequirePermission></RequireRole> },
       { path: 'areas/new',        element: <AreasForm /> },
       { path: 'areas/form',       element: <AreasForm /> },
 
@@ -427,7 +428,7 @@ const router = createBrowserRouter([
       // wrapped here, mirroring the `divisiones`/`clasificaciones`/`usuarios`
       // precedent — every `/plans` verb is enforced server-side to
       // ADMIN/SERVICIOS_ESCOLARES.
-      { path: 'planes', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><PlanesList /></RequireRole> },
+      { path: 'planes', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_READ']} redirectTo="/dashboard"><PlanesList /></RequirePermission></RequireRole> },
       { path: 'planes/new',          element: <PlanForm /> },
       { path: 'planes/form',         element: <PlanForm /> },
       { path: 'planes/detalle',      element: <PlanDetalle /> },
@@ -443,7 +444,7 @@ const router = createBrowserRouter([
       // out of scope for this change.
       {
         path: 'usuarios',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><UsuariosList /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><RequirePermission permissionKeys={['USERS_READ']} redirectToRoleMain><UsuariosList /></RequirePermission></RequireRole>,
       },
       // `usuarios/form` (register+edit+view via ?mode=) is REMOVED — the
       // 2026-07-28 wiring plan drops "edit" entirely (no `PUT /users/{id}`
@@ -457,11 +458,11 @@ const router = createBrowserRouter([
       // Roles y permisos (solo front — catálogo mock, read-only)
       {
         path: 'roles',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RolesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><RequirePermission permissionKeys={['ROLES_READ']} redirectToRoleMain><RolesList /></RequirePermission></RequireRole>,
       },
       {
         path: 'roles/permisos',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RolPermisos /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><RequirePermission permissionKeys={['ROLES_ASSIGN_PERMISSIONS']} redirectToRoleMain><RolPermisos /></RequirePermission></RequireRole>,
       },
     ],
   },
