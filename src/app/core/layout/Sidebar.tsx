@@ -99,10 +99,14 @@ export const SYSTEM_NAV: NavEntry[] = [
 ]
 
 /**
- * `ADMINISTRADOR` is a superuser: it bypasses every entry's allow-list and
- * sees the whole nav tree. Backend grants ADMIN on all endpoints, and
- * `RequireRole` mirrors it, so the sidebar must show everything it could
- * actually open. See `RequireRole.tsx` for the parallel rule.
+ * `ADMINISTRADOR` is a superuser for the per-entry ROLE allow-lists: it can
+ * open any entry regardless of its `roles` array (backend grants ADMIN on all
+ * endpoints, and `RequireRole` mirrors that). Permission gating, however,
+ * applies to every role — including ADMIN (`RequirePermission` has no
+ * superuser bypass). An entry whose `permissionKeys` the active role lacks is
+ * hidden for everyone, so removing e.g. `DIVISIONS_READ` from ADMIN also
+ * removes the item from its sidebar. See `RequireRole.tsx` / `RequirePermission.tsx`
+ * for the parallel rules.
  */
 function isSuperAdmin(role: Role | null): boolean {
   return role === 'ADMINISTRADOR'
@@ -168,11 +172,9 @@ function filterNavByRole(
       const children = filterNavByRole(e.children, superAdmin, role, hasAnyPermission)
       if (children.length > 0) out.push({ ...e, children })
     } else if (
-      superAdmin || (
-        role !== null &&
-        e.roles.includes(role) &&
-        (!e.permissionKeys || hasAnyPermission(e.permissionKeys))
-      )
+      role !== null &&
+      (superAdmin || e.roles.includes(role)) &&
+      (!e.permissionKeys || hasAnyPermission(e.permissionKeys))
     ) out.push(e)
   }
   return out
@@ -277,8 +279,10 @@ export function Sidebar({
   }
 
   // Role-filtered nav entries. Groups with no visible children (recursively)
-  // are hidden. ADMINISTRADOR bypasses the per-entry allow-lists (superuser —
-  // sees all). `activeLeaf` is the deepest visible leaf matching `pathname`.
+  // are hidden. ADMINISTRADOR bypasses the per-entry ROLE allow-lists
+  // (superuser) but still respects `permissionKeys` — an entry whose READ
+  // permission was removed is hidden even for ADMIN. `activeLeaf` is the
+  // deepest visible leaf matching `pathname`.
   const visibleEntries: NavEntry[] = role === null ? [] : filterNavByRole(navigation, isSuperAdmin(role), role, hasAnyPermission)
   const activeLeaf: string | null = deepestActiveLeaf(visibleEntries, pathname)
 

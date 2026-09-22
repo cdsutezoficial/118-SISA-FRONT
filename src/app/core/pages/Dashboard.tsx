@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Building2, GraduationCap, BookOpen, BookMarked, CalendarRange, Users, CreditCard, Tags, Users2, CheckCircle2, Activity } from 'lucide-react'
 import { usePendingToast } from '../infra/hooks'
+import { useRole } from '../infra/RoleContext'
 import { Breadcrumb, PageHeader, DataTable, type ColumnDef, type BadgeStyle } from '@app/core/components/list'
 import { KpiCards, QuickAccess, InitialAvatar, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
 
@@ -11,15 +12,19 @@ const kpiCards: KpiCardData[] = [
   { label: 'Grupos Activos', value: '36', sub: 'Periodo ENE-ABR 2026', color: 'bg-emerald-50 text-emerald-600', icon: <Users size={20} /> },
 ]
 
-const quickAccess: QuickAccessItem[] = [
-  { label: 'Divisiones', icon: <Building2 size={20} />, url: '/divisiones' },
-  { label: 'Programas', icon: <GraduationCap size={20} />, url: '/programas' },
-  { label: 'Planes de Estudio', icon: <BookOpen size={20} />, url: '/planes' },
-  { label: 'Clasificaciones', icon: <Tags size={20} />, url: '/clasificaciones' },
-  { label: 'Periodos', icon: <CalendarRange size={20} />, url: '/periodos' },
-  { label: 'Grupos', icon: <Users size={20} />, url: '/grupos' },
-  { label: 'Conceptos de Pago', icon: <CreditCard size={20} />, url: '/conceptos' },
-  { label: 'Generaciones', icon: <Users2 size={20} />, url: '/generaciones' },
+interface DashboardQuickAccessItem extends QuickAccessItem {
+  permissionKey?: string
+}
+
+const quickAccess: DashboardQuickAccessItem[] = [
+  { label: 'Divisiones', icon: <Building2 size={20} />, url: '/divisiones', permissionKey: 'DIVISIONS_READ' },
+  { label: 'Programas', icon: <GraduationCap size={20} />, url: '/programas', permissionKey: 'PROGRAMS_READ' },
+  { label: 'Planes de Estudio', icon: <BookOpen size={20} />, url: '/planes', permissionKey: 'PLANS_READ' },
+  { label: 'Clasificaciones', icon: <Tags size={20} />, url: '/clasificaciones', permissionKey: 'SUBJECT_CLASSIFICATIONS_READ' },
+  { label: 'Periodos', icon: <CalendarRange size={20} />, url: '/periodos', permissionKey: 'PERIODS_READ' },
+  { label: 'Grupos', icon: <Users size={20} />, url: '/grupos', permissionKey: 'GROUPS_READ' },
+  { label: 'Conceptos de Pago', icon: <CreditCard size={20} />, url: '/conceptos', permissionKey: 'PAYMENT_CONCEPTS_READ' },
+  { label: 'Generaciones', icon: <Users2 size={20} />, url: '/generaciones', permissionKey: 'GENERATIONS_READ' },
 ]
 
 const recentActivity = [
@@ -66,6 +71,8 @@ const activityColumns: ColumnDef<RecentActivityItem>[] = [
 export default function Dashboard() {
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
+  const { hasAnyPermission } = useRole()
+  const visibleQuickAccess = quickAccess.filter(item => !item.permissionKey || hasAnyPermission([item.permissionKey]))
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
       {toast && (
@@ -86,7 +93,7 @@ export default function Dashboard() {
       <KpiCards cards={kpiCards} />
 
       {/* Quick access */}
-      <QuickAccess items={quickAccess} />
+      <QuickAccess items={visibleQuickAccess} />
 
       {/* Recent activity */}
       <DataTable
