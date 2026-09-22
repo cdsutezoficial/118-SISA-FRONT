@@ -4,13 +4,14 @@ import {
   mapRoles,
   mapFrontendRoleKey,
   decodeJwtPayload,
+  decodeCapabilities,
   getStoredMustChangePassword,
   persistSession,
   clearSession,
   persistMustChangePasswordCleared,
   markSignedOut,
 } from './auth'
-import type { LoginResponse, JwtClaims } from './auth'
+import type { LoginResponse, JwtClaims, CapabilityResponse } from './auth'
 import { apiGet, getAccessToken, getStoredAuthMode, setUnauthorizedHandler } from './apiClient'
 import type { ApiError } from './apiClient'
 
@@ -25,26 +26,26 @@ import type { ApiError } from './apiClient'
 const ROLE_STORAGE_KEY = 'sisa.mockRole'
 const ACTIVE_ROLE_KEY = 'sisa.activeRole'
 
-interface RoleCatalogItem {
-  id: string
-  key: string
-}
-
-interface RolesPageResponse {
-  items: RoleCatalogItem[]
-}
-
-interface RolePermissionItem {
-  key: string
-  status: 'ACTIVE' | 'INACTIVE'
-}
-
-interface RoleDetailResponse {
-  permissions: RolePermissionItem[]
+/** Mock permission set for a role — mirror of the backend seed for real sessions. */
+function mockPermissionKeys(role: Role | null): string[] {
+  return role === null ? [] : (MOCK_ACTIVE_PERMISSION_KEYS[role] ?? [])
 }
 
 const MOCK_ACTIVE_PERMISSION_KEYS: Partial<Record<Role, string[]>> = {
-  ADMINISTRADOR: ['USERS_READ', 'ROLES_READ'],
+  ADMINISTRADOR: [
+    'USERS_READ',
+    'ROLES_READ',
+    'DIVISIONS_READ',
+    'PROGRAMS_READ',
+    'PLANS_READ',
+    'SUBJECT_CLASSIFICATIONS_READ',
+    'PERIODS_READ',
+    'GENERATIONS_READ',
+    'GROUPS_READ',
+    'PROGRAM_ADMISSION_CONFIGS_READ',
+    'PAYMENT_AREAS_READ',
+    'PAYMENT_CONCEPTS_READ',
+  ],
   SERVICIOS_ESCOLARES: [
     'USERS_READ',
     'ROLES_READ',
@@ -156,18 +157,22 @@ export interface RoleContextValue {
   mustChangePassword: boolean
   /** Backend role key currently active in the shell, if the frontend role maps to one. */
   activeRoleKey: string | null
-  /** Permission keys granted to the currently active role. */
+  /** Permission keys granted to the current session (union across the account's JWT roles). */
   activePermissionKeys: string[]
-  /** Loading state for the active role's permission resolution. */
-  permissionsStatus: 'idle' | 'loading' | 'error'
+  /**
+   * Permission resolution state. Starts `'pending'` in real mode so guards
+   * NEVER treat "not loaded yet" as "no permission" — the reload false-positive
+   * race. Proceeds to `'idle'` once the capability envelope arrives.
+   */
+  permissionsStatus: 'pending' | 'loading' | 'idle' | 'error'
   /** Human-readable permission loading error, if any. */
   permissionsError: string
-  /** True when the active role has the given permission key. */
+  /** True when the session has the given permission key. */
   hasPermission: (permissionKey: string) => boolean
-  /** True when the active role has any of the given permission keys. */
+  /** True when the session has any of the given permission keys. */
   hasAnyPermission: (permissionKeys: string[]) => boolean
-  /** Re-fetches the active role permissions from the backend. */
-  refreshPermissions: () => Promise<void>
+  /** Re-fetches the session's capability envelope from the backend (real mode); sync re-derivation in mock mode. */
+  refreshCapabilities: () => Promise<void>
   /** Establishes a real session from a successful `/auth/login` response. */
   login: (res: LoginResponse) => void
   /**
@@ -238,8 +243,14 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const decoded = token ? decodeJwtPayload(token) : null
     return readStoredActiveRole(decoded ? mapRoles(decoded.roles) : [])
   })
-  const [activePermissionKeys, setActivePermissionKeys] = useState<string[]>([])
-  const [permissionsStatus, setPermissionsStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  // Permission resolution starts `'pending'` in real mode — NOT `'idle'` — so
+  // guards wait for the capability envelope instead of treating the first,
+  // still-empty render as "no permission" (the reload false-positive race).
+  // Mock mode derives its keys synchronously from the stored role.
+  const [activePermissionKeys, setActivePermissionKeys] = useState<string[]>(() =>
+    authMode === 'real' ? [] : mockPermissionKeys(mockRole))
+  const [permissionsStatus, setPermissionsStatus] = useState<'pending' | 'loading' | 'idle' | 'error'>(
+    () => (authMode === 'real' ? 'pending' : 'idle'))
   const [permissionsError, setPermissionsError] = useState('')
   const activeShellRole = authMode === 'real' ? activeRole : mockRole
 
@@ -269,13 +280,18 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     setClaims(decoded)
     setActiveRoleState(readStoredActiveRole(decoded ? mapRoles(decoded.roles) : []))
     setAuthModeState('real')
+    // Drop the mock permission set and re-enter `pending` so guards never
+    // treat stale mock keys as real permissions during the login transition.
+    setActivePermissionKeys([])
+    setPermissionsStatus('pending')
+    setPermissionsError('')
     setMustChangePasswordState(res.mustChangePassword)
     setSessionExpired(false) // a fresh login clears the expiry flag so a future expiry can alert again
   }
 
-  async function refreshPermissions(): Promise<void> {
+  async function refreshCapabilities(): Promise<void> {
     if (authMode !== 'real') {
-      setActivePermissionKeys(mockRole === null ? [] : (MOCK_ACTIVE_PERMISSION_KEYS[mockRole] ?? []))
+      setActivePermissionKeys(mockPermissionKeys(mockRole))
       setPermissionsStatus('idle')
       setPermissionsError('')
       return
@@ -292,18 +308,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     setPermissionsError('')
 
     try {
-      const roles = await apiGet<RolesPageResponse>('/roles', { size: 100 })
-      const activeRoleItem = roles.items.find(item => item.key === activeRoleKey)
-
-      if (!activeRoleItem) {
-        setActivePermissionKeys([])
-        setPermissionsStatus('error')
-        setPermissionsError('No se encontró el rol activo en el catálogo de roles.')
-        return
-      }
-
-      const detail = await apiGet<RoleDetailResponse>(`/roles/${activeRoleItem.id}`)
-      setActivePermissionKeys(detail.permissions.filter(permission => permission.status === 'ACTIVE').map(permission => permission.key))
+      // Self-service endpoint: the caller's OWN permission keys (union across
+      // its JWT roles) arrive obfuscated as a base64url envelope — never as
+      // plaintext keys in the response, never inside the access token.
+      const res = await apiGet<CapabilityResponse>('/auth/me/capabilities')
+      setActivePermissionKeys(decodeCapabilities(res.capabilities))
       setPermissionsStatus('idle')
     } catch (err) {
       const apiErr = err as Partial<ApiError>
@@ -388,7 +397,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }, [activeRole, authMode, realRoles])
 
   useEffect(() => {
-    void refreshPermissions()
+    void refreshCapabilities()
   }, [activeRoleKey, authMode, mockRole])
 
   const value: RoleContextValue = {
@@ -407,7 +416,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     permissionsError,
     hasPermission: permissionKey => activePermissionKeys.includes(permissionKey),
     hasAnyPermission: permissionKeys => permissionKeys.some(permissionKey => activePermissionKeys.includes(permissionKey)),
-    refreshPermissions,
+    refreshCapabilities,
     sessionExpired,
     login,
     logout,

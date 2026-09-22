@@ -20,7 +20,13 @@ export function RequirePermission({
     return null
   }
 
-  if (authMode === 'real' && permissionsStatus === 'loading') {
+  /**
+   * Permission resolution is `'pending'` (never resolved on this mount yet) or
+   * `'loading'` — hold rendering instead of reading the still-empty key set.
+   * This is what prevents the reload false-positive: permissions arrive async,
+   * so "not resolved yet" must NOT be treated as "no permission".
+   */
+  if (authMode === 'real' && (permissionsStatus === 'pending' || permissionsStatus === 'loading')) {
     return null
   }
 
