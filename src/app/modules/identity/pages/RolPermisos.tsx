@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router'
 import {
   FormPage, FormHeader, FormCard, Button,
 } from '@app/core/components/form'
-import { FieldError, FieldHelp, SearchSelectField } from '@app/core/components/ui'
+import { FieldHelp, SearchSelectField } from '@app/core/components/ui'
 import {
   Breadcrumb, EmptyState,
 } from '@app/core/components/list'
@@ -82,7 +82,7 @@ function isStandardAction(suffix: string): boolean {
 export default function RolPermisos() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const { activeRoleKey, refreshPermissions } = useRole()
+  const { activeRoleKey, refreshCapabilities } = useRole()
   const requestedRoleKey = params.get('rol')
   const [roles, setRoles] = useState<RoleListItem[]>([])
   const [permissions, setPermissions] = useState<PermissionCatalogItem[]>([])
@@ -203,7 +203,7 @@ export default function RolPermisos() {
       setSelectedIds(new Set(result.permissions.map(permission => permission.id)))
       setSubmitMsg('Permisos actualizados correctamente.')
       setSubmitTone('success')
-      if (selectedRole.key === activeRoleKey) await refreshPermissions()
+      if (selectedRole.key === activeRoleKey) await refreshCapabilities()
     } catch (err) {
       const apiErr = err as Partial<ApiError>
       if (apiErr.status === 409 || apiErr.status === 400) {
