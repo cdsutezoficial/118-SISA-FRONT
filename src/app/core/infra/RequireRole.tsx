@@ -48,7 +48,11 @@ export function RequireRole({ allowedRoles, redirectTo = '/admision', redirectTo
   redirectToRoleMain?: boolean
   children: ReactNode
 }) {
-  const { role } = useRole()
+  const { role, authMode, availableRoles } = useRole()
+
+  if (authMode === 'real' && role === null && availableRoles.length > 0) {
+    return null
+  }
 
   if (role === null || (role !== 'ADMINISTRADOR' && !allowedRoles.includes(role))) {
     const to = redirectToRoleMain && role ? ROLE_DEFAULT_PATHS[role] : redirectTo

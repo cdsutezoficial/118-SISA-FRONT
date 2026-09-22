@@ -1,4 +1,8 @@
 import {
+  useEffect,
+  useState,
+} from 'react'
+import {
   Eye, ShieldCheck, Landmark, Globe,
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
@@ -11,13 +15,16 @@ import {
   MobileCards,
   type ColumnDef,
 } from '@app/core/components/list'
+import { apiGet } from '@app/core/infra/apiClient'
+import type { ApiError } from '@app/core/infra/apiClient'
 import { ROLE_LABELS, ROLE_BADGE_STYLE, DIVISION_SCOPED_ROLES } from '../data/roles'
 import type { RoleType } from '../data/roles'
-import { ROLE_DESCRIPTIONS, permissionCountFor } from '../data/permissions'
+import { describeRole, isRoleType } from '../data/permissions'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface Rol {
+  id: string
   roleType: RoleType
   label: string
   description: string
@@ -25,14 +32,26 @@ interface Rol {
   permisos: number
 }
 
-/** Catálogo read-only: los 11 roles se listan fijos (no se crean ni editan). */
-const ROLES: Rol[] = (Object.keys(ROLE_LABELS) as RoleType[]).map(roleType => ({
-  roleType,
-  label: ROLE_LABELS[roleType],
-  description: ROLE_DESCRIPTIONS[roleType],
-  scope: DIVISION_SCOPED_ROLES.has(roleType) ? 'División' : 'Global',
-  permisos: permissionCountFor(roleType),
-}))
+interface RoleListItem {
+  id: string
+  name: string
+  key: string
+  status: 'ACTIVE' | 'INACTIVE'
+  description: string
+}
+
+interface RoleListResponse {
+  items: RoleListItem[]
+}
+
+interface RolePermissionItem {
+  id: string
+  status: 'ACTIVE' | 'INACTIVE'
+}
+
+interface RoleDetailResponse {
+  permissions: RolePermissionItem[]
+}
 
 function RoleBadge({ roleType }: { roleType: RoleType }) {
   return (
@@ -58,6 +77,55 @@ function ScopeBadge({ scope }: { scope: Rol['scope'] }) {
 
 export default function RolesList() {
   const navigate = useNavigate()
+  const [roles, setRoles] = useState<Rol[]>([])
+  const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
+  const [errorMsg, setErrorMsg] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadRoles() {
+      setLoadStatus('loading')
+      setErrorMsg('')
+
+      try {
+        const data = await apiGet<RoleListResponse>('/roles', { size: 100 })
+        const permissionCounts = await Promise.all(data.items.map(async role => {
+          try {
+            const detail = await apiGet<RoleDetailResponse>(`/roles/${role.id}`)
+            return [role.id, detail.permissions.filter(permission => permission.status === 'ACTIVE').length] as const
+          } catch {
+            return [role.id, 0] as const
+          }
+        }))
+
+        if (cancelled) return
+
+        const counts = new Map(permissionCounts)
+        setRoles(data.items
+          .filter((role): role is RoleListItem & { key: RoleType } => isRoleType(role.key))
+          .map(role => ({
+            id: role.id,
+            roleType: role.key,
+            label: ROLE_LABELS[role.key],
+            description: describeRole(role.key, role.description),
+            scope: DIVISION_SCOPED_ROLES.has(role.key) ? 'División' : 'Global',
+            permisos: counts.get(role.id) ?? 0,
+          })))
+        setLoadStatus('idle')
+      } catch (err) {
+        if (cancelled) return
+        const apiErr = err as Partial<ApiError>
+        setErrorMsg(apiErr.status === 403
+          ? 'No tienes permiso para consultar roles.'
+          : 'No se pudo cargar el catálogo de roles.')
+        setLoadStatus('error')
+      }
+    }
+
+    void loadRoles()
+    return () => { cancelled = true }
+  }, [])
 
   const columns: ColumnDef<Rol>[] = [
     { key: 'label', header: 'Rol', render: row => <RoleBadge roleType={row.roleType} />, className: 'w-56' },
@@ -87,12 +155,12 @@ export default function RolesList() {
       <DataTable
         numbered
         columns={columns}
-        status="idle"
-        items={ROLES}
-        keyFor={row => row.roleType}
+        status={loadStatus}
+        items={roles}
+        keyFor={row => row.id}
         loadingLabel="Cargando roles..."
         emptyTitle="No hay roles registrados"
-        emptyHint="El catálogo de roles está vacío."
+        emptyHint={loadStatus === 'error' ? errorMsg : 'El catálogo de roles está vacío.'}
         actions={{
           view: row => navigate(`/roles/permisos?rol=${row.roleType}`),
           viewTooltip: 'Ver permisos',
@@ -101,9 +169,9 @@ export default function RolesList() {
 
       {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
       <MobileCards
-        status="idle"
-        items={ROLES}
-        keyFor={row => row.roleType}
+        status={loadStatus}
+        items={roles}
+        keyFor={row => row.id}
         renderItem={row => (
           <>
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -129,7 +197,7 @@ export default function RolesList() {
         )}
         loadingLabel="Cargando roles..."
         emptyTitle="No hay roles registrados"
-        emptyHint="El catálogo de roles está vacío."
+        emptyHint={loadStatus === 'error' ? errorMsg : 'El catálogo de roles está vacío.'}
       />
     </PageContainer>
   )

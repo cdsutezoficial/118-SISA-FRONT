@@ -29,6 +29,14 @@ export const ROLE_MAP: Record<string, Role> = {
   DIRECTOR_DIVISION: 'DIRECTOR_DIVISION',
 }
 
+export const FRONTEND_ROLE_KEY_MAP: Partial<Record<Role, string>> = {
+  ADMINISTRADOR: 'ADMIN',
+  FINANZAS: 'PERSONAL_FINANZAS',
+  SERVICIOS_ESCOLARES: 'SERVICIOS_ESCOLARES',
+  GESTOR_ACADEMICO: 'GESTOR_ACADEMICO',
+  DIRECTOR_DIVISION: 'DIRECTOR_DIVISION',
+}
+
 /** First entry in `roles` that has a frontend `Role` mapping wins; `null` if none do. */
 export function mapRole(roles: string[]): Role | null {
   for (const backendRole of roles) {
@@ -57,10 +65,25 @@ export function mapRoles(roles: string[]): Role[] {
   return out
 }
 
+export function mapFrontendRoleKey(role: Role | null): string | null {
+  if (role === null) return null
+  return FRONTEND_ROLE_KEY_MAP[role] ?? null
+}
+
 export interface JwtClaims {
   sub: string
   roles: string[]
   exp: number
+}
+
+/** Decodes a single base64url segment to its UTF-8 text (claims payloads, capability envelopes). */
+function decodeBase64UrlSegment(value: string): string {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
+  const binary = atob(padded)
+  return decodeURIComponent(
+    Array.prototype.map.call(binary, (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+  )
 }
 
 /**
@@ -73,22 +96,33 @@ export function decodeJwtPayload(token: string): JwtClaims | null {
   try {
     const segments = token.split('.')
     if (segments.length !== 3) return null
-    const payload = segments[1]
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
-    const binary = atob(padded)
-    const json = decodeURIComponent(
-      Array.prototype.map
-        .call(binary, (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    )
-    const claims = JSON.parse(json) as Partial<JwtClaims>
+    const claims = JSON.parse(decodeBase64UrlSegment(segments[1])) as Partial<JwtClaims>
     if (typeof claims.sub !== 'string' || !Array.isArray(claims.roles) || typeof claims.exp !== 'number') {
       return null
     }
     return { sub: claims.sub, roles: claims.roles, exp: claims.exp }
   } catch {
     return null
+  }
+}
+
+export interface CapabilityResponse {
+  capabilities: string
+}
+
+/**
+ * Decodes the base64url capability envelope from {@code GET /auth/me/capabilities}
+ * into the caller's own permission keys. The payload is obfuscated on the wire
+ * (not plaintext JSON), but the backend remains the real authority — decoding
+ * here only drives what the UI shows. Returns `[]` for any malformed envelope.
+ */
+export function decodeCapabilities(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(decodeBase64UrlSegment(raw)) as unknown
+    if (!Array.isArray(parsed) || parsed.some(key => typeof key !== 'string')) return []
+    return parsed
+  } catch {
+    return []
   }
 }
 

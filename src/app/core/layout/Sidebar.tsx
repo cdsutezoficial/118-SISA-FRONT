@@ -10,7 +10,13 @@ import {
 } from 'lucide-react'
 import { useRole } from '../infra/RoleContext'
 import type { Role } from '../infra/RoleContext'
-import { ADMIN_SERVICIOS_ROLES, ALL_STAFF_ROLES, ROLE_LABELS } from './layoutRoles'
+import {
+  ACADEMIC_CONFIG_ROLES,
+  ADMINISTRATION_ROLES,
+  ADMISSION_ROLES,
+  ENROLLMENT_ROLES,
+  ROLE_LABELS,
+} from './layoutRoles'
 
 // ─── Nav model ────────────────────────────────────────────────────────────────
 // NavLeaf (navigable item) and NavGroup (collapsible section). Groups nest
@@ -24,6 +30,7 @@ export interface NavLeaf {
   base: string
   path: string
   roles: Role[]
+  permissionKeys?: string[]
 }
 
 export interface NavGroup {
@@ -44,58 +51,62 @@ export const SYSTEM_NAV: NavEntry[] = [
   {
     id: 'config', icon: <Settings size={18} />, label: 'Configuración Académica',
     children: [
-      { icon: <LayoutDashboard size={18} />, label: 'Dashboard', base: 'dashboard', path: '/dashboard', roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <Building2 size={18} />,     label: 'Divisiones Académicas',   base: 'divisiones', path: '/divisiones', roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <GraduationCap size={18} />, label: 'Programas Educativos',    base: 'programas',  path: '/programas',  roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <Users2 size={18} />,        label: 'Generaciones',            base: 'generaciones', path: '/generaciones', roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <Ticket size={18} />,        label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <Building2 size={18} />,     label: 'Áreas de Facturación',     base: 'areas',      path: '/areas',      roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <CreditCard size={18} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <LayoutDashboard size={18} />, label: 'Dashboard', base: 'dashboard', path: '/dashboard', roles: ACADEMIC_CONFIG_ROLES },
+      { icon: <Building2 size={18} />,     label: 'Divisiones Académicas',   base: 'divisiones', path: '/divisiones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['DIVISIONS_READ'] },
+      { icon: <GraduationCap size={18} />, label: 'Programas Educativos',    base: 'programas',  path: '/programas',  roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PROGRAMS_READ'] },
+      { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PLANS_READ'] },
+      { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['SUBJECT_CLASSIFICATIONS_READ'] },
+      { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PERIODS_READ'] },
+      { icon: <Users2 size={18} />,        label: 'Generaciones',            base: 'generaciones', path: '/generaciones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['GENERATIONS_READ'] },
+      { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['GROUPS_READ'] },
+      { icon: <Ticket size={18} />,        label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <Building2 size={18} />,     label: 'Áreas de Facturación',     base: 'areas',      path: '/areas',      roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PAYMENT_AREAS_READ'] },
+      { icon: <CreditCard size={18} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
     ],
   },
   {
     id: 'admin', icon: <UserCog size={18} />, label: 'Administración',
     children: [
-      { icon: <IdCard size={18} />, label: 'Usuarios', base: 'usuarios', path: '/usuarios', roles: ADMIN_SERVICIOS_ROLES },
-      { icon: <ShieldCheck size={18} />, label: 'Roles', base: 'roles', path: '/roles', roles: ADMIN_SERVICIOS_ROLES },
+      { icon: <IdCard size={18} />, label: 'Usuarios', base: 'usuarios', path: '/usuarios', roles: ADMINISTRATION_ROLES, permissionKeys: ['USERS_READ'] },
+      { icon: <ShieldCheck size={18} />, label: 'Roles y Permisos', base: 'roles', path: '/roles', roles: ADMINISTRATION_ROLES, permissionKeys: ['ROLES_READ'] },
     ],
   },
   {
     id: 'admision', icon: <UserPlus size={18} />, label: 'Admisión',
     children: [
-      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',              base: 'admision-dash',   path: '/admision',                  roles: ALL_STAFF_ROLES },
-      { icon: <Megaphone size={16} />,        label: 'Canales de Difusión',   base: 'canales',          path: '/admision/canales',          roles: ALL_STAFF_ROLES },
-      { icon: <Users size={16} />,            label: 'Candidatos',            base: 'candidatos',       path: '/admision/candidatos',       roles: ALL_STAFF_ROLES },
-      { icon: <UserPlus size={16} />,         label: 'Registrar Candidato',   base: 'candidato-registrar', path: '/admision/candidatos/registrar', roles: ALL_STAFF_ROLES },
-      { icon: <ClipboardCheck size={16} />,   label: 'Selección de Candidatos', base: 'seleccion',     path: '/admision/seleccion',        roles: ALL_STAFF_ROLES },
-      { icon: <IdCard size={16} />,           label: 'Generar Matrículas',    base: 'matriculas',       path: '/admision/matriculas',       roles: ALL_STAFF_ROLES },
-      { icon: <Megaphone size={16} />,        label: 'Publicar Resultados',   base: 'publicar',         path: '/admision/publicar',         roles: ALL_STAFF_ROLES },
-      { icon: <BadgePercent size={16} />,     label: 'Aplicar Descuentos',    base: 'descuentos',       path: '/admision/descuentos',       roles: ALL_STAFF_ROLES },
-      { icon: <Unlock size={16} />,           label: 'Habilitar Inducción',   base: 'habilitacion',     path: '/admision/habilitacion',     roles: ALL_STAFF_ROLES },
+      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',              base: 'admision-dash',   path: '/admision',                  roles: ADMISSION_ROLES },
+      { icon: <Megaphone size={16} />,        label: 'Canales de Difusión',   base: 'canales',          path: '/admision/canales',          roles: ['SERVICIOS_ESCOLARES'] },
+      { icon: <Users size={16} />,            label: 'Candidatos',            base: 'candidatos',       path: '/admision/candidatos',       roles: ['SERVICIOS_ESCOLARES'] },
+      { icon: <UserPlus size={16} />,         label: 'Registrar Candidato',   base: 'candidato-registrar', path: '/admision/candidatos/registrar', roles: ['SERVICIOS_ESCOLARES'] },
+      { icon: <ClipboardCheck size={16} />,   label: 'Selección de Candidatos', base: 'seleccion',     path: '/admision/seleccion',        roles: ['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION'] },
+      { icon: <IdCard size={16} />,           label: 'Generar Matrículas',    base: 'matriculas',       path: '/admision/matriculas',       roles: ['SERVICIOS_ESCOLARES'] },
+      { icon: <Megaphone size={16} />,        label: 'Publicar Resultados',   base: 'publicar',         path: '/admision/publicar',         roles: ['SERVICIOS_ESCOLARES'] },
+      { icon: <BadgePercent size={16} />,     label: 'Aplicar Descuentos',    base: 'descuentos',       path: '/admision/descuentos',       roles: ['SERVICIOS_ESCOLARES'] },
+      { icon: <Unlock size={16} />,           label: 'Habilitar Inducción',   base: 'habilitacion',     path: '/admision/habilitacion',     roles: ['SERVICIOS_ESCOLARES'] },
     ],
   },
   {
     id: 'inscripciones', icon: <ClipboardCheck size={18} />, label: 'Inscripciones',
     children: [
-      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',                   base: 'inscripciones-dash', path: '/inscripciones',               roles: ALL_STAFF_ROLES },
-      { icon: <Users size={16} />,            label: 'Estudiantes',                 base: 'estudiantes',        path: '/inscripciones/estudiantes',  roles: ALL_STAFF_ROLES },
-      { icon: <UserPlus size={16} />,         label: 'Nuevo Ingreso',               base: 'nuevo-ingreso',      path: '/inscripciones/nuevo-ingreso', roles: ALL_STAFF_ROLES },
-      { icon: <RotateCcw size={16} />,        label: 'Reinscripción',               base: 'reinscripcion',      path: '/inscripciones/reinscripcion', roles: ALL_STAFF_ROLES },
-      { icon: <FileText size={16} />,         label: 'Documentos Institucionales',  base: 'documentos',         path: '/inscripciones/documentos',   roles: ALL_STAFF_ROLES },
-      { icon: <Archive size={16} />,          label: 'Expediente',                  base: 'expediente',         path: '/inscripciones/expediente',   roles: ALL_STAFF_ROLES },
+      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',                   base: 'inscripciones-dash', path: '/inscripciones',               roles: ENROLLMENT_ROLES },
+      { icon: <Users size={16} />,            label: 'Estudiantes',                 base: 'estudiantes',        path: '/inscripciones/estudiantes',  roles: ENROLLMENT_ROLES },
+      { icon: <UserPlus size={16} />,         label: 'Nuevo Ingreso',               base: 'nuevo-ingreso',      path: '/inscripciones/nuevo-ingreso', roles: ENROLLMENT_ROLES },
+      { icon: <RotateCcw size={16} />,        label: 'Reinscripción',               base: 'reinscripcion',      path: '/inscripciones/reinscripcion', roles: ENROLLMENT_ROLES },
+      { icon: <FileText size={16} />,         label: 'Documentos Institucionales',  base: 'documentos',         path: '/inscripciones/documentos',   roles: ENROLLMENT_ROLES },
+      { icon: <Archive size={16} />,          label: 'Expediente',                  base: 'expediente',         path: '/inscripciones/expediente',   roles: ENROLLMENT_ROLES },
     ],
   },
 ]
 
 /**
- * `ADMINISTRADOR` is a superuser: it bypasses every entry's allow-list and
- * sees the whole nav tree. Backend grants ADMIN on all endpoints, and
- * `RequireRole` mirrors it, so the sidebar must show everything it could
- * actually open. See `RequireRole.tsx` for the parallel rule.
+ * `ADMINISTRADOR` is a superuser for the per-entry ROLE allow-lists: it can
+ * open any entry regardless of its `roles` array (backend grants ADMIN on all
+ * endpoints, and `RequireRole` mirrors that). Permission gating, however,
+ * applies to every role — including ADMIN (`RequirePermission` has no
+ * superuser bypass). An entry whose `permissionKeys` the active role lacks is
+ * hidden for everyone, so removing e.g. `DIVISIONS_READ` from ADMIN also
+ * removes the item from its sidebar. See `RequireRole.tsx` / `RequirePermission.tsx`
+ * for the parallel rules.
  */
 function isSuperAdmin(role: Role | null): boolean {
   return role === 'ADMINISTRADOR'
@@ -148,25 +159,34 @@ function ancestorGroups(nav: NavEntry[], pathname: string, out: Set<string>) {
   }
 }
 
-/** Entries filtradas por rol (recursivo); los grupos sin hijos visibles se ocultan. */
-function filterNavByRole(nav: NavEntry[], superAdmin: boolean, role: Role | null): NavEntry[] {
+/** Entries filtradas por rol/permisos (recursivo); los grupos sin hijos visibles se ocultan. */
+function filterNavByRole(
+  nav: NavEntry[],
+  superAdmin: boolean,
+  role: Role | null,
+  hasAnyPermission: (permissionKeys: string[]) => boolean,
+): NavEntry[] {
   const out: NavEntry[] = []
   for (const e of nav) {
     if (isGroup(e)) {
-      const children = filterNavByRole(e.children, superAdmin, role)
+      const children = filterNavByRole(e.children, superAdmin, role, hasAnyPermission)
       if (children.length > 0) out.push({ ...e, children })
-    } else if (superAdmin || (role !== null && e.roles.includes(role))) out.push(e)
+    } else if (
+      role !== null &&
+      (superAdmin || e.roles.includes(role)) &&
+      (!e.permissionKeys || hasAnyPermission(e.permissionKeys))
+    ) out.push(e)
   }
   return out
 }
 
 /** Hojas visibles aplanadas (sidebar colapsada — el árbol completo). */
-function flattenedLeaves(nav: NavEntry[], superAdmin: boolean, role: Role | null): NavLeaf[] {
+function flattenedLeaves(nav: NavEntry[]): NavLeaf[] {
   const out: NavLeaf[] = []
   const walk = (entries: NavEntry[]) => {
     for (const e of entries) {
       if (isGroup(e)) walk(e.children)
-      else if (superAdmin || (role !== null && e.roles.includes(role))) out.push(e)
+      else out.push(e)
     }
   }
   walk(nav)
@@ -191,7 +211,7 @@ export function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { role, setRole, availableRoles, user, authMode, logout } = useRole()
+  const { role, setRole, availableRoles, user, authMode, logout, hasAnyPermission } = useRole()
   const isRealSession = authMode === 'real'
 
   // ─── Accordion state ───────────────────────────────────────────────────────
@@ -259,9 +279,11 @@ export function Sidebar({
   }
 
   // Role-filtered nav entries. Groups with no visible children (recursively)
-  // are hidden. ADMINISTRADOR bypasses the per-entry allow-lists (superuser —
-  // sees all). `activeLeaf` is the deepest visible leaf matching `pathname`.
-  const visibleEntries: NavEntry[] = role === null ? [] : filterNavByRole(navigation, isSuperAdmin(role), role)
+  // are hidden. ADMINISTRADOR bypasses the per-entry ROLE allow-lists
+  // (superuser) but still respects `permissionKeys` — an entry whose READ
+  // permission was removed is hidden even for ADMIN. `activeLeaf` is the
+  // deepest visible leaf matching `pathname`.
+  const visibleEntries: NavEntry[] = role === null ? [] : filterNavByRole(navigation, isSuperAdmin(role), role, hasAnyPermission)
   const activeLeaf: string | null = deepestActiveLeaf(visibleEntries, pathname)
 
   // Recursive renderers. Depth drives indentation on the desktop sidebar; the
@@ -370,7 +392,7 @@ export function Sidebar({
         <nav className={`flex-1 py-2 px-2 space-y-0.5 overflow-y-auto ${collapsed ? 'overflow-x-hidden' : ''}`}>
           {collapsed ? (
             // Collapsed: flat icon list (whole tree flattened to leaves)
-            flattenedLeaves(navigation, isSuperAdmin(role), role).map(item => {
+            flattenedLeaves(visibleEntries).map(item => {
               const isActive = item.path === activeLeaf
               return (
                 <div key={item.path} className="relative group">
