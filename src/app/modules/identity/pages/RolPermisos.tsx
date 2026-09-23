@@ -64,10 +64,10 @@ function groupCheckedState(group: PermissionDisplayGroup, selectedIds: Set<strin
 }
 
 const TABLE_ACTION_COLUMNS = [
-  { suffix: 'READ', label: 'Ver', keyLabel: '_READ' },
-  { suffix: 'CREATE', label: 'Crear', keyLabel: '_CREATE' },
-  { suffix: 'UPDATE', label: 'Actualizar', keyLabel: '_UPDATE' },
-  { suffix: 'DELETE', label: 'Eliminar', keyLabel: '_DELETE' },
+  { suffix: 'READ', label: 'Ver' },
+  { suffix: 'CREATE', label: 'Crear' },
+  { suffix: 'UPDATE', label: 'Actualizar' },
+  { suffix: 'DELETE', label: 'Eliminar' },
 ] as const
 
 function findActionItem(items: PermissionDisplayItem[], suffix: string): PermissionDisplayItem | undefined {
@@ -291,10 +291,7 @@ export default function RolPermisos() {
                     <th className="px-4 py-3 text-[12px] font-semibold text-[#333333]">Módulo / descripción</th>
                     {TABLE_ACTION_COLUMNS.map(column => (
                       <th key={column.suffix} className="px-4 py-3 text-[12px] font-semibold text-[#333333] min-w-[150px]">
-                        <div className="flex flex-col">
-                          <span>{column.label}</span>
-                          <span className="text-[11px] font-medium text-[#6B7280]">{column.keyLabel}</span>
-                        </div>
+                        <span>{column.label}</span>
                       </th>
                     ))}
                     <th className="px-4 py-3 text-[12px] font-semibold text-[#333333] min-w-[260px]">Otros</th>
