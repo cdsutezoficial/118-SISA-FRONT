@@ -33,6 +33,69 @@ export interface PaymentRecord {
   fecha?: string
 }
 
+// ── Screen 13 (ficha) real-backend flow types — mirror the backend DTOs ──
+// Distinct from the mock `PaymentRecord` shape: `POST /candidates`, the ficha
+// PDF route and `POST /candidates/{id}/payments/confirm` speak the backend's
+// language (`referenceNumber`/`amount`/`deadline`/`PENDING|PAID`).
+
+/** `RegisterCandidateUseCase.FichaPayment` — the ticket the POST generates. */
+export interface FichaPaymentBackend {
+  referenceNumber: string
+  amount: number
+  deadline: string | null
+  /** Backend enum — `PENDING` (ficha generated, unpaid) or `PAID`. */
+  status: 'PENDING' | 'PAID'
+}
+
+/** `POST /candidates/{id}/payments/confirm` — paid-ficha confirmation. */
+export interface PaymentConfirmationBackend {
+  candidateId: string
+  folio: string
+  candidateStatus: CandidateStatus
+  referenceNumber: string
+  amount: number
+  paidAt: string
+  receiptNumber: string
+}
+
+/** `GET /candidates/{id}` — ficha projection for route-refresh fallback. */
+export interface CandidateFichaBackend {
+  candidateId: string
+  folio: string
+  candidateStatus: CandidateStatus
+  registeredAt: string
+  admissionConfigId: string
+  programName: string
+  curp: string
+  firstName: string
+  lastName1: string
+  lastName2: string
+  email: string
+  referenceNumber: string
+  amount: number
+  deadline: string | null
+  paymentStatus: 'PENDING' | 'PAID'
+  receiptNumber: string | null
+  paidAt: string | null
+}
+
+/**
+ * Route-state payload `CandidatoRegistro` hands to `FichaConfirmacion` (Screen
+ * 13), built from the real `POST /candidates` response. Optional so a direct
+ * mount / page refresh can fall back to `GET /candidates/{id}`.
+ */
+export interface FichaRouteState {
+  candidate: Candidate
+  metodoPago: MetodoPagoFicha
+  pagoFicha?: {
+    referencia: string
+    monto: number
+    fechaLimite: string
+    estado: 'PENDING' | 'PAID'
+    folio: string
+  }
+}
+
 /** Screen 7 — captured independently of status; pass/fail is derived, not stored. */
 export interface ExamResult {
   fecha: string
@@ -289,3 +352,6 @@ export function isAdmisionActionEnabled(candidate: Candidate, action: AdmisionAc
   if (action === 'REGISTRAR_INDUCCION') return candidate.pagoInduccion.status === 'CONFIRMADO'
   return true
 }
+
+/** Screen 13 payment-method choice — mirrors `CandidatoRegistro`'s `MetodoPago`. */
+export type MetodoPagoFicha = 'ONLINE' | 'VENTANILLA'
