@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Info } from 'lucide-react'
 import { ModeSwitcher, DatePicker, FieldLabel, FieldError } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
@@ -83,6 +84,9 @@ export default function PeriodosForm() {
   const [endDate, setEndDate] = useState('')
   const [enrollmentStart, setEnrollmentStart] = useState('')
   const [enrollmentEnd, setEnrollmentEnd] = useState('')
+  // Status se lee en view/edit para replicar la regla de PeriodosList.tsx: un
+  // periodo CLOSED es terminal y NO puede editarse (ni desde este form).
+  const [status, setStatus] = useState<PeriodStatus | ''>('')
 
   // ─── Auxiliary state ───────────────────────────────────────────────────────
   const [errors, setErrors] = useState<FormErrors>({})
@@ -104,6 +108,7 @@ export default function PeriodosForm() {
       setEndDate('')
       setEnrollmentStart('')
       setEnrollmentEnd('')
+      setStatus('')
       setLoadStatus('idle')
       setLoadErrorMsg('')
     }
@@ -126,6 +131,7 @@ export default function PeriodosForm() {
         setEndDate(data.endDate)
         setEnrollmentStart(data.enrollmentStart)
         setEnrollmentEnd(data.enrollmentEnd)
+        setStatus(data.status)
         setLoadStatus('idle')
       })
       .catch((err: unknown) => {
@@ -146,8 +152,10 @@ export default function PeriodosForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, mode])
 
-  const disabled = isView || loadStatus === 'loading'
+  const closed = status === 'CLOSED'
+  const disabled = isView || closed || loadStatus === 'loading'
   const isSubmitting = submitStatus === 'submitting'
+  const periodLabel = isRegister ? 'Registrar Periodo' : isView ? 'Ver Periodo' : 'Editar Periodo'
 
   // ─── Validation ────────────────────────────────────────────────────────────
   // Mirrors AcademicPeriod's server-side invariants (validateDateRanges in
@@ -178,6 +186,9 @@ export default function PeriodosForm() {
 
   // ─── Submit ────────────────────────────────────────────────────────────────
   async function handleSubmit() {
+    // Un periodo CLOSED es terminal: por si acaso alguien dispara el submit
+    // (el botón ya queda disabled), no se envía nada.
+    if (closed) return
     const validationErrors = validate()
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors)
@@ -232,12 +243,12 @@ export default function PeriodosForm() {
           { label: 'Inicio', to: '/dashboard' },
           { label: 'Configuración Académica' },
           { label: 'Periodos Académicos', to: '/periodos' },
-          { label: isRegister ? 'Registrar Periodo' : isView ? 'Ver Periodo' : 'Editar Periodo' },
+          { label: periodLabel },
         ]}
       />
 
       <FormHeader
-        title={isRegister ? 'Registrar Periodo' : isView ? 'Ver Periodo' : 'Editar Periodo'}
+        title={periodLabel}
         subtitle={isRegister
           ? 'Completa los campos para registrar un nuevo periodo académico.'
           : isView
@@ -249,6 +260,7 @@ export default function PeriodosForm() {
             id={id}
             registerUrl="/periodos/new"
             formUrl={m => `/periodos/form?mode=${m}&id=${id}`}
+            canEdit={!closed}
           />
         }
       />
@@ -258,6 +270,14 @@ export default function PeriodosForm() {
 
       {/* Submit error banner */}
       {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
+
+      {/* Periodo cerrado: terminal, no editable (misma regla que PeriodosList) */}
+      {closed && (
+        <div className="mb-6 flex items-start gap-2 text-[12px] text-[#6B7280] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md px-3 py-2.5">
+          <Info size={13} className="text-[#009574] flex-shrink-0 mt-0.5" />
+          Este periodo está cerrado y ya no puede editarse.
+        </div>
+      )}
 
       {/* Form card */}
       <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando periodo...">
@@ -351,11 +371,12 @@ export default function PeriodosForm() {
       {/* Actions */}
       {loadStatus !== 'loading' && (
         <FormActions
-          isView={isView}
+          isView={isView || closed}
           onBack={() => navigate('/periodos')}
           onPrimary={isView ? () => navigate(`/periodos/form?mode=edit&id=${id}`) : handleSubmit}
           primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Periodo' : 'Guardar Cambios'}
           isSubmitting={isSubmitting}
+          primaryDisabled={closed}
         />
       )}
     </FormPage>
