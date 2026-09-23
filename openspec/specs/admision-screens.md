@@ -83,7 +83,9 @@ LlaveMX (per `00-TRANSVERSALES.md` RN-AUTH-005 and real-world CURP structure —
 
 #### Step 1 — Datos Generales, Domicilio Actual y Contacto
 
-Identity verification gate MUST block "Siguiente" until the candidate clicks "Verificar con LlaveMX" (simulated) and a verified badge is shown, replacing any manual LlaveMX toggle. Once verified, the 7 locked fields above populate automatically.
+Identity verification gate MUST block "Siguiente" until either (a) the candidate clicks "Verificar con LlaveMX" (simulated) and a verified badge is shown, or (b) the candidate opts for manual capture ("¿No tienes LlaveMX? Ingresa tus datos manualmente"), which unlocks the 7 identity fields as editable inputs and shows a "Captura manual" badge. Both paths are reversible: manual → "Intentar de nuevo con LlaveMX" returns to the idle gate (typed identity fields are preserved until an actual verification overwrites them). Once verified, the 7 locked fields above populate automatically.
+
+> **DEV NOTE (2026-09-22)**: RN-AUTH-004 in `00-TRANSVERSALES.md` originally made LlaveMX mandatory for registration. Stakeholders requested a manual-capture fallback for applicants without LlaveMX, so the gate is now *recommended* LlaveMX with optional manual entry. Both staff and public mounts behave identically. The LlaveMX button itself now uses the official Digital Morelos widget (`core/components/LlaveMxButton.tsx`, brand colors #6F7857/#832B56/#C2996D).
 
 Manual fields — *Datos Generales*: Nacionalidad (Mexicana/Extranjera radio); if Mexicana → Municipio de Nacimiento (select, from the Estado de Nacimiento LlaveMX provided); if Extranjera → País de Nacimiento, Estado de Nacimiento (now editable), Ciudad de Nacimiento; Estado Civil (select); Lengua Natal (select); ¿Tienes hijos? (Sí/No).
 *Domicilio Actual*: Calle, Número Exterior, Número Interior (optional), Colonia, Estado, Municipio (depends on Estado), Localidad, Código Postal (5 digits).
@@ -103,10 +105,13 @@ Manual fields — *Datos Generales*: Nacionalidad (Mexicana/Extranjera radio); i
 
 MUST require a payment-method selection (Evo Payments online / ventanilla) before "Finalizar Registro" is enabled. On submit, each mount MUST navigate to its own mount's Ficha Confirmación (Screen 13) — staff mount stays under `AppLayout`, público mount stays under `AuthLayout` — carrying the generated folio and payment instructions.
 
-#### Scenario: Next blocked until identity verified
-- GIVEN Step 1 is shown and identity is not yet verified
-- WHEN the candidate has not clicked "Verificar con LlaveMX"
+#### Scenario: Next blocked until identity verified or manual capture chosen
+- GIVEN Step 1 is shown and identity is neither verified nor in manual-capture mode
+- WHEN the candidate has not clicked "Verificar con LlaveMX" nor chosen manual capture
 - THEN "Siguiente" MUST remain disabled
+- GIVEN the candidate chose "Ingresa tus datos manualmente" and filled the required identity fields
+- WHEN the candidate views Step 1
+- THEN the 7 identity fields MUST render as editable inputs and "Siguiente" MUST be enabled
 
 #### Scenario: Estado de Nacimiento locks and unlocks with Nacionalidad
 - GIVEN identity is verified and Nacionalidad is set to "Mexicana"
