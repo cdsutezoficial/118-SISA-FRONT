@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ArrowLeft, AlertCircle, GraduationCap, Loader2, Mail } from 'lucide-react'
+import { apiPost } from '../infra/apiClient'
+import type { ApiError } from '../infra/apiClient'
 
 // ─── Left panel — same institutional branding as Login ────────────────────────
 
@@ -64,7 +66,23 @@ export default function ResetPassword() {
     if (!correo.includes('@')) { setError('Ingresa un correo válido.'); return }
     setError('')
     setLoading(true)
-    setTimeout(() => { setLoading(false); setSent(true) }, 1200)
+    void (async () => {
+      try {
+        // 204 regardless of whether the account exists — never reveal account
+        // existence (matches the backend's silent-success contract).
+        await apiPost('/auth/forgot-password', { username: correo.trim() })
+        setLoading(false)
+        setSent(true)
+      } catch (err) {
+        setLoading(false)
+        const apiErr = err as Partial<ApiError>
+        if (apiErr.status === 400 || apiErr.status === 422) {
+          setError(apiErr.message ?? 'Verifica que el correo sea válido.')
+        } else {
+          setError('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+        }
+      }
+    })()
   }
 
   return (

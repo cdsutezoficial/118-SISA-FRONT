@@ -10,6 +10,7 @@ import { apiGet, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 import { ROLE_LABELS, ROLE_BADGE_STYLE, ROLE_OPTIONS, DIVISION_SCOPED_ROLES } from '../data/roles'
 import type { RoleType } from '../data/roles'
+import { fetchRoleIdByType } from '../data/rolesApi'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ export default function AsignarRol() {
   const [loadErrorMsg, setLoadErrorMsg] = useState(userId ? '' : 'Falta el usuario. Regresa al listado e intenta de nuevo.')
 
   const [divisions, setDivisions] = useState<DivisionSummary[]>([])
+  const [roleIds, setRoleIds] = useState<Partial<Record<RoleType, string>>>({})
   const [rol, setRol] = useState<RoleType | ''>('')
   const [division, setDivision] = useState('')
   const [errors, setErrors] = useState<FormErrors>({})
@@ -90,6 +92,9 @@ export default function AsignarRol() {
     apiGet<DivisionsPageResponse>('/divisions', { size: 100 })
       .then(data => { if (!cancelled) setDivisions(data.items) })
       .catch(() => {/* non-critical — division select just won't populate */})
+    fetchRoleIdByType()
+      .then(map => { if (!cancelled) setRoleIds(map) })
+      .catch(() => {/* non-critical — role submit will surface the resolution error */})
     return () => { cancelled = true }
   }, [userId])
 
@@ -111,11 +116,17 @@ export default function AsignarRol() {
     setSubmitted(true)
     if (Object.keys(e).length > 0) { setErrors(e); return }
     if (!userId || !rol) return
+    const roleId = roleIds[rol]
+    if (!roleId) {
+      setSubmitStatus('error')
+      setSubmitErrorMsg('No se pudo determinar el identificador del rol en el catálogo. Intenta de nuevo.')
+      return
+    }
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
     try {
       await apiPost(`/users/${userId}/roles`, {
-        roleType: rol,
+        roleId,
         divisionId: needsScope ? division : undefined,
       })
       navigate(`/usuarios/detalle?id=${userId}`, { state: { toast: 'Rol asignado correctamente.' } })

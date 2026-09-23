@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { GraduationCap, Loader2 } from 'lucide-react'
+import { GraduationCap } from 'lucide-react'
 import { Button, TextField } from '@app/core/components/form'
+import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 import { ErrorBanner } from '@app/core/components/list'
 import { useRole } from '@app/core/infra/RoleContext'
 import { mockCandidates } from '@app/modules/admision/data/mockData'
@@ -39,17 +40,7 @@ import type { Candidate } from '@app/modules/admision/data/types'
  * no change.
  */
 
-// Mirrors `Login.tsx`'s page-local `LlaveMXIcon` — kept local (not shared/exported)
-// since Login.tsx doesn't export it either.
-function LlaveMXIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="flex-shrink-0">
-      <circle cx="8" cy="8" r="5" stroke="currentColor" strokeWidth="2" />
-      <circle cx="8" cy="8" r="2" fill="currentColor" />
-      <path d="M12 8h8M17 8v3M19.5 8v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  )
-}
+// Botón oficial de Digital Morelos / LlaveMX — ver `core/components/LlaveMxButton.tsx`.
 
 const FOLIO_PATTERN = /^ADM-\d{4}-\d+$/i
 
@@ -152,15 +143,12 @@ export default function PortalInduccion() {
               <p className="text-[12px] text-[#6B7280] mb-4">
                 Accede de forma segura con tu identidad digital LlaveMX.
               </p>
-              <Button
-                type="button"
+              <LlaveMxButton
                 onClick={handleLlaveMX}
                 disabled={llaveLoading}
-                className="w-full py-2.5"
-              >
-                {llaveLoading ? <Loader2 size={16} className="animate-spin" /> : <LlaveMXIcon />}
-                Acceder con LlaveMX
-              </Button>
+                loading={llaveLoading}
+                className="w-full"
+              />
             </div>
 
             {/* Separador */}
