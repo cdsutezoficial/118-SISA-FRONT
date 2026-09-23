@@ -160,7 +160,7 @@ export default function SeleccionCandidatos() {
 
       <FormHeader
         title="Selección de Candidatos"
-        subtitle="Revisa los candidatos de tus programas con sus resultados disponibles y marca cada uno como admitido o rechazado. Solo puedes actuar sobre candidatos de tu división."
+        subtitle="Revisa los candidatos de tus carreras con sus resultados disponibles y marca cada uno como admitido o rechazado. Solo puedes actuar sobre candidatos de tu división."
         right={
           <span className="text-[12px] font-semibold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap mt-1">
             Selección Abierta
@@ -182,7 +182,7 @@ export default function SeleccionCandidatos() {
         <FilterSelect
           value={programaFilter}
           onChange={setProgramaFilter}
-          allLabel="Todos los programas"
+          allLabel="Todas las carreras"
           options={programas.map(p => ({ value: p, label: p }))}
           className="sm:w-64"
         />

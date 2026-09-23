@@ -63,13 +63,13 @@ const kpiCards: KpiCardData[] = [
 ]
 
 const topProgramasColumns: ColumnDef<ProgramaStat>[] = [
-  { key: 'programa', header: 'Programa', type: 'name', value: r => r.programa },
+  { key: 'programa', header: 'Carrera', type: 'name', value: r => r.programa },
   { key: 'fichas', header: 'Fichas', type: 'count', value: r => r.fichas, className: 'w-20' },
   { key: 'admitidos', header: 'Admitidos', type: 'count', value: r => r.admitidos, className: 'w-24' },
 ]
 
 const estadoProgramasColumns: ColumnDef<ProgramaStat>[] = [
-  { key: 'programa', header: 'Programa', type: 'name', value: r => r.programa },
+  { key: 'programa', header: 'Carrera', type: 'name', value: r => r.programa },
   { key: 'enProceso', header: 'En Proceso', type: 'count', value: r => r.enProceso, className: 'w-24' },
   { key: 'completados', header: 'Completados', type: 'count', value: r => r.completados, className: 'w-24' },
 ]
@@ -117,9 +117,9 @@ export default function AdmisionDashboard() {
           status="idle"
           items={programaStats}
           keyFor={r => r.programa}
-          loadingLabel="Calculando programas..."
+          loadingLabel="Calculando carreras..."
           emptyTitle="Sin candidatos"
-          emptyHint="Los programas solicitados aparecerán aquí."
+          emptyHint="Las carreras solicitadas aparecerán aquí."
           showOnMobile
           header={
             <>
@@ -132,9 +132,9 @@ export default function AdmisionDashboard() {
           status="idle"
           items={programaStats}
           keyFor={r => r.programa}
-          loadingLabel="Calculando programas..."
+          loadingLabel="Calculando carreras..."
           emptyTitle="Sin candidatos"
-          emptyHint="El estado por programa aparecerá aquí."
+          emptyHint="El estado por carrera aparecerá aquí."
           showOnMobile
           header={
             <>

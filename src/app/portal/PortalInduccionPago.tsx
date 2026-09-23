@@ -119,7 +119,7 @@ export default function PortalInduccionPago() {
           <p className="text-[12px] font-bold text-[#009574] uppercase tracking-widest mb-4">Datos del candidato</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <ReadField label="Nombre" value={candidate.nombre} />
-            <ReadField label="Programa" value={candidate.programa} />
+            <ReadField label="Carrera" value={candidate.programa} />
             <ReadField label="Folio" value={candidate.folio} mono />
           </div>
         </div>

@@ -126,7 +126,7 @@ export default function ReinscripcionWizard() {
               <ReadField label="Grupo Actual" value={selectedStudent.grupo} />
             </div>
             <div className="col-span-12 md:col-span-6">
-              <ReadField label="Programa" value={selectedStudent.programa} />
+              <ReadField label="Carrera" value={selectedStudent.programa} />
             </div>
             <div className="col-span-12 md:col-span-6">
               <ReadField label="Nivel Actual" value={selectedStudent.nivelActual} />
@@ -164,7 +164,7 @@ export default function ReinscripcionWizard() {
         <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Resumen de Reinscripción</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <ReadField label="Estudiante" value={selectedStudent?.nombre ?? ''} />
-          <ReadField label="Programa" value={selectedStudent?.programa ?? ''} />
+          <ReadField label="Carrera" value={selectedStudent?.programa ?? ''} />
           <ReadField label="Periodo" value={ACTIVE_PERIOD} />
         </div>
         <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-2">Materias</p>

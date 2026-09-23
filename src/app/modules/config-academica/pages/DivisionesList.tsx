@@ -128,7 +128,7 @@ export default function DivisionesList() {
     { key: 'name', header: 'División', type: 'name' },
     { key: 'code', header: 'Clave', type: 'code', className: 'w-24' },
     { key: 'description', header: 'Descripción', type: 'muted' },
-    { key: 'programCount', header: 'Programas', type: 'count', className: 'w-28' },
+    { key: 'programCount', header: 'Carreras', type: 'count', className: 'w-28' },
     { key: 'status', header: 'Estado', type: 'status', className: 'w-24' },
   ]
 
@@ -213,7 +213,7 @@ export default function DivisionesList() {
               <p className="text-[12px] text-[#6B7280] mb-2 leading-snug line-clamp-2">{row.description}</p>
             )}
             <p className="text-[12px] text-[#6B7280] mb-3">
-              <span className="font-semibold text-[#333333]">{row.programCount}</span> programa{row.programCount !== 1 ? 's' : ''}
+              <span className="font-semibold text-[#333333]">{row.programCount}</span> carrera{row.programCount !== 1 ? 's' : ''}
             </p>
             <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
               <button

@@ -403,7 +403,7 @@ export default function PlanDetalle() {
           <FormCard>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
-                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Programa</p>
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Carrera</p>
                 <p className="text-[13px] font-medium text-[#333333]">{programLabel(plan.programId)}</p>
               </div>
               <div>

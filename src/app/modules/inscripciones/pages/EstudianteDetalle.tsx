@@ -120,7 +120,7 @@ function CambiarProgramaModal({ student, currentPrograma, onSave, onCancel }: {
 
   return (
     <Modal
-      title="Cambiar Programa"
+      title="Cambiar Carrera"
       onClose={onCancel}
       maxWidth="max-w-md"
       footer={
@@ -135,14 +135,14 @@ function CambiarProgramaModal({ student, currentPrograma, onSave, onCancel }: {
       }
     >
       <p className="text-[13px] text-[#6B7280] mb-4">
-        Estudiante: <strong className="text-[#333333]">{student.nombre}</strong> · Programa actual:{' '}
+        Estudiante: <strong className="text-[#333333]">{student.nombre}</strong> · Carrera actual:{' '}
         <strong className="text-[#333333]">{currentPrograma}</strong>
       </p>
 
       <div className="space-y-4 mb-6">
         <div>
-          <FieldLabel required>Programa destino</FieldLabel>
-          <SearchSelect options={programaOpciones} value={programa} onChange={handleProgramaChange} placeholder="Selecciona un programa" />
+          <FieldLabel required>Carrera destino</FieldLabel>
+          <SearchSelect options={programaOpciones} value={programa} onChange={handleProgramaChange} placeholder="Selecciona una carrera" />
         </div>
         <div>
           <FieldLabel required>Plan</FieldLabel>
@@ -150,7 +150,7 @@ function CambiarProgramaModal({ student, currentPrograma, onSave, onCancel }: {
             options={planOpciones}
             value={plan}
             onChange={setPlan}
-            placeholder={programa ? 'Selecciona un plan' : 'Selecciona un programa primero'}
+            placeholder={programa ? 'Selecciona un plan' : 'Selecciona una carrera primero'}
             disabled={!programa}
           />
         </div>
@@ -218,13 +218,13 @@ export default function EstudianteDetalle() {
       return [...closed, next]
     })
     setShowCambiarPrograma(false)
-    setToast(`Programa actualizado a "${input.programa}".`)
+    setToast(`Carrera actualizada a "${input.programa}".`)
   }
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: 'info', label: 'Información General', icon: <UserCheck size={14} /> },
     { key: 'academico', label: 'Historial Académico', icon: <GraduationCap size={14} /> },
-    { key: 'programas', label: 'Historial de Programas', icon: <History size={14} /> },
+    { key: 'programas', label: 'Historial de Carreras', icon: <History size={14} /> },
     { key: 'documentos', label: 'Documentos', icon: <FileText size={14} /> },
   ]
 
@@ -256,7 +256,7 @@ export default function EstudianteDetalle() {
       <FormCard>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-6">
           <ReadField label="Matrícula" value={student.matricula} mono />
-          <ReadField label="Programa" value={student.programa} />
+          <ReadField label="Carrera" value={student.programa} />
           <ReadField label="Nivel Actual" value={student.nivelActual} />
           <ReadField label="Grupo" value={student.grupo} />
           <div>
@@ -326,16 +326,16 @@ export default function EstudianteDetalle() {
       {activeTab === 'programas' && (
         <FormCard>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest">Bitácora de Programa/Plan</p>
+            <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest">Bitácora de Carrera/Plan</p>
             <Button size="sm" variant="secondary" onClick={() => setShowCambiarPrograma(true)}>
-              <ArrowLeftRight size={13} />Cambiar Programa
+              <ArrowLeftRight size={13} />Cambiar Carrera
             </Button>
           </div>
           <MiniTable
             items={historyRows}
             keyFor={row => row.id}
             columns={[
-              { key: 'programa', header: 'Programa', render: row => <span className="font-medium text-[#333333]">{row.programa}</span> },
+              { key: 'programa', header: 'Carrera', render: row => <span className="font-medium text-[#333333]">{row.programa}</span> },
               { key: 'plan', header: 'Plan', render: row => <span className="font-mono text-[12px] text-[#6B7280]">{row.plan}</span> },
               { key: 'desde', header: 'Desde' },
               { key: 'hasta', header: 'Hasta', render: row => (row.hasta === null ? <BadgePill value="Actual" map={actualBadgeMap} /> : row.hasta) },

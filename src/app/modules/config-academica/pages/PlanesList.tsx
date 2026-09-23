@@ -172,7 +172,7 @@ export default function PlanesList() {
   const columns: ColumnDef<PlanListItem>[] = [
     { key: 'version', header: 'Versión', type: 'code', className: 'w-28' },
     { key: 'validityPeriod', header: 'Vigencia', type: 'muted', className: 'w-24' },
-    { key: 'programId', header: 'Programa Educativo', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabel(row.programId) },
     { key: 'effectiveFrom', header: 'Vigente desde', type: 'count', value: row => formatDate(row.effectiveFrom), className: 'w-32 text-center', cellClassName: 'text-center tabular-nums' },
     {
       key: 'levels',
@@ -222,7 +222,7 @@ export default function PlanesList() {
       <PageHeader
         divider
         title="Planes de Estudio"
-        subtitle="Consulta y administra los planes de estudio de cada programa educativo. Cada programa puede tener múltiples planes vigentes simultáneamente."
+        subtitle="Consulta y administra los planes de estudio de cada carrera. Cada carrera puede tener múltiples planes vigentes simultáneamente."
         actions={[{ icon: <PlusIcon size={15} />, label: 'Registrar Plan de Estudios', onClick: () => navigate('/planes/new') }]}
       />
 
@@ -233,7 +233,7 @@ export default function PlanesList() {
         <FilterSelect
           value={programFilter}
           onChange={v => { setProgramFilter(v); setPage(1) }}
-          allLabel="Todos los programas"
+          allLabel="Todas las carreras"
           className="sm:w-64"
           options={programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))}
         />

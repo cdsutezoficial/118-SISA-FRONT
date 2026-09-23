@@ -24,7 +24,7 @@ type PaymentConceptType = 'ENROLLMENT' | 'REINSCRIPTION' | 'EXTRAORDINARY' | 'DO
 type PaymentConceptStatus = 'ACTIVE' | 'INACTIVE'
 
 // `AcademicLevel` — shared-kernel enum, mismo set de labels que
-// `ProgramasForm.tsx` (usado solo por la tabla de Tarifas).
+// `CarrerasForm.tsx` (usado solo por la tabla de Tarifas).
 type AcademicLevel = 'TSU' | 'CONTINUIDAD' | 'INGENIERIA' | 'LICENCIATURA' | 'POSGRADO'
 
 const LEVEL_LABELS: Record<AcademicLevel, string> = {
@@ -476,7 +476,7 @@ export default function ConceptosForm() {
   }, [id, isRegister])
 
   function programLabel(programId: string | null): string {
-    if (!programId) return 'Todos los programas'
+    if (!programId) return 'Todas las carreras'
     const p = programs.find(p => p.id === programId)
     return p ? `${p.code} — ${p.name}` : '—'
   }
@@ -947,7 +947,7 @@ export default function ConceptosForm() {
                   <div className="hidden md:block border border-[#E5E7EB] rounded-lg overflow-hidden">
                     <MiniTable
                       columns={[
-                        { key: 'programa', header: 'Programa', render: r => <span className="text-[#333333]">{programLabel(r.programId)}</span> },
+                        { key: 'programa', header: 'Carrera', render: r => <span className="text-[#333333]">{programLabel(r.programId)}</span> },
                         { key: 'nivel', header: 'Nivel', render: r => <span className="text-[#333333]">{levelLabel(r.level)}</span> },
                         { key: 'periodo', header: 'Periodo', render: r => <span className="text-[#333333]">{periodLabel(r.periodId)}</span> },
                         { key: 'monto', header: 'Monto', className: 'text-right tabular-nums', render: r => <span className="font-medium text-[#333333]">{formatCurrency(r.amount)}</span> },

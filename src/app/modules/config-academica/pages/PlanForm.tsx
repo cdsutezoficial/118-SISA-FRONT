@@ -360,7 +360,7 @@ export default function PlanForm() {
   // ─── Validation ────────────────────────────────────────────────────────────
   function validate(): FormErrors {
     const e: FormErrors = {}
-    if (isRegister && !programId) e.programId = 'Selecciona el programa educativo.'
+    if (isRegister && !programId) e.programId = 'Selecciona la carrera.'
     if (!version.trim()) e.version = 'La versión del plan es requerida.'
     if (!validityPeriod.trim()) e.validityPeriod = 'El periodo de vigencia es requerido.'
     if (!titulationKey.trim()) e.titulationKey = 'La clave de titulación es requerida.'
@@ -452,7 +452,7 @@ export default function PlanForm() {
       setSubmitStatus('error')
       const apiErr = err as Partial<ApiError>
       if (apiErr.status === 409) {
-        setSubmitErrorMsg(apiErr.message ?? 'La versión ya está en uso por otro plan de este programa.')
+        setSubmitErrorMsg(apiErr.message ?? 'La versión ya está en uso por otro plan de esta carrera.')
       } else if (apiErr.status === 400) {
         setSubmitErrorMsg(apiErr.message ?? 'Revisa los datos capturados: hay un valor inválido.')
       } else if (apiErr.status === 401) {
@@ -664,19 +664,19 @@ export default function PlanForm() {
 
               {/* Programa Educativo */}
               <div className="col-span-12 sm:col-span-8">
-                <FieldLabel required={isRegister}>Programa Educativo</FieldLabel>
+                <FieldLabel required={isRegister}>Carrera</FieldLabel>
                 <SearchSelectField
                   options={programs}
                   value={programId}
                   onChange={v => { setProgramId(v); setErrors(prev => ({ ...prev, programId: undefined })) }}
-                  placeholder="Seleccionar programa…"
+                  placeholder="Seleccionar carrera…"
                   disabled={programDisabled}
                   hasError={!!errors.programId}
-                  searchPlaceholder="Buscar programa…"
+                  searchPlaceholder="Buscar carrera…"
                 />
                 {errors.programId
                   ? <FieldError>{errors.programId}</FieldError>
-                  : <FieldHelp>{isEdit ? 'El programa no se puede modificar una vez creado el plan.' : 'Programa educativo al que pertenece este plan.'}</FieldHelp>}
+                  : <FieldHelp>{isEdit ? 'La carrera no se puede modificar una vez creado el plan.' : 'Carrera a la que pertenece este plan.'}</FieldHelp>}
               </div>
 
               <TextField
@@ -687,7 +687,7 @@ export default function PlanForm() {
                 disabled={disabled}
                 error={errors.version}
                 placeholder="Ej. 2024-1"
-                help="Identifica el plan dentro del programa (único por programa)."
+                help="Identifica el plan dentro de la carrera (único por carrera)."
                 className="col-span-12 sm:col-span-4"
               />
 

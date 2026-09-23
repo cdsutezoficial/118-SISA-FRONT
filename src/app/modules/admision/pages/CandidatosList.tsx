@@ -83,13 +83,13 @@ export default function CandidatosList() {
     const nombre = cambiarProgramaTarget.nombre
     setCandidates(prev => prev.map(c => (c.id === targetId ? { ...c, programa: nuevoPrograma } : c)))
     setCambiarProgramaTarget(null)
-    setToast(`Programa actualizado para ${nombre}.`)
+    setToast(`Carrera actualizada para ${nombre}.`)
   }
 
   const columns: ColumnDef<Candidate>[] = [
     { key: 'folio', header: 'Folio', type: 'code', className: 'w-32' },
     { key: 'nombre', header: 'Nombre Completo', type: 'name' },
-    { key: 'programa', header: 'Programa Solicitado', type: 'text' },
+    { key: 'programa', header: 'Carrera Solicitada', type: 'text' },
     { key: 'status', header: 'Estado', type: 'badge', badge: statusBadgeMap, className: 'w-28' },
     { key: 'fechaRegistro', header: 'Fecha de Registro', type: 'muted', className: 'w-24' },
   ]
@@ -125,7 +125,7 @@ export default function CandidatosList() {
         <FilterSelect
           value={programaFilter}
           onChange={v => { setProgramaFilter(v); setPage(1) }}
-          allLabel="Todos los programas"
+          allLabel="Todas las carreras"
           className="w-full sm:w-64"
           options={programas.map(p => ({ value: p, label: p }))}
         />
@@ -190,7 +190,7 @@ export default function CandidatosList() {
               {isAdmisionActionEnabled(row, 'CAMBIAR_PROGRAMA') && (
                 <ActionBtn
                   icon={<ArrowLeftRight size={15} />}
-                  tooltip="Cambiar Programa"
+                  tooltip="Cambiar Carrera"
                   onClick={() => setCambiarProgramaTarget(row)}
                 />
               )}
@@ -232,7 +232,7 @@ export default function CandidatosList() {
                 <CardActionButton icon={<GraduationCap size={13} />} label="Registrar Inducción" onClick={() => navigate(`/admision/candidatos/induccion?id=${row.id}`)} />
               )}
               {isAdmisionActionEnabled(row, 'CAMBIAR_PROGRAMA') && (
-                <CardActionButton icon={<ArrowLeftRight size={13} />} label="Cambiar Programa" onClick={() => setCambiarProgramaTarget(row)} />
+                <CardActionButton icon={<ArrowLeftRight size={13} />} label="Cambiar Carrera" onClick={() => setCambiarProgramaTarget(row)} />
               )}
             </div>
           </>

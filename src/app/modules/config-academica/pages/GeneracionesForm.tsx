@@ -192,7 +192,7 @@ export default function GeneracionesForm() {
       if (apiErr.status === 409) {
         // Backend: "Generation number already in use for this program: " + number.
         // Surfaced verbatim when present, same convention as ClasificacionesForm's 409 handling.
-        setSubmitErrorMsg(apiErr.message ?? 'El número de generación ya está en uso para este programa.')
+        setSubmitErrorMsg(apiErr.message ?? 'El número de generación ya está en uso para esta carrera.')
       } else if (apiErr.status === 400) {
         setSubmitErrorMsg(apiErr.message ?? 'Revisa los datos capturados: hay un valor inválido.')
       } else if (apiErr.status === 401) {
@@ -236,14 +236,14 @@ export default function GeneracionesForm() {
         <div className="grid grid-cols-12 gap-4">
           {/* Programa Educativo */}
           <div className="col-span-12 sm:col-span-6">
-            <FieldLabel required>Programa Educativo</FieldLabel>
+            <FieldLabel required>Carrera</FieldLabel>
             <SearchSelectField
               options={programOptions}
               value={programId}
               onChange={handleProgramChange}
-              placeholder="Selecciona el programa"
+              placeholder="Selecciona la carrera"
               disabled={disabled}
-              searchPlaceholder="Buscar programa…"
+              searchPlaceholder="Buscar carrera…"
             />
           </div>
           {/* Plan de Estudios */}
@@ -281,7 +281,7 @@ export default function GeneracionesForm() {
             disabled={disabled}
             numeric
             placeholder="Ej. 7"
-            help="Consecutivo dentro del programa — no reinicia por año."
+            help="Consecutivo dentro de la carrera — no reinicia por año."
             className="col-span-6 sm:col-span-3"
           />
           {/* Código — read-only, edit mode only (server-computed) */}

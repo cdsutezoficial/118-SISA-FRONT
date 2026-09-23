@@ -139,7 +139,7 @@ export default function HabilitarInduccion() {
     },
     { key: 'folio', header: 'Folio', type: 'code', className: 'w-40' },
     { key: 'nombre', header: 'Nombre Completo', type: 'name' },
-    { key: 'programa', header: 'Programa', type: 'text' },
+    { key: 'programa', header: 'Carrera', type: 'text' },
     { key: 'examen', header: 'Examen', type: 'text', className: 'w-24', value: row => row.examen?.calificacion ?? '—' },
     { key: 'estado', header: 'Estado Inducción', type: 'badge', className: 'w-36', value: row => INDUCCION_ESTADO_META[getInduccionEstado(row)].label, badge: INDUCCION_BADGES },
     {
@@ -177,7 +177,7 @@ export default function HabilitarInduccion() {
         <FilterSelect
           value={programaFilter}
           onChange={setProgramaFilter}
-          allLabel="Todos los programas"
+          allLabel="Todas las carreras"
           options={programas.map(p => ({ value: p, label: p }))}
           className="sm:w-64"
         />
@@ -225,7 +225,7 @@ export default function HabilitarInduccion() {
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#6B7280] mb-3">
                 <span>Folio: <span className="font-mono font-medium text-[#333333]">{row.folio}</span></span>
-                <span>Programa: <span className="font-medium text-[#333333]">{row.programa}</span></span>
+                <span>Carrera: <span className="font-medium text-[#333333]">{row.programa}</span></span>
                 <span>Examen: <span className="font-medium text-[#333333]">{row.examen?.calificacion ?? '—'}</span></span>
                 <span className={`inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${INDUCCION_ESTADO_META[estado].badgeClass}`}>
                   {INDUCCION_ESTADO_META[estado].label}

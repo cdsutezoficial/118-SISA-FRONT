@@ -140,7 +140,7 @@ export default function ConfirmarPagoInduccion() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-6">
           <ReadField label="Candidato" value={candidate.nombre} />
           <ReadField label="Folio" value={candidate.folio} mono />
-          <ReadField label="Programa" value={candidate.programa} />
+          <ReadField label="Carrera" value={candidate.programa} />
           <ReadField label="Referencia Generada" value={referenciaGenerada} mono />
           <ReadField label="Monto Esperado" value={`$${INDUCCION_MONTO.toFixed(2)}`} />
         </div>

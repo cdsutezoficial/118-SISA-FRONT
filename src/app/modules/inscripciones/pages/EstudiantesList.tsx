@@ -67,7 +67,7 @@ export default function EstudiantesList() {
   const columns: ColumnDef<Student>[] = [
     { key: 'matricula', header: 'Matrícula', type: 'code', className: 'w-28' },
     { key: 'nombre', header: 'Nombre Completo', type: 'name' },
-    { key: 'programa', header: 'Programa', type: 'text' },
+    { key: 'programa', header: 'Carrera', type: 'text' },
     { key: 'nivelActual', header: 'Nivel Actual', type: 'text' },
     { key: 'grupo', header: 'Grupo', type: 'text', className: 'w-24' },
     { key: 'status', header: 'Estado', type: 'badge', badge: statusBadgeMap, className: 'w-28' },
@@ -95,7 +95,7 @@ export default function EstudiantesList() {
         <FilterSelect
           value={programaFilter}
           onChange={v => { setProgramaFilter(v); setPage(1) }}
-          allLabel="Todos los programas"
+          allLabel="Todas las carreras"
           className="w-full sm:w-64"
           options={programaOptions.map(p => ({ value: p, label: p }))}
         />

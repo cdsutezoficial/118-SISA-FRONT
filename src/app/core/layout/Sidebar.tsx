@@ -53,7 +53,7 @@ export const SYSTEM_NAV: NavEntry[] = [
     children: [
       { icon: <LayoutDashboard size={18} />, label: 'Dashboard', base: 'dashboard', path: '/dashboard', roles: ACADEMIC_CONFIG_ROLES },
       { icon: <Building2 size={18} />,     label: 'Divisiones Académicas',   base: 'divisiones', path: '/divisiones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['DIVISIONS_READ'] },
-      { icon: <GraduationCap size={18} />, label: 'Programas Educativos',    base: 'programas',  path: '/programas',  roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PROGRAMS_READ'] },
+      { icon: <GraduationCap size={18} />, label: 'Carreras',           base: 'carreras',   path: '/carreras',   roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['CARRERAS_READ'] },
       { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PLANS_READ'] },
       { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['SUBJECT_CLASSIFICATIONS_READ'] },
       { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PERIODS_READ'] },

@@ -140,7 +140,7 @@ export default function RegistroInduccion() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
           <ReadField label="Candidato" value={candidate.nombre} />
           <ReadField label="Folio" value={candidate.folio} mono />
-          <ReadField label="Programa" value={candidate.programa} />
+          <ReadField label="Carrera" value={candidate.programa} />
         </div>
       </FormCard>
 

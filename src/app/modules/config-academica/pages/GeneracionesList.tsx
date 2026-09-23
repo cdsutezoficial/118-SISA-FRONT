@@ -203,7 +203,7 @@ export default function GeneracionesList() {
 
   const columns: ColumnDef<GenerationListItem>[] = [
     { key: 'code', header: 'Código', type: 'code', className: 'w-24' },
-    { key: 'programId', header: 'Programa Educativo', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabel(row.programId) },
     { key: 'planId', header: 'Plan de Estudios', type: 'muted', value: row => planLabel(row.planId), className: 'w-28' },
     { key: 'startPeriodId', header: 'Periodo de Inicio', type: 'muted', value: row => periodLabel(row.startPeriodId) },
     { key: 'status', header: 'Estado', type: 'status', activeLabel: 'Activa', inactiveLabel: 'Finalizada', className: 'w-28' },
@@ -223,7 +223,7 @@ export default function GeneracionesList() {
 
       <PageHeader
         title="Generaciones"
-        subtitle="Consulta y administra las generaciones (cohortes de ingreso) por programa educativo."
+        subtitle="Consulta y administra las generaciones (cohortes de ingreso) por carrera."
         actions={[{ label: 'Registrar Generación', icon: <PlusIcon />, onClick: () => navigate('/generaciones/new') }]}
       />
 
@@ -235,8 +235,8 @@ export default function GeneracionesList() {
             options={programOptions}
             value={programFilter}
             onChange={v => { setProgramFilter(v); setPage(1) }}
-            placeholder="Todos los programas"
-            searchPlaceholder="Buscar programa…"
+            placeholder="Todas las carreras"
+            searchPlaceholder="Buscar carrera…"
           />
         </div>
         <FilterSelect

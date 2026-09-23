@@ -178,7 +178,7 @@ export default function AplicarDescuento() {
               <ReadField label="Nombre" value={resultCandidate.nombre} />
               <ReadField label="Folio" value={resultCandidate.folio} mono />
               <ReadField label="CURP" value={resultCandidate.curp} mono />
-              <ReadField label="Programa" value={resultCandidate.programa} />
+              <ReadField label="Carrera" value={resultCandidate.programa} />
               <div>
                 <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Estado</p>
                 <span

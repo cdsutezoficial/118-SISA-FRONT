@@ -260,7 +260,7 @@ export default function ConfiguracionAdmisionForm() {
       if (apiErr.status === 409) {
         // Backend: DuplicateProgramAdmissionConfigException — a config
         // already exists for this exact programId+periodId combination.
-        setSubmitErrorMsg(apiErr.message ?? 'Ya existe una configuración de admisión para este programa y periodo.')
+        setSubmitErrorMsg(apiErr.message ?? 'Ya existe una configuración de admisión para esta carrera y periodo.')
       } else if (apiErr.status === 400) {
         // Backend: InvalidProgramAdmissionConfigDataException (maxCandidates
         // <= 0, closesAt not after opensAt) or one of the FK-reference-not-
@@ -283,14 +283,14 @@ export default function ConfiguracionAdmisionForm() {
           { label: 'Inicio', to: '/dashboard' },
           { label: 'Configuración Académica' },
           { label: 'Configuración de Admisión', to: '/configuracion-admision' },
-          { label: isRegister ? 'Configurar Programa' : 'Editar Configuración' },
+          { label: isRegister ? 'Configurar Carrera' : 'Editar Configuración' },
         ]}
       />
 
       <FormHeader
-        title={isRegister ? 'Configurar Programa para Admisión' : 'Editar Configuración de Admisión'}
+        title={isRegister ? 'Configurar Carrera para Admisión' : 'Editar Configuración de Admisión'}
         subtitle={isRegister
-          ? 'Define el cupo y la ventana de venta de fichas para un programa educativo.'
+          ? 'Define el cupo y la ventana de venta de fichas para una carrera.'
           : 'Modifica el cupo y la ventana de venta de fichas.'}
       />
 
@@ -305,14 +305,14 @@ export default function ConfiguracionAdmisionForm() {
         <div className="grid grid-cols-12 gap-4">
           {/* Fila 1 */}
           <div className="col-span-12 sm:col-span-6">
-            <FieldLabel required>Programa Educativo</FieldLabel>
+            <FieldLabel required>Carrera</FieldLabel>
             <SearchSelectField
               options={programOptions}
               value={programId}
               onChange={handleProgramChange}
-              placeholder="Selecciona el programa"
+              placeholder="Selecciona la carrera"
               disabled={disabled}
-              searchPlaceholder="Buscar programa…"
+              searchPlaceholder="Buscar carrera…"
             />
           </div>
           <div className="col-span-12 sm:col-span-6">
@@ -346,7 +346,7 @@ export default function ConfiguracionAdmisionForm() {
               <Switch checked={isOffered} onChange={setIsOffered} disabled={disabled} />
               <span className="text-[13px] text-[#333333]">{isOffered ? 'Sí' : 'No'}</span>
             </div>
-            <FieldHelp>Equivalente a marcar el programa como disponible en este proceso.</FieldHelp>
+            <FieldHelp>Equivalente a marcar la carrera como disponible en este proceso.</FieldHelp>
           </div>
 
           {/* Fila 3 */}
@@ -360,7 +360,7 @@ export default function ConfiguracionAdmisionForm() {
             disabled={disabled}
             numeric
             placeholder="Ej. 120"
-            help="Máximo de fichas pagadas antes de que el programa deje de aparecer disponible."
+            help="Máximo de fichas pagadas antes de que la carrera deje de aparecer disponible."
             className="col-span-12 sm:col-span-4"
           />
           <div className="col-span-12 sm:col-span-4">
