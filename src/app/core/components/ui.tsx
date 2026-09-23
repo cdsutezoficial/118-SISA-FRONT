@@ -287,6 +287,59 @@ export function SimpleSelect({ options, value, onChange, placeholder = 'Seleccio
   )
 }
 
+// ─── CalendarPickerSelect ─────────────────────────────────────────────────────
+// Selector custom para el header del DatePicker (mes/año): la lista nativa de
+// options no se puede estilizar, así que este usa el mismo patrón dropdown del
+// resto de la app (botón + panel) con la lista desplegable maquetada.
+
+function CalendarPickerSelect({ value, options, onSelect, ariaLabel }: {
+  value: number
+  options: { value: number; label: string }[]
+  onSelect: (v: number) => void
+  ariaLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = options.find(o => o.value === value)?.label ?? String(value)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1 text-[12px] font-semibold text-[#333333] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md px-2 py-1 cursor-pointer hover:border-[#009574]/40 hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition-colors ${open ? 'border-[#009574]/40 bg-white' : ''}`}
+      >
+        <span className="max-w-[64px] truncate">{current}</span>
+        <ChevronDown size={12} className="text-[#6B7280]" />
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl max-h-52 overflow-y-auto py-1 min-w-[96px]">
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => { onSelect(o.value); setOpen(false) }}
+              className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors
+                ${o.value === value ? 'bg-[#e6f5f1] text-[#009574] font-semibold' : 'text-[#333333] hover:bg-[#F8F9FA]'}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Calendar helpers ─────────────────────────────────────────────────────────
 function buildCalendar(year: number, month: number): (Date | null)[][] {
   const first = new Date(year, month, 1)
@@ -309,6 +362,26 @@ function parseDate(str: string): Date | null {
   return new Date(yyyy, mm - 1, dd)
 }
 
+/** `true` solo para strings `dd/mm/yyyy` que representan una fecha real (sin overflow: 32/13/2020 → false). */
+function isValidDateString(str: string): boolean {
+  if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) return false
+  const [dd, mm, yyyy] = str.split('/').map(Number)
+  if (!dd || !mm || yyyy < 1900) return false
+  const d = new Date(yyyy, mm - 1, dd)
+  return d.getFullYear() === yyyy && d.getMonth() === mm - 1 && d.getDate() === dd
+}
+
+/** Máscara dd/mm/yyyy: deja solo dígitos e inserta `/` cada 2 y 4 dígitos (máx 10 chars). */
+function maskDraft(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 8)
+  let out = ''
+  for (let i = 0; i < digits.length; i++) {
+    if (i === 2 || i === 4) out += '/'
+    out += digits[i]
+  }
+  return out
+}
+
 // ─── DatePicker ───────────────────────────────────────────────────────────────
 interface DatePickerProps {
   value: string
@@ -324,7 +397,13 @@ export function DatePicker({ value, onChange, disabled = false, minDate, placeho
   const parsed = parseDate(value)
   const [viewYear, setViewYear] = useState(parsed ? parsed.getFullYear() : today.getFullYear())
   const [viewMonth, setViewMonth] = useState(parsed ? parsed.getMonth() : today.getMonth())
+  // `draft` es el texto editable en el input; se sincroniza con el valor externo.
+  const [draft, setDraft] = useState(value)
   const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -342,9 +421,12 @@ export function DatePicker({ value, onChange, disabled = false, minDate, placeho
     if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
     else setViewMonth(m => m + 1)
   }
+  function prevYear() { setViewYear(y => y - 1) }
+  function nextYear() { setViewYear(y => y + 1) }
 
   function selectDay(d: Date) {
     onChange(formatDate(d))
+    setDraft(formatDate(d))
     setOpen(false)
   }
 
@@ -352,6 +434,23 @@ export function DatePicker({ value, onChange, disabled = false, minDate, placeho
     if (!minDate) return false
     return d < new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
   }
+
+  /** Aplica el texto escrito del input cuando es una fecha válida. */
+  function commitDraft() {
+    if (isValidDateString(draft)) {
+      onChange(draft)
+      const d = parseDate(draft)
+      if (d) { setViewYear(d.getFullYear()); setViewMonth(d.getMonth()) }
+      setOpen(false)
+      return true
+    }
+    setDraft(value) // inválido → vuelve al valor previo
+    return false
+  }
+
+  // Rango de años navegables (1900..año actual) — para moverte rápido al año.
+  const yearOptions: number[] = []
+  for (let y = 1900; y <= today.getFullYear(); y++) yearOptions.push(y)
 
   const weeks = buildCalendar(viewYear, viewMonth)
 
@@ -365,20 +464,53 @@ export function DatePicker({ value, onChange, disabled = false, minDate, placeho
 
   return (
     <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] flex items-center justify-between"
-      >
-        <span className={value ? 'text-[#333333]' : 'text-[#6B7280]'}>{value || placeholder}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#6B7280]"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      </button>
+      <div className="flex">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          onChange={e => setDraft(maskDraft(e.target.value))}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commitDraft()
+            if (e.key === 'Escape') setOpen(false)
+          }}
+          onBlur={() => {
+            if (isValidDateString(draft)) onChange(draft)
+            else setDraft(value)
+          }}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-l-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-label="Abrir calendario"
+          className="px-3 border border-l-0 border-[#E5E7EB] rounded-r-md bg-[#F8F9FA] text-[#6B7280] hover:text-[#009574] hover:border-[#009574]/40 focus:outline-none focus:ring-2 focus:ring-[#009574]/30 flex items-center"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </button>
+      </div>
       {open && (
-        <div className="absolute z-50 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-64">
-          <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-[#F8F9FA]"><ChevronLeft size={14} /></button>
-            <span className="text-[13px] font-semibold text-[#333333]">{MONTHS[viewMonth]} {viewYear}</span>
-            <button type="button" onClick={nextMonth} className="p-1 rounded hover:bg-[#F8F9FA]"><ChevronRight size={14} /></button>
+        <div className="absolute z-50 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-72">
+          <div className="flex items-center justify-between mb-2 gap-1">
+            <button type="button" onClick={prevYear} aria-label="Año anterior" className="p-1 rounded hover:bg-[#F8F9FA]" title="Año anterior"><ChevronLeft size={14} /></button>
+            <button type="button" onClick={prevMonth} aria-label="Mes anterior" className="p-1 rounded hover:bg-[#F8F9FA]" title="Mes anterior"><ChevronLeft size={14} className="-ml-1" /></button>
+            <div className="flex items-center gap-1">
+              <CalendarPickerSelect
+                ariaLabel="Mes"
+                value={viewMonth}
+                options={MONTHS.map((m, i) => ({ value: i, label: m }))}
+                onSelect={setViewMonth}
+              />
+              <CalendarPickerSelect
+                ariaLabel="Año"
+                value={viewYear}
+                options={yearOptions.map(y => ({ value: y, label: String(y) }))}
+                onSelect={setViewYear}
+              />
+            </div>
+            <button type="button" onClick={nextMonth} aria-label="Mes siguiente" className="p-1 rounded hover:bg-[#F8F9FA]" title="Mes siguiente"><ChevronRight size={14} className="-mr-1" /></button>
+            <button type="button" onClick={nextYear} aria-label="Año siguiente" className="p-1 rounded hover:bg-[#F8F9FA]" title="Año siguiente"><ChevronRight size={14} /></button>
           </div>
           <div className="grid grid-cols-7 mb-1">
             {DAYS.map(d => <div key={d} className="text-[10px] font-semibold text-[#6B7280] text-center py-0.5">{d}</div>)}
@@ -900,11 +1032,13 @@ export function SuccessModal({ title, message, buttonLabel = 'Continuar', onClos
 }
 
 // ─── ModeSwitcher ─────────────────────────────────────────────────────────────
-export function ModeSwitcher({ mode, registerUrl, formUrl, id }: {
+export function ModeSwitcher({ mode, registerUrl, formUrl, id, canEdit = true }: {
   mode: 'register' | 'view' | 'edit'
   registerUrl: string
   formUrl: (mode: 'view' | 'edit') => string
   id?: string | null
+  /** false → deshabilita la pestaña Editar (registro inmodificable, p.ej. periodo CLOSED). */
+  canEdit?: boolean
 }) {
   const navigate = useNavigate()
   const tabs = [
@@ -915,7 +1049,7 @@ export function ModeSwitcher({ mode, registerUrl, formUrl, id }: {
   return (
     <div className="inline-flex items-center border border-[#E5E7EB] rounded-lg overflow-hidden text-[12px]">
       {tabs.map(t => {
-        const disabled = !!(t.requiresId && !id)
+        const disabled = !!(t.requiresId && !id) || (t.key === 'edit' && !canEdit)
         return (
           <button
             key={t.key}

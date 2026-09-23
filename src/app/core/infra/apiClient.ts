@@ -147,3 +147,32 @@ export async function apiDelete<T>(path: string): Promise<T> {
   })
   return handleResponse<T>(res)
 }
+
+/**
+ * Binary download (e.g. the ficha PDF at {@code GET /candidates/{id}/ficha.pdf}).
+ * Reads the body as a {@link Blob} instead of JSON — {@code handleResponse}'s
+ * JSON parse throws on {@code application/pdf} payloads, so this is a separate
+ * helper that shares the same URL/auth/401 plumbing.
+ */
+export async function apiDownload(path: string): Promise<Blob> {
+  const res = await fetch(buildUrl(path), {
+    headers: buildHeaders(),
+  })
+  if (!res.ok) {
+    if (res.status === 401) unauthorizedHandler?.()
+    throw await parseApiError(res)
+  }
+  return res.blob()
+}
+
+/** Triggers a browser download for the given blob (helper for {@code apiDownload}). */
+export function saveBlobDownload(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}

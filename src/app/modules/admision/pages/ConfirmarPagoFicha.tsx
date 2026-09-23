@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { FieldLabel, FieldError, DatePicker, ReadField } from '@app/core/components/ui'
+import { Loader2 } from 'lucide-react'
+import { FieldLabel, FieldError, DatePicker, ReadField, Toast } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
 import { Breadcrumb } from '@app/core/components/list'
 import { FileUpload, type UploadedFile } from '@app/core/components/FileUpload'
+import { apiGet, apiPost, type ApiError } from '@app/core/infra/apiClient'
 import { mockCandidates } from '../data/mockData'
-import type { Candidate } from '../data/types'
+import type { Candidate, CandidateFichaBackend, PaymentConfirmationBackend } from '../data/types'
 
 /**
  * Screen 6 — Confirmación de Pago de Ficha, per `03-admision.md` ("Pantalla 6")
@@ -19,18 +21,15 @@ import type { Candidate } from '../data/types'
  * defensive fallback to `mockCandidates[0]` if the id isn't found (e.g. direct
  * navigation to the route).
  *
- * MOCK-ONLY LIMITATION: per the Candidate Status State Machine, confirming
- * this payment is one of the few actions allowed to transition
- * `status: REGISTERED -> PAID` (and `pagoFicha.status -> 'CONFIRMADO'`).
- * However `mockCandidates` is a static in-memory array with no shared
- * mutation store across pages (a known Foundation B limitation — see
- * `FileUpload.tsx`/`mockData.ts` history). This screen therefore does NOT
- * attempt to invent a new shared-state mechanism (out of scope for this
- * single-screen task): on a valid submit it simulates the transition via a
- * success toast + redirect only, exactly like `CandidatoRegistro.tsx` (Screen
- * 4) already does for its own new-candidate flow. The change is NOT expected
- * to persist or be reflected on other screens (e.g. `CandidatosList.tsx` will
- * still show the candidate as `REGISTERED` after returning).
+ * REAL-BACKEND FLOW (wired to `118-SISA-BACK`):
+ * - Backend-created candidates carry UUID ids. For those, this screen syncs
+ *   the ticket display from `GET /candidates/{id}` (real ficha projection:
+ *   folio, programa, referencia, monto) and confirms the payment with
+ *   `POST /candidates/{id}/payments/confirm`, getting back the real receipt
+ *   (`REC-...`). A 409 means the ficha is already paid (idempotent re-confirm)
+ *   — shown as an info state, not an error.
+ * - Mock candidates (non-UUID ids, direct mock navigation) keep the previous
+ *   toast-only simulation: the transition is NOT persisted anywhere.
  */
 
 // Mirrors `CandidatoRegistro.tsx`'s `FICHA_MONTO` convention — kept local
@@ -38,6 +37,9 @@ import type { Candidate } from '../data/types'
 const FICHA_MONTO = 500
 
 const METODOS_PAGO = ['Transferencia bancaria', 'Depósito en ventanilla', 'Pago en línea (Evo Payments)']
+
+// Backend candidate ids are UUIDs; mock candidates use ids like "cand-01".
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Placeholder bank reference — same deterministic, backend-less generator style used by `FichaConfirmacion.tsx`'s `buildReferencia`. */
 function buildReferencia(folio: string): string {
@@ -59,20 +61,62 @@ interface FormErrors {
 export default function ConfirmarPagoFicha() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const idParam = searchParams.get('id')
+  const idParam = searchParams.get('id') ?? ''
 
+  const esCandidatoReal = UUID_RE.test(idParam)
   const found = mockCandidates.find(c => c.id === idParam)
-  const candidate: Candidate = found ?? mockCandidates[0]
+  const mockCandidate: Candidate = found ?? mockCandidates[0]
 
-  const [referenciaGenerada] = useState(() => candidate.pagoFicha.referencia ?? buildReferencia(candidate.folio))
+  const [ficha, setFicha] = useState(() => ({
+    id: idParam || mockCandidate.id,
+    folio: mockCandidate.folio,
+    nombre: mockCandidate.nombre,
+    programa: mockCandidate.programa,
+    referencia: mockCandidate.pagoFicha.referencia ?? buildReferencia(mockCandidate.folio),
+    monto: mockCandidate.pagoFicha.monto ?? FICHA_MONTO,
+  }))
+  const [alreadyPaid, setAlreadyPaid] = useState(false)
+  const [loadingFicha, setLoadingFicha] = useState(false)
 
   const [fecha, setFecha] = useState('')
   const [metodo, setMetodo] = useState('')
-  const [monto, setMonto] = useState(FICHA_MONTO.toFixed(2))
+  const [monto, setMonto] = useState('')
   const [referenciaBancaria, setReferenciaBancaria] = useState('')
   const [comprobante, setComprobante] = useState<UploadedFile | null>(null)
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitted, setSubmitted] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [toast, setToast] = useState('')
+
+  // Real candidates: sync the ticket display from `GET /candidates/{id}` (the
+  // same projection `CandidatoRegistro` created). Also reflects the real amount
+  // and reference on the "Esperado" card where the mock demo used its local
+  // `FICHA_MONTO`.
+  useEffect(() => {
+    if (!esCandidatoReal) {
+      setMonto((mockCandidate.pagoFicha.monto ?? FICHA_MONTO).toFixed(2))
+      return
+    }
+    setLoadingFicha(true)
+    apiGet<CandidateFichaBackend>(`/candidates/${idParam}`)
+      .then(f => {
+        setFicha({
+          id: idParam,
+          folio: f.folio,
+          nombre: `${f.firstName} ${f.lastName1} ${f.lastName2}`.trim(),
+          programa: f.programName,
+          referencia: f.referenceNumber,
+          monto: Number(f.amount),
+        })
+        setMonto(Number(f.amount).toFixed(2))
+        if (f.paymentStatus === 'PAID') setAlreadyPaid(true)
+      })
+      .catch(err => {
+        const apiErr = err as Partial<ApiError>
+        setToast(apiErr.status === 404 ? 'No se encontró el candidato.' : 'No se pudo cargar la ficha del candidato.')
+      })
+      .finally(() => setLoadingFicha(false))
+  }, [idParam, esCandidatoReal, mockCandidate.pagoFicha.monto])
 
   function clearErr(field: keyof FormErrors) {
     if (submitted) setErrors(prev => ({ ...prev, [field]: undefined }))
@@ -88,29 +132,57 @@ export default function ConfirmarPagoFicha() {
     return e
   }
 
-  function handleConfirmar() {
+  async function handleConfirmar() {
     const e = validate()
     setSubmitted(true)
     if (Object.keys(e).length > 0) { setErrors(e); return }
+    if (alreadyPaid) return
 
-    // See file-level comment: mock-only simulated transition, no shared
-    // mutation store. Navigates back to the candidate's Detalle (Screen 5)
-    // with a success toast via router state — the same `state: { toast }`
-    // convention used across the app's other Registro/Form screens
-    // (`DivisionesForm.tsx`, `AsignarMateria.tsx`, etc.).
-    navigate(`/admision/candidatos/detalle?id=${candidate.id}`, {
-      state: { toast: 'Pago confirmado. El candidato puede continuar con el proceso.' },
-    })
+    if (!esCandidatoReal) {
+      // Mock simulation (same as pre-integration) so the staff mock demo still behaves.
+      setBusy(true)
+      setTimeout(() => {
+        setBusy(false)
+        navigate(`/admision/candidatos/detalle?id=${ficha.id}`, {
+          state: { toast: 'Pago confirmado. El candidato puede continuar con el proceso.' },
+        })
+      }, 1200)
+      return
+    }
+
+    // Real backend: `POST /candidates/{id}/payments/confirm` marks the ficha
+    // PAID server-side and mails the confirmation receipt.
+    setBusy(true)
+    try {
+      const res = await apiPost<PaymentConfirmationBackend>(`/candidates/${ficha.id}/payments/confirm`)
+      navigate(`/admision/candidatos/detalle?id=${ficha.id}`, {
+        state: { toast: `Pago confirmado. Recibo ${res.receiptNumber}. El candidato puede continuar con el proceso.` },
+      })
+    } catch (err) {
+      const apiErr = err as Partial<ApiError>
+      if (apiErr.status === 409) {
+        setAlreadyPaid(true)
+        setToast('Este candidato ya tiene la ficha pagada en el sistema.')
+      } else if (apiErr.status === 404) {
+        setToast('No se encontró el candidato. Vuelve a intentar.')
+      } else {
+        setToast('No se pudo confirmar el pago. Intenta de nuevo más tarde.')
+      }
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <FormPage>
+      {toast && <Toast message={toast} onClose={() => setToast('')} />}
+
       <Breadcrumb
         items={[
           { label: 'Inicio', to: '/admision' },
           { label: 'Admisión', to: '/admision' },
           { label: 'Candidatos', to: '/admision/candidatos' },
-          { label: 'Detalle', to: `/admision/candidatos/detalle?id=${candidate.id}` },
+          { label: 'Detalle', to: `/admision/candidatos/detalle?id=${ficha.id}` },
           { label: 'Confirmar Pago' },
         ]}
       />
@@ -123,12 +195,22 @@ export default function ConfirmarPagoFicha() {
       {/* Informative card (read-only) */}
       <FormCard>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-6">
-          <ReadField label="Candidato" value={candidate.nombre} />
-          <ReadField label="Folio" value={candidate.folio} mono />
-          <ReadField label="Programa" value={candidate.programa} />
-          <ReadField label="Referencia Generada" value={referenciaGenerada} mono />
-          <ReadField label="Monto Esperado" value={`$${FICHA_MONTO.toFixed(2)}`} />
+          <ReadField label="Candidato" value={ficha.nombre} />
+          <ReadField label="Folio" value={ficha.folio} mono />
+          <ReadField label="Programa" value={ficha.programa} />
+          <ReadField label="Referencia Generada" value={ficha.referencia} mono />
+          <ReadField label="Monto Esperado" value={`$${ficha.monto.toFixed(2)}`} />
         </div>
+        {loadingFicha && (
+          <div className="flex items-center gap-2 text-[12px] text-[#6B7280] mt-4">
+            <Loader2 size={14} className="animate-spin text-[#009574]" /> Sincronizando datos con el sistema…
+          </div>
+        )}
+        {alreadyPaid && (
+          <div className="mt-4 flex items-start gap-2 text-[12px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2.5">
+            Este candidato ya figura con la ficha pagada.
+          </div>
+        )}
       </FormCard>
 
       {/* Form */}
@@ -185,9 +267,11 @@ export default function ConfirmarPagoFicha() {
       {/* Actions */}
       <FormActions
         isView={false}
-        onBack={() => navigate(`/admision/candidatos/detalle?id=${candidate.id}`)}
+        onBack={() => navigate(`/admision/candidatos/detalle?id=${ficha.id}`)}
         onPrimary={handleConfirmar}
-        primaryLabel="Confirmar Pago"
+        primaryLabel={busy ? 'Confirmando Pago...' : 'Confirmar Pago'}
+        isSubmitting={busy}
+        primaryDisabled={alreadyPaid}
       />
     </FormPage>
   )

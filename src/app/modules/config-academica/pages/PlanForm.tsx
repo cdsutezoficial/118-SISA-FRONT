@@ -834,7 +834,7 @@ export default function PlanForm() {
             {errors.levels && <FieldError>{errors.levels}</FieldError>}
 
             {/* Desktop table (md+) */}
-            <div className="hidden md:block border border-[#E5E7EB] rounded-lg overflow-hidden mt-2">
+            <div className="hidden md:block border border-[#E5E7EB] rounded-lg mt-2">
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-[#E5E7EB] bg-[#F8F9FA]">
@@ -871,15 +871,11 @@ export default function PlanForm() {
                           {isView ? (
                             <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${LEVEL_TYPE_STYLE[row.type]}`}>{LEVEL_TYPE_LABELS[row.type]}</span>
                           ) : (
-                            <select
+                            <SelectField
                               value={row.type}
-                              onChange={e => updateLevel(row.key, { type: e.target.value as PlanLevelType })}
-                              className="px-2.5 py-1.5 text-[12px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] appearance-none focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
-                            >
-                              {(Object.keys(LEVEL_TYPE_LABELS) as PlanLevelType[]).map(t => (
-                                <option key={t} value={t}>{LEVEL_TYPE_LABELS[t]}</option>
-                              ))}
-                            </select>
+                              onChange={v => updateLevel(row.key, { type: v as PlanLevelType })}
+                              options={(Object.keys(LEVEL_TYPE_LABELS) as PlanLevelType[]).map(t => ({ value: t, label: LEVEL_TYPE_LABELS[t] }))}
+                            />
                           )}
                         </td>
                         <td className="px-3 py-2">
