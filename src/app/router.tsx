@@ -16,6 +16,7 @@ import Dashboard from '@app/core/pages/Dashboard'
 // Admisión
 import AdmisionDashboard from '@app/modules/admision/pages/AdmisionDashboard'
 import CanalesDifusion from '@app/modules/admision/pages/CanalesDifusion'
+import TiposBachillerato from '@app/modules/admision/pages/TiposBachillerato'
 import CandidatosList from '@app/modules/admision/pages/CandidatosList'
 import CandidatoDetalle from '@app/modules/admision/pages/CandidatoDetalle'
 import CandidatoRegistro from '@app/modules/admision/pages/CandidatoRegistro'
@@ -175,6 +176,10 @@ const router = createBrowserRouter([
           {
             path: 'canales',
             element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CanalesDifusion /></RequireRole>,
+          },
+          {
+            path: 'tipos-bachillerato',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><TiposBachillerato /></RequireRole>,
           },
           {
             path: 'candidatos',
