@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Eye, EyeOff, AlertCircle, CheckCircle2, GraduationCap, XCircle } from 'lucide-react'
+import { apiPost } from '../infra/apiClient'
+import type { ApiError } from '../infra/apiClient'
 
 // ─── Left panel ───────────────────────────────────────────────────────────────
 
@@ -87,14 +89,19 @@ function PasswordInput({ id, value, onChange, placeholder, hasError }: {
 export default function ResetConfirm() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const tokenExpired = params.get('expired') === 'true'
-  // Allow toggling expired state for prototype purposes
-  const [expired, setExpired] = useState(tokenExpired)
+  // The backend only ever links here with a real one-time token; an empty or
+  // consumed/expired token renders the same "link no válido" state.
+  const token = params.get('token') ?? ''
+  const tokenInvalid = token.length === 0
+  // `expired` also covers invalid/missing tokens — the user-facing message is
+  // intentionally generic to avoid leaking token state.
+  const [expired, setExpired] = useState(tokenInvalid)
   const [nueva, setNueva] = useState('')
   const [confirmar, setConfirmar] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
   const strength    = calcStrength(nueva)
   const noCoincide  = !!confirmar && nueva !== confirmar
@@ -106,7 +113,22 @@ export default function ResetConfirm() {
     setSubmitted(true)
     if (!nueva.trim() || !confirmar.trim() || nueva !== confirmar) return
     setLoading(true)
-    setTimeout(() => { setLoading(false); setDone(true) }, 1200)
+    void (async () => {
+      try {
+        await apiPost('/auth/reset-password', { token, newPassword: nueva })
+        setLoading(false)
+        setDone(true)
+      } catch (err) {
+        setLoading(false)
+        const apiErr = err as Partial<ApiError>
+        if (apiErr.status === 400) {
+          // Token unknown, already used or past its 30-minute TTL.
+          setExpired(true)
+        } else {
+          setErrorMsg(apiErr.message ?? 'No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+        }
+      }
+    })()
   }
 
   return (
@@ -257,8 +279,14 @@ export default function ResetConfirm() {
                   )}
                 </div>
 
-                {/* Submit */}
-                <button
+{/* Submit */}
+                  {errorMsg && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-100">
+                      <AlertCircle size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
+                      <p className="text-[12px] text-red-600 leading-relaxed">{errorMsg}</p>
+                    </div>
+                  )}
+                  <button
                   type="submit"
                   disabled={loading}
                   className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold transition-all ${
@@ -276,17 +304,6 @@ export default function ResetConfirm() {
                   {loading ? 'Restableciendo...' : 'Restablecer Contraseña'}
                 </button>
               </form>
-
-              {/* Prototype state toggle */}
-              <div className="mt-8 pt-4 border-t border-[#E5E7EB] flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => setExpired(true)}
-                  className="text-[11px] text-[#9CA3AF] hover:text-[#6B7280] transition-colors"
-                >
-                  Simular token expirado →
-                </button>
-              </div>
             </>
           )}
         </div>
