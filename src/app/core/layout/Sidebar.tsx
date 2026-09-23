@@ -60,7 +60,7 @@ export const SYSTEM_NAV: NavEntry[] = [
   {
     id: 'config', icon: <Settings size={18} />, label: 'Configuración Académica',
     children: [
-      { icon: <LayoutDashboard size={18} />, label: 'Dashboard', base: 'dashboard', path: '/dashboard', roles: ACADEMIC_CONFIG_ROLES },
+      { icon: <LayoutDashboard size={18} />, label: 'Dashboard', base: 'dashboard', path: '/dashboard', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['DIVISIONS_READ'] },
       { icon: <Building2 size={18} />,     label: 'Divisiones Académicas',   base: 'divisiones', path: '/divisiones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['DIVISIONS_READ'] },
       { icon: <GraduationCap size={18} />, label: 'Carreras',           base: 'carreras',   path: '/carreras',   roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['CARRERAS_READ'] },
       { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PLANS_READ'] },
@@ -82,20 +82,20 @@ export const SYSTEM_NAV: NavEntry[] = [
     children: [
       { icon: <Building2 size={16} />,     label: 'Áreas de Facturación',     base: 'areas',      path: '/areas',      roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_AREAS_READ'] },
       { icon: <CreditCard size={16} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
-      { icon: <BadgePercent size={16} />,  label: 'Aplicar Descuentos',      base: 'descuentos', path: '/admision/descuentos', roles: FINANZAS_ROLES },
+      { icon: <BadgePercent size={16} />,  label: 'Aplicar Descuentos',      base: 'descuentos', path: '/admision/descuentos', roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
     ],
   },
   {
     id: 'admision', icon: <UserPlus size={18} />, label: 'Admisión',
     children: [
-      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',                 base: 'admision-dash',   path: '/admision',                  roles: ADMISSION_ROLES },
+      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',                 base: 'admision-dash',   path: '/admision',                  roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
       { icon: <Ticket size={16} />,          label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
-      { icon: <Users size={16} />,           label: 'Candidatos',                base: 'candidatos',       path: '/admision/candidatos',       roles: ADMISSION_ROLES },
-      { icon: <UserPlus size={16} />,        label: 'Registrar Candidato',       base: 'candidato-registrar', path: '/admision/candidatos/registrar', roles: ADMISSION_ROLES },
-      { icon: <ClipboardCheck size={16} />,  label: 'Selección de Candidatos',   base: 'seleccion',        path: '/admision/seleccion',        roles: ADMISSION_ROLES },
-      { icon: <IdCard size={16} />,          label: 'Generar Matrículas',        base: 'matriculas',       path: '/admision/matriculas',       roles: ADMISSION_ROLES },
-      { icon: <Megaphone size={16} />,       label: 'Publicar Resultados',       base: 'publicar',         path: '/admision/publicar',         roles: ADMISSION_ROLES },
-      { icon: <Unlock size={16} />,          label: 'Habilitar Inducción',       base: 'habilitacion',     path: '/admision/habilitacion',     roles: ADMISSION_ROLES },
+      { icon: <Users size={16} />,           label: 'Candidatos',                base: 'candidatos',       path: '/admision/candidatos',       roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <UserPlus size={16} />,        label: 'Registrar Candidato',       base: 'candidato-registrar', path: '/admision/candidatos/registrar', roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <ClipboardCheck size={16} />,  label: 'Selección de Candidatos',   base: 'seleccion',        path: '/admision/seleccion',        roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <IdCard size={16} />,          label: 'Generar Matrículas',        base: 'matriculas',       path: '/admision/matriculas',       roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <Megaphone size={16} />,       label: 'Publicar Resultados',       base: 'publicar',         path: '/admision/publicar',         roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <Unlock size={16} />,          label: 'Habilitar Inducción',       base: 'habilitacion',     path: '/admision/habilitacion',     roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
     ],
   },
   {
