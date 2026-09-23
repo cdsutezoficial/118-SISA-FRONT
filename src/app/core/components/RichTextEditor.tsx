@@ -174,6 +174,13 @@ export default function RichTextEditor({
     onUpdate: ({ editor: current }) => onChange?.(current.getHTML()),
   })
 
+  // Sincroniza el estado de edición con `readonly` — `useEditor` solo toma
+  // `editable` en la creación, así que cambiar view→edit (ModeSwitcher) dejaba
+  // el contentEditable en false y no permitía escribir. Se re-aplica aquí.
+  useEffect(() => {
+    editor?.setEditable(!readonly)
+  }, [editor, readonly])
+
   // Resincroniza el editor cuando el form lo resetea externamente (crear/editar),
   // pero solo si el HTML difiere para no pisar la posición del cursor mientras
   // el usuario escribe (onUpdate ya dejó value === editor.getHTML()).
