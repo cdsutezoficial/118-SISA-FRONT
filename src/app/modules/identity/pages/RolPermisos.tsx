@@ -15,6 +15,7 @@ import { useRole } from '@app/core/infra/RoleContext'
 import {
   describeRole,
   groupPermissionCatalog,
+  mergePlannedPermissions,
   type PermissionCatalogItem,
   type PermissionDisplayItem,
   type PermissionDisplayGroup,
@@ -115,7 +116,7 @@ export default function RolPermisos() {
 
         if (cancelled) return
         setRoles(rolesResponse.items)
-        setPermissions(permissionsResponse.items)
+        setPermissions(mergePlannedPermissions(permissionsResponse.items))
         setLoadStatus('idle')
       } catch (err) {
         if (cancelled) return
