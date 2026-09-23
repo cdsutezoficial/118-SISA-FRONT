@@ -197,7 +197,7 @@ export default function ConfirmarPagoFicha() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-6">
           <ReadField label="Candidato" value={ficha.nombre} />
           <ReadField label="Folio" value={ficha.folio} mono />
-          <ReadField label="Programa" value={ficha.programa} />
+          <ReadField label="Carrera" value={ficha.programa} />
           <ReadField label="Referencia Generada" value={ficha.referencia} mono />
           <ReadField label="Monto Esperado" value={`$${ficha.monto.toFixed(2)}`} />
         </div>

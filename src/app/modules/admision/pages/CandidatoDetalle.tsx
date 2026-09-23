@@ -76,7 +76,7 @@ export default function CandidatoDetalle() {
   function handleCambiarPrograma(nuevoPrograma: string) {
     setCandidate(prev => ({ ...prev, programa: nuevoPrograma }))
     setShowCambiarPrograma(false)
-    setToast(`Programa actualizado a "${nuevoPrograma}".`)
+    setToast(`Carrera actualizada a "${nuevoPrograma}".`)
   }
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
@@ -117,7 +117,7 @@ export default function CandidatoDetalle() {
       <FormCard>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           <ReadField label="Folio" value={candidate.folio} mono />
-          <ReadField label="Programa Solicitado" value={candidate.programa} />
+          <ReadField label="Carrera Solicitada" value={candidate.programa} />
           <div>
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Estado Actual</p>
             <BadgePill value={candidate.status} map={statusBadgeMap} />
@@ -247,7 +247,7 @@ export default function CandidatoDetalle() {
         </Button>
         {candidate.status !== 'ACCEPTED' && candidate.status !== 'REJECTED' && candidate.status !== 'ENROLLED' && (
           <Button variant="secondary" onClick={() => setShowCambiarPrograma(true)}>
-            <ArrowLeftRight size={14} />Cambiar Programa
+            <ArrowLeftRight size={14} />Cambiar Carrera
           </Button>
         )}
       </div>

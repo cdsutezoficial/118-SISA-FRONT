@@ -1165,7 +1165,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             <SearchSelectField options={programaOptions} value={paso3.admissionConfigId} onChange={v => {
               const config = configsAdmision.find(c => c.id === v)
               setPaso3(prev => ({ ...prev, admissionConfigId: v, programa: config?.label ?? '' }))
-            }} placeholder={programaOptions.length === 0 ? 'No hay programas para esa modalidad' : 'Selecciona un programa'} searchPlaceholder="Buscar carrera…" />
+            }} placeholder={programaOptions.length === 0 ? 'No hay carreras para esa modalidad' : 'Selecciona una carrera'} searchPlaceholder="Buscar carrera…" />
           </div>
         </div>
 
@@ -1432,7 +1432,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       {catalogsStatus === 'error' && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-md px-4 py-3 text-[13px] text-red-700 flex items-start gap-2">
           <ShieldCheck size={16} className="flex-shrink-0 mt-0.5" />
-          No se pudieron cargar los catálogos (programas, estados, canales). Verifica que el servidor esté disponible e intenta de nuevo.
+          No se pudieron cargar los catálogos (carreras, estados, canales). Verifica que el servidor esté disponible e intenta de nuevo.
         </div>
       )}
       <Wizard steps={steps} onComplete={handleComplete} finishLabel="Finalizar Registro" />

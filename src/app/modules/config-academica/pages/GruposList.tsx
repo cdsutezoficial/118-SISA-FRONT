@@ -305,7 +305,7 @@ export default function GruposList() {
 
   const columns: ColumnDef<GroupListItem>[] = [
     { key: 'code', header: 'Clave', type: 'code' },
-    { key: 'programId', header: 'Programa', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabel(row.programId) },
     { key: 'generationId', header: 'Generación', type: 'muted', value: row => generationLabel(row.generationId) },
     { key: 'planLevelId', header: 'Nivel', type: 'muted', value: row => levelLabel(row) },
     { key: 'periodId', header: 'Periodo', type: 'muted', value: row => periodLabel(row.periodId) },
@@ -360,8 +360,8 @@ export default function GruposList() {
             options={programOptions}
             value={programFilter}
             onChange={v => { setProgramFilter(v); setGenerationFilter(''); setLevelFilter(''); setPage(1) }}
-            placeholder="Todos los programas"
-            searchPlaceholder="Buscar programa…"
+            placeholder="Todas las carreras"
+            searchPlaceholder="Buscar carrera…"
           />
         </div>
         <div className="w-full sm:w-56">

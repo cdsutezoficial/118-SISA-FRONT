@@ -100,7 +100,7 @@ export default function GenerarMatriculas() {
   const allCompleted = summary.length > 0 && pendingPrograms.length === 0
 
   const columns: ColumnDef<ProgramaSummary>[] = [
-    { key: 'programa', header: 'Programa', type: 'name' },
+    { key: 'programa', header: 'Carrera', type: 'name' },
     { key: 'admitidos', header: 'Admitidos', type: 'count', className: 'w-32' },
     { key: 'generadas', header: 'Matrículas Generadas', type: 'count', className: 'w-44' },
     {
@@ -175,7 +175,7 @@ export default function GenerarMatriculas() {
       <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3.5 mb-6">
         <Info size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
         <p className="text-[13px] text-blue-700">
-          Las decisiones de selección están listas. Genera las matrículas por programa o en lote antes de publicar la
+          Las decisiones de selección están listas. Genera las matrículas por carrera o en lote antes de publicar la
           lista oficial de admitidos.
         </p>
       </div>
@@ -186,8 +186,8 @@ export default function GenerarMatriculas() {
         status="idle"
         items={summary}
         keyFor={row => row.programa}
-        loadingLabel="Cargando programas..."
-        emptyTitle="No hay programas con candidatos admitidos"
+        loadingLabel="Cargando carreras..."
+        emptyTitle="No hay carreras con candidatos admitidos"
         emptyHint="Vuelve a intentarlo en unos momentos."
       />
 
@@ -228,8 +228,8 @@ export default function GenerarMatriculas() {
             </div>
           </>
         )}
-        loadingLabel="Cargando programas..."
-        emptyTitle="No hay programas con candidatos admitidos"
+        loadingLabel="Cargando carreras..."
+        emptyTitle="No hay carreras con candidatos admitidos"
         emptyHint="Vuelve a intentarlo en unos momentos."
       />
 

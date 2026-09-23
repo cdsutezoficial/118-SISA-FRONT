@@ -322,7 +322,7 @@ export default function NuevoIngresoWizard() {
               <ReadField label="Teléfono" value={selectedCandidate.telefono} />
             </div>
             <div className="col-span-12 md:col-span-4">
-              <ReadField label="Programa" value={selectedCandidate.programa} />
+              <ReadField label="Carrera" value={selectedCandidate.programa} />
             </div>
             <div className="col-span-12 md:col-span-6">
               <ReadField label="División" value={selectedCandidate.division} />
@@ -650,7 +650,7 @@ export default function NuevoIngresoWizard() {
         <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Resumen</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <ReadField label="Estudiante" value={selectedCandidate?.nombre ?? ''} />
-          <ReadField label="Programa" value={selectedCandidate?.programa ?? ''} />
+          <ReadField label="Carrera" value={selectedCandidate?.programa ?? ''} />
           <ReadField label="Grupo Asignado" value={effectiveGroup?.grupo ?? ''} />
         </div>
 

@@ -95,7 +95,7 @@ function buildProgramaAvance(students: Student[]): ProgramaAvance[] {
 const programaAvance = buildProgramaAvance(mockStudents)
 
 const avanceColumns: ColumnDef<ProgramaAvance>[] = [
-  { key: 'programa', header: 'Programa', type: 'name', value: r => r.programa },
+  { key: 'programa', header: 'Carrera', type: 'name', value: r => r.programa },
   { key: 'nivel', header: 'Nivel', type: 'text', value: r => r.nivel },
   { key: 'nuevoIngreso', header: 'Nuevo Ingreso', type: 'count', value: r => `${r.nuevoIngresoCompletado} / ${r.nuevoIngresoTotal}`, className: 'w-32' },
   { key: 'reinscripciones', header: 'Reinscripciones', type: 'count', value: r => `${r.reinscripcionesCompletadas} / ${r.reinscripcionesTotal}`, className: 'w-32' },
@@ -126,13 +126,13 @@ export default function InscripcionesDashboard() {
         items={programaAvance}
         keyFor={r => r.programa}
         loadingLabel="Calculando avance..."
-        emptyTitle="Sin programas registrados"
-        emptyHint="El avance por programa aparecerá aquí."
+        emptyTitle="Sin carreras registradas"
+        emptyHint="El avance por carrera aparecerá aquí."
         showOnMobile
         header={
           <>
             <Activity size={15} className="text-[#6B7280]" />
-            <h2 className="text-[14px] font-semibold text-[#333333]">Avance por Programa</h2>
+            <h2 className="text-[14px] font-semibold text-[#333333]">Avance por Carrera</h2>
           </>
         }
       />

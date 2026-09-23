@@ -29,10 +29,10 @@ const DOC_TYPE_LABELS: Record<InstitutionalDocumentType, string> = {
 const SCOPE_LABELS: Record<InstitutionalDocumentScope, string> = {
   GLOBAL: 'Global',
   DIVISION: 'Por División',
-  PROGRAM: 'Por Programa',
+  PROGRAM: 'Por Carrera',
 }
 
-// Divisiones/programas catalog — mirrors `DivisionesList.tsx`/`ProgramasList.tsx`
+// Divisiones/carreras catalog — mirrors `DivisionesList.tsx`/`CarrerasList.tsx`
 // division names; "División de Ciencias de la Salud" has no student-facing
 // program elsewhere in this module yet, so it carries one token program here.
 const DIVISIONES_CATALOGO = [
@@ -201,12 +201,12 @@ function DocumentoModal({ mode, initial, onSave, onCancel }: {
             </div>
             {scope === 'PROGRAM' && (
               <div>
-                <FieldLabel required>Programa</FieldLabel>
+                <FieldLabel required>Carrera</FieldLabel>
                 <SearchSelect
                   options={programOptions}
                   value={programId}
                   onChange={setProgramId}
-                  placeholder={divisionId ? 'Selecciona un programa' : 'Selecciona una división primero'}
+                  placeholder={divisionId ? 'Selecciona una carrera' : 'Selecciona una división primero'}
                   disabled={!divisionId}
                 />
               </div>
@@ -251,7 +251,7 @@ export default function DocumentosInstitucionales() {
   function scopeDisplay(doc: InstitutionalDocument): string {
     if (doc.scope === 'GLOBAL') return 'Global'
     if (doc.scope === 'DIVISION') return `División: ${doc.divisionId}`
-    return `Programa: ${doc.programId}`
+    return `Carrera: ${doc.programId}`
   }
 
   const columns: ColumnDef<InstitutionalDocument>[] = [

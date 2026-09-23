@@ -58,7 +58,7 @@ interface ProgramsPageResponse {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ProgramasList() {
+export default function CarrerasList() {
   const navigate = useNavigate()
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
@@ -112,7 +112,7 @@ export default function ProgramasList() {
         if (apiErr.status === 401) {
           setErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
         } else if (apiErr.status === 403) {
-          setErrorMsg('No tienes permiso para consultar programas educativos.')
+          setErrorMsg('No tienes permiso para consultar carreras.')
         } else {
           setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
         }
@@ -138,11 +138,11 @@ export default function ProgramasList() {
       setPrograms(data.items)
       setTotalElements(data.totalElements)
       setTotalPages(data.totalPages)
-      setToast(nextStatus === 'ACTIVE' ? 'Programa activado.' : 'Programa desactivado.')
+      setToast(nextStatus === 'ACTIVE' ? 'Carrera activada.' : 'Carrera desactivada.')
     } catch (err) {
       const apiErr = err as Partial<ApiError>
       setToast(apiErr.status === 403
-        ? 'No tienes permiso para cambiar el estado de este programa.'
+        ? 'No tienes permiso para cambiar el estado de esta carrera.'
         : 'No se pudo actualizar el estado. Intenta de nuevo.')
     } finally {
       setTogglingId(null)
@@ -152,7 +152,7 @@ export default function ProgramasList() {
   const emptyHint = loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'
 
   const columns: ColumnDef<ProgramListItem>[] = [
-    { key: 'name', header: 'Programa', type: 'name' },
+    { key: 'name', header: 'Carrera', type: 'name' },
     { key: 'code', header: 'Clave', type: 'code', className: 'w-24' },
     { key: 'divisionId', header: 'División', type: 'muted', value: row => divisionCode(row.divisionId), className: 'w-20' },
     { key: 'dgpCode', header: 'Clave DGP', type: 'muted', value: row => row.dgpCode ?? '—', className: 'w-32', cellClassName: 'font-mono text-[11px]' },
@@ -167,14 +167,14 @@ export default function ProgramasList() {
         items={[
           { label: 'Inicio', to: '/dashboard' },
           { label: 'Configuración Académica' },
-          { label: 'Programas Educativos' },
+          { label: 'Carreras' },
         ]}
       />
 
       <PageHeader
-        title="Programas Educativos"
-        subtitle="Gestiona los programas educativos del sistema."
-        actions={[{ label: 'Registrar Programa', icon: <PlusIcon />, onClick: () => navigate('/programas/new') }]}
+        title="Carreras"
+        subtitle="Gestiona las carreras del sistema."
+        actions={[{ label: 'Registrar Carrera', icon: <PlusIcon />, onClick: () => navigate('/carreras/new') }]}
       />
 
       {loadStatus === 'error' && errorMsg && <ErrorBanner message={errorMsg} />}
@@ -200,13 +200,13 @@ export default function ProgramasList() {
         status={loadStatus}
         items={programs}
         keyFor={row => row.id}
-        loadingLabel="Cargando programas..."
-        emptyTitle="No se encontraron programas"
+        loadingLabel="Cargando carreras..."
+        emptyTitle="No se encontraron carreras"
         emptyHint={emptyHint}
         footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
         actions={{
-          view: row => navigate(`/programas/form?mode=view&id=${row.id}`),
-          edit: row => navigate(`/programas/form?mode=edit&id=${row.id}`),
+          view: row => navigate(`/carreras/form?mode=view&id=${row.id}`),
+          edit: row => navigate(`/carreras/form?mode=edit&id=${row.id}`),
         }}
         onToggleStatus={handleToggleStatus}
         togglingId={togglingId}
@@ -249,13 +249,13 @@ export default function ProgramasList() {
             {/* Actions */}
             <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
               <button
-                onClick={() => navigate(`/programas/form?mode=view&id=${row.id}`)}
+                onClick={() => navigate(`/carreras/form?mode=view&id=${row.id}`)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#6B7280] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
               >
                 <Eye size={14} />Ver
               </button>
               <button
-                onClick={() => navigate(`/programas/form?mode=edit&id=${row.id}`)}
+                onClick={() => navigate(`/carreras/form?mode=edit&id=${row.id}`)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"
               >
                 <Pencil size={14} />Editar
@@ -263,8 +263,8 @@ export default function ProgramasList() {
             </div>
           </>
         )}
-        loadingLabel="Cargando programas..."
-        emptyTitle="No se encontraron programas"
+        loadingLabel="Cargando carreras..."
+        emptyTitle="No se encontraron carreras"
         emptyHint={emptyHint}
         pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
       />

@@ -29,7 +29,7 @@ const RESOURCE_META: Record<string, { module: string; resource: string; resource
   USERS: { module: 'Identidad', resource: 'Usuarios', resourceOrder: 30 },
   PERSONS: { module: 'Identidad', resource: 'Personas', resourceOrder: 40 },
   DIVISIONS: { module: 'Configuración Académica', resource: 'Divisiones Académicas', resourceOrder: 10 },
-  PROGRAMS: { module: 'Configuración Académica', resource: 'Programas Educativos', resourceOrder: 20 },
+  PROGRAMS: { module: 'Configuración Académica', resource: 'Carreras', resourceOrder: 20 },
   PLANS: { module: 'Configuración Académica', resource: 'Planes de Estudio', resourceOrder: 30 },
   SUBJECT_CLASSIFICATIONS: { module: 'Configuración Académica', resource: 'Clasificaciones de Materias', resourceOrder: 40 },
   PERIODS: { module: 'Configuración Académica', resource: 'Periodos Académicos', resourceOrder: 50 },

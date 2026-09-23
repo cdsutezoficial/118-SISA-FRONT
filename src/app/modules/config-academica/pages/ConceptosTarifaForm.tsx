@@ -16,7 +16,7 @@ import type { ApiError } from '@app/core/infra/apiClient'
 // `PlanEscalaForm.tsx` which support both register and edit via `?mode=`.
 
 // `AcademicLevel` — same shared-kernel enum/labels already established in
-// `ProgramasForm.tsx`/`ConceptosForm.tsx` (do not invent a second label set).
+// `CarrerasForm.tsx`/`ConceptosForm.tsx` (do not invent a second label set).
 type AcademicLevel = 'TSU' | 'CONTINUIDAD' | 'INGENIERIA' | 'LICENCIATURA' | 'POSGRADO'
 
 const LEVEL_LABELS: Record<AcademicLevel, string> = {
@@ -261,16 +261,16 @@ export default function ConceptosTarifaForm() {
             <div className="grid grid-cols-12 gap-4 mb-2">
               {/* Programa */}
               <div className="col-span-12 sm:col-span-6">
-                <FieldLabel>Programa</FieldLabel>
+                <FieldLabel>Carrera</FieldLabel>
                 <SearchSelectField
                   options={programs}
                   value={programId}
                   onChange={setProgramId}
-                  placeholder="Todos los programas"
+                  placeholder="Todas las carreras"
                   disabled={disabled}
-                  searchPlaceholder="Buscar programa…"
+                  searchPlaceholder="Buscar carrera…"
                 />
-                <FieldHelp>Vacío = aplica a todos los programas.</FieldHelp>
+                <FieldHelp>Vacío = aplica a todas las carreras.</FieldHelp>
               </div>
               {/* Nivel */}
               <SelectField

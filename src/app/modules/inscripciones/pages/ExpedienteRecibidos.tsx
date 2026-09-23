@@ -85,7 +85,7 @@ export default function ExpedienteRecibidos() {
   const columns: ColumnDef<Student>[] = [
     { key: 'matricula', header: 'Matrícula', type: 'code', className: 'w-28' },
     { key: 'nombre', header: 'Nombre Completo', type: 'name' },
-    { key: 'programa', header: 'Programa', type: 'text' },
+    { key: 'programa', header: 'Carrera', type: 'text' },
     {
       key: 'progreso',
       header: 'Documentos Entregados',

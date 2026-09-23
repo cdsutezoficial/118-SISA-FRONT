@@ -304,14 +304,14 @@ export default function GruposForm() {
         <div className="grid grid-cols-12 gap-4">
           {/* Fila 1 */}
           <div className="col-span-12 sm:col-span-4">
-            <FieldLabel required={!isView}>Programa Educativo</FieldLabel>
+            <FieldLabel required={!isView}>Carrera</FieldLabel>
             <SearchSelectField
               options={programOptions}
               value={programId}
               onChange={handleProgramChange}
-              placeholder="Selecciona el programa"
+              placeholder="Selecciona la carrera"
               disabled={disabled}
-              searchPlaceholder="Buscar programa…"
+              searchPlaceholder="Buscar carrera…"
             />
             <FieldHelp>Filtra las generaciones disponibles.</FieldHelp>
           </div>

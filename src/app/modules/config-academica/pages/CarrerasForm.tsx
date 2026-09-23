@@ -60,7 +60,7 @@ type FormErrors = Partial<Record<'name' | 'offerName' | 'code' | 'divisionId' | 
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ProgramasForm() {
+export default function CarrerasForm() {
   const navigate = useNavigate()
   const { mode, id } = useFormMode()
   const isView = mode === 'view'
@@ -136,11 +136,11 @@ export default function ProgramasForm() {
         setLoadStatus('error')
         const apiErr = err as Partial<ApiError>
         if (apiErr.status === 404) {
-          setLoadErrorMsg('No se encontró el programa solicitado.')
+          setLoadErrorMsg('No se encontró la carrera solicitada.')
         } else if (apiErr.status === 401) {
           setLoadErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
         } else if (apiErr.status === 403) {
-          setLoadErrorMsg('No tienes permiso para consultar este programa.')
+          setLoadErrorMsg('No tienes permiso para consultar esta carrera.')
         } else {
           setLoadErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
         }
@@ -155,7 +155,7 @@ export default function ProgramasForm() {
   // ─── Validation ────────────────────────────────────────────────────────────
   function validate(): FormErrors {
     const e: FormErrors = {}
-    if (!name.trim()) e.name = 'El nombre del programa es requerido.'
+    if (!name.trim()) e.name = 'El nombre de la carrera es requerido.'
     if (!offerName.trim()) e.offerName = 'El nombre de oferta es requerido.'
     if (!code.trim()) e.code = 'La clave es requerida.'
     if (!divisionId) e.divisionId = 'Selecciona una división académica.'
@@ -190,16 +190,16 @@ export default function ProgramasForm() {
     try {
       if (isRegister) {
         const created = await apiPost<AcademicProgramDetail>('/programs', payload)
-        navigate(`/programas/form?mode=view&id=${created.id}`, { state: { toast: 'Programa registrado exitosamente.' } })
+        navigate(`/carreras/form?mode=view&id=${created.id}`, { state: { toast: 'Carrera registrada exitosamente.' } })
       } else if (id) {
         await apiPut<AcademicProgramDetail>(`/programs/${id}`, payload)
-        navigate(`/programas/form?mode=view&id=${id}`, { state: { toast: 'Programa actualizado exitosamente.' } })
+        navigate(`/carreras/form?mode=view&id=${id}`, { state: { toast: 'Carrera actualizada exitosamente.' } })
       }
     } catch (err) {
       setSubmitStatus('error')
       const apiErr = err as Partial<ApiError>
       if (apiErr.status === 409) {
-        setSubmitErrorMsg(apiErr.message ?? 'La clave o el nombre de oferta + modalidad ya están en uso por otro programa.')
+        setSubmitErrorMsg(apiErr.message ?? 'La clave o el nombre de oferta + modalidad ya están en uso por otra carrera.')
       } else if (apiErr.status === 400) {
         setSubmitErrorMsg(apiErr.message ?? 'Revisa los datos capturados: hay un valor inválido.')
       } else if (apiErr.status === 401) {
@@ -220,24 +220,24 @@ export default function ProgramasForm() {
         items={[
           { label: 'Inicio', to: '/dashboard' },
           { label: 'Configuración Académica' },
-          { label: 'Programas Educativos', to: '/programas' },
-          { label: isRegister ? 'Registrar Programa' : isView ? 'Ver Programa' : 'Editar Programa' },
+          { label: 'Carreras', to: '/carreras' },
+          { label: isRegister ? 'Registrar Carrera' : isView ? 'Ver Carrera' : 'Editar Carrera' },
         ]}
       />
 
       <FormHeader
-        title={isRegister ? 'Registrar Programa' : isView ? 'Ver Programa' : 'Editar Programa'}
+        title={isRegister ? 'Registrar Carrera' : isView ? 'Ver Carrera' : 'Editar Carrera'}
         subtitle={isRegister
-          ? 'Completa los campos para registrar un nuevo programa educativo.'
+          ? 'Completa los campos para registrar una nueva carrera.'
           : isView
-          ? 'Información del programa educativo.'
-          : 'Modifica los datos del programa educativo.'}
+          ? 'Información de la carrera.'
+          : 'Modifica los datos de la carrera.'}
         right={
           <ModeSwitcher
             mode={mode}
             id={id}
-            registerUrl="/programas/new"
-            formUrl={m => `/programas/form?mode=${m}&id=${id}`}
+            registerUrl="/carreras/new"
+            formUrl={m => `/carreras/form?mode=${m}&id=${id}`}
           />
         }
       />
@@ -249,17 +249,17 @@ export default function ProgramasForm() {
       {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
 
       {/* Form card */}
-      <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando programa...">
+      <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando carrera...">
         <div className="grid grid-cols-12 gap-4">
           <TextField
-            label="Nombre del Programa"
+            label="Nombre de la Carrera"
             required={!isView}
             value={name}
             onChange={v => { setName(v); setErrors(prev => ({ ...prev, name: undefined })) }}
             disabled={disabled}
             error={errors.name}
             placeholder="Ej. Ingeniería en Desarrollo y Gestión de Software"
-            help="Nombre oficial y completo del programa educativo."
+            help="Nombre oficial y completo de la carrera."
             className="col-span-12 sm:col-span-8"
           />
           <TextField
@@ -270,7 +270,7 @@ export default function ProgramasForm() {
             disabled={disabled}
             error={errors.code}
             placeholder="Ej. IDGS"
-            help="Identificador corto único del programa."
+            help="Identificador corto único de la carrera."
             className="col-span-12 sm:col-span-4"
           />
           <TextField
@@ -321,7 +321,7 @@ export default function ProgramasForm() {
             />
             {errors.divisionId
               ? <FieldError>{errors.divisionId}</FieldError>
-              : <FieldHelp>División a la que pertenece el programa.</FieldHelp>}
+              : <FieldHelp>División a la que pertenece la carrera.</FieldHelp>}
           </div>
           <TextField
             label="Clave DGP"
@@ -338,7 +338,7 @@ export default function ProgramasForm() {
             onChange={setDescription}
             disabled={disabled}
             rows={3}
-            placeholder="Descripción breve del programa y su enfoque académico."
+            placeholder="Descripción breve de la carrera y su enfoque académico."
             className="col-span-12"
           />
         </div>
@@ -348,9 +348,9 @@ export default function ProgramasForm() {
       {loadStatus !== 'loading' && (
         <FormActions
           isView={isView}
-          onBack={() => navigate('/programas')}
-          onPrimary={isView ? () => navigate(`/programas/form?mode=edit&id=${id}`) : handleSubmit}
-          primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Programa' : 'Guardar Cambios'}
+          onBack={() => navigate('/carreras')}
+          onPrimary={isView ? () => navigate(`/carreras/form?mode=edit&id=${id}`) : handleSubmit}
+          primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Carrera' : 'Guardar Cambios'}
           isSubmitting={isSubmitting}
         />
       )}

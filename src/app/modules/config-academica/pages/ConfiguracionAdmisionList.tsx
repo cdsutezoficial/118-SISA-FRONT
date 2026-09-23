@@ -206,7 +206,7 @@ export default function ConfiguracionAdmisionList() {
   const emptyHint = loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'
 
   const columns: ColumnDef<ConfigListItem>[] = [
-    { key: 'programId', header: 'Programa Educativo', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabel(row.programId) },
     { key: 'periodId', header: 'Periodo Destino', type: 'muted', value: row => periodLabel(row.periodId) },
     { key: 'targetGenerationId', header: 'Generación Destino', type: 'code', value: row => generationLabel(row.targetGenerationId), className: 'w-24' },
     { key: 'maxCandidates', header: 'Cupo Máximo', type: 'count', className: 'w-24', cellClassName: 'tabular-nums' },
@@ -228,8 +228,8 @@ export default function ConfiguracionAdmisionList() {
 
       <PageHeader
         title="Configuración de Admisión"
-        subtitle="Configura qué programas se ofertan en cada proceso de admisión, su cupo y ventana de venta de fichas."
-        actions={[{ label: 'Configurar Programa', icon: <PlusIcon />, onClick: () => navigate('/configuracion-admision/new') }]}
+        subtitle="Configura qué carreras se ofertan en cada proceso de admisión, su cupo y ventana de venta de fichas."
+        actions={[{ label: 'Configurar Carrera', icon: <PlusIcon />, onClick: () => navigate('/configuracion-admision/new') }]}
       />
 
       {loadStatus === 'error' && errorMsg && <ErrorBanner message={errorMsg} />}
@@ -240,8 +240,8 @@ export default function ConfiguracionAdmisionList() {
             options={programOptions}
             value={programFilter}
             onChange={v => { setProgramFilter(v); setPage(1) }}
-            placeholder="Todos los programas"
-            searchPlaceholder="Buscar programa…"
+            placeholder="Todas las carreras"
+            searchPlaceholder="Buscar carrera…"
           />
         </div>
         <FilterSelect

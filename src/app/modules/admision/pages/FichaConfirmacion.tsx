@@ -277,7 +277,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           <ReadField label="Folio" value={ficha.folio} mono />
           <ReadField label="Nombre" value={ficha.nombre} />
           <ReadField label="CURP" value={ficha.curp} mono />
-          <ReadField label="Programa Solicitado" value={ficha.programa} />
+          <ReadField label="Carrera Solicitada" value={ficha.programa} />
         </div>
         <div className="space-y-4">
           <div>

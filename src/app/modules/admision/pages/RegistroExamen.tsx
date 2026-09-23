@@ -107,7 +107,7 @@ export default function RegistroExamen() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
           <ReadField label="Candidato" value={candidate.nombre} />
           <ReadField label="Folio" value={candidate.folio} mono />
-          <ReadField label="Programa Solicitado" value={candidate.programa} />
+          <ReadField label="Carrera Solicitada" value={candidate.programa} />
         </div>
       </FormCard>
 

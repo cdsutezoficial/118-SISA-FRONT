@@ -7,7 +7,7 @@ import { KpiCards, QuickAccess, InitialAvatar, type KpiCardData, type QuickAcces
 
 const kpiCards: KpiCardData[] = [
   { label: 'Divisiones Académicas', value: '4', sub: '+1 este ciclo', color: 'bg-blue-50 text-blue-600', icon: <Building2 size={20} /> },
-  { label: 'Programas Educativos', value: '12', sub: '+2 este ciclo', color: 'bg-violet-50 text-violet-600', icon: <GraduationCap size={20} /> },
+  { label: 'Carreras', value: '12', sub: '+2 este ciclo', color: 'bg-violet-50 text-violet-600', icon: <GraduationCap size={20} /> },
   { label: 'Materias Registradas', value: '148', sub: '+8 este ciclo', color: 'bg-amber-50 text-amber-600', icon: <BookMarked size={20} /> },
   { label: 'Grupos Activos', value: '36', sub: 'Periodo ENE-ABR 2026', color: 'bg-emerald-50 text-emerald-600', icon: <Users size={20} /> },
 ]
@@ -18,7 +18,7 @@ interface DashboardQuickAccessItem extends QuickAccessItem {
 
 const quickAccess: DashboardQuickAccessItem[] = [
   { label: 'Divisiones', icon: <Building2 size={20} />, url: '/divisiones', permissionKey: 'DIVISIONS_READ' },
-  { label: 'Programas', icon: <GraduationCap size={20} />, url: '/programas', permissionKey: 'PROGRAMS_READ' },
+  { label: 'Carreras', icon: <GraduationCap size={20} />, url: '/carreras', permissionKey: 'CARRERAS_READ' },
   { label: 'Planes de Estudio', icon: <BookOpen size={20} />, url: '/planes', permissionKey: 'PLANS_READ' },
   { label: 'Clasificaciones', icon: <Tags size={20} />, url: '/clasificaciones', permissionKey: 'SUBJECT_CLASSIFICATIONS_READ' },
   { label: 'Periodos', icon: <CalendarRange size={20} />, url: '/periodos', permissionKey: 'PERIODS_READ' },
@@ -32,7 +32,7 @@ const recentActivity = [
   { fecha: '27/06/2026', usuario: 'A. Ramírez', accion: 'Actualizó la materia Fundamentos de Programación', tipo: 'Materia' },
   { fecha: '25/06/2026', usuario: 'L. Hernández', accion: 'Cerró el periodo AGO-DIC 2025', tipo: 'Periodo' },
   { fecha: '20/06/2026', usuario: 'M. González', accion: 'Registró el concepto Cuota Cuatrimestral con 3 tarifas', tipo: 'Concepto' },
-  { fecha: '15/06/2026', usuario: 'C. Mendoza', accion: 'Agregó el programa Ing. en Inteligencia Artificial', tipo: 'Programa' },
+  { fecha: '15/06/2026', usuario: 'C. Mendoza', accion: 'Agregó la carrera Ing. en Inteligencia Artificial', tipo: 'Carrera' },
 ]
 
 const tipoBadge: Record<string, BadgeStyle> = {
@@ -40,7 +40,7 @@ const tipoBadge: Record<string, BadgeStyle> = {
   Materia: { label: 'Materia', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
   Periodo: { label: 'Periodo', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   Concepto: { label: 'Concepto', className: 'bg-violet-50 text-violet-700 border border-violet-200' },
-  Programa: { label: 'Programa', className: 'bg-teal-50 text-teal-700 border border-teal-200' },
+  Carrera: { label: 'Carrera', className: 'bg-teal-50 text-teal-700 border border-teal-200' },
 }
 
 type RecentActivityItem = {

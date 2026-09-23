@@ -52,9 +52,9 @@ import DivisionesForm from '@app/modules/config-academica/pages/DivisionesForm'
 import ClasificacionesList from '@app/modules/config-academica/pages/ClasificacionesList'
 import ClasificacionesForm from '@app/modules/config-academica/pages/ClasificacionesForm'
 
-// Programas
-import ProgramasList from '@app/modules/config-academica/pages/ProgramasList'
-import ProgramasForm from '@app/modules/config-academica/pages/ProgramasForm'
+// Carreras
+import CarrerasList from '@app/modules/config-academica/pages/CarrerasList'
+import CarrerasForm from '@app/modules/config-academica/pages/CarrerasForm'
 
 // Periodos
 import PeriodosList from '@app/modules/config-academica/pages/PeriodosList'
@@ -321,18 +321,18 @@ const router = createBrowserRouter([
       { path: 'clasificaciones/new',  element: <ClasificacionesForm /> },
       { path: 'clasificaciones/form', element: <ClasificacionesForm /> },
 
-      // Programas
+      // Carreras
       //
       // Role guard: the list route is wrapped here, mirroring the
       // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`grupos`
       // precedent — every `/programs` verb is enforced server-side to
       // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
       // redirect to `/dashboard` instead of a raw 403/blank state for any
-      // other role. `programas/new`/`programas/form` are untouched — out of
+      // other role. `carreras/new`/`carreras/form` are untouched — out of
       // scope for this change.
-      { path: 'programas', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PROGRAMS_READ']} redirectTo="/dashboard"><ProgramasList /></RequirePermission></RequireRole> },
-      { path: 'programas/new',  element: <ProgramasForm /> },
-      { path: 'programas/form', element: <ProgramasForm /> },
+      { path: 'carreras', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['CARRERAS_READ']} redirectTo="/dashboard"><CarrerasList /></RequirePermission></RequireRole> },
+      { path: 'carreras/new',  element: <CarrerasForm /> },
+      { path: 'carreras/form', element: <CarrerasForm /> },
 
       // Periodos Académicos
       //
