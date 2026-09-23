@@ -1,12 +1,24 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { ShieldCheck, CheckCircle2, GraduationCap, Loader2, Lock } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, GraduationCap, Lock } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
-import { FieldLabel, FieldHelp, SearchSelect, Switch, RadioCard, inputCls, ReadField } from '@app/core/components/ui'
-import { FormPage, FormHeader, Button, SelectField, TextField, TimeField } from '@app/core/components/form'
+import {
+  FieldLabel,
+  FieldHelp,
+  SearchSelect,
+  SearchSelectField,
+  Switch,
+  RadioCard,
+  inputCls,
+  ReadField,
+  DatePicker,
+  type SelectOption,
+} from '@app/core/components/ui'
+import { FormPage, FormHeader, SelectField, TextField, TimeField } from '@app/core/components/form'
+import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 import { Breadcrumb } from '@app/core/components/list'
+import { apiGet, apiPost, type ApiError } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
-import { mockCandidates } from '../data/mockData'
 import type {
   Candidate,
   Nacionalidad,
@@ -49,38 +61,65 @@ interface CandidatoRegistroProps {
   origin: ScreenOrigin
 }
 
-// ─── Mock catalogs ───────────────────────────────────────────────────────────
-// Mirrors the canonical program catalog in `pages/ProgramasList.tsx` (names +
-// division) so a freshly-registered candidate's `division` lines up with the
-// same divisions used across the rest of the Admisión mock data.
+// ─── Backend catalog DTOs & catalogs ──────────────────────────────────────────
+// Screen 4 consumes REAL reference catalogs from 118-SISA-BACK (anonymous
+// GETs, opened for the public /portal/registro mount):
+//   GET /states                                                        → StateListItemResponse[] (id + name)
+//   GET /municipalities?stateId=<id>                                   → MunicipalityListItemResponse[] (id + name)
+//   GET /outreach-channels/options                                     → OptionResponse[] { id, label, code }
+//   GET /high-school-types/options                                     → OptionResponse[] { id, label, code }
+//   GET /program-admission-configs/options                             → OptionResponse[] { id(program), label(programName), code(modality) }
+//
+// The wizard keeps working with catalog NAMES in `paso{1,2,3}` state (so the
+// validation/rendering/summary code is unchanged), and resolves names → UUIDs
+// against these loaded lists when assembling the `POST /candidates` body.
 
+interface StateItem {
+  id: string
+  name: string
+}
+interface StateListResponse {
+  items: StateItem[]
+}
+interface MunicipalityItem {
+  id: string
+  name: string
+}
+interface MunicipalityListResponse {
+  items: MunicipalityItem[]
+}
+interface OptionItem {
+  id: string
+  label: string
+  code: string | null
+}
+interface CandidateRegistrationResponse {
+  id: string
+  personId: string
+  admissionConfigId: string
+  folio: string
+  status: string
+  llaveMxVerified: boolean
+  registeredAt: string
+  isFirstChoice: boolean
+  outreachChannelId: string | null
+  isEnabledForInduction: boolean
+  payment: {
+    referenceNumber: string
+    amount: number
+    deadline: string | null
+    status: 'PENDING' | 'PAID'
+  }
+}
+
+// Program-name → division fallback map (division is not part of the configs
+// options projection). Used only to label the review/summary candidate.
 const PROGRAMA_DIVISION: Record<string, string> = {
   'Ingeniería en Desarrollo y Gestión de Software': 'División de Tecnologías de la Información',
   'Técnico Superior Universitario en TI': 'División de Tecnologías de la Información',
   'Licenciatura en Administración de Empresas': 'División de Ciencias Económico Administrativas',
   'Ingeniería Industrial': 'División de Ingeniería',
 }
-const PROGRAMAS = Object.keys(PROGRAMA_DIVISION)
-
-// Mirrors `pages/admision/CanalesDifusion.tsx`'s catalog.
-const CANALES = ['Redes Sociales', 'Feria Universitaria', 'Recomendación de egresado', 'Página web institucional', 'Radio y televisión']
-
-// Full 32-entity catálogo (INEGI), per `00-shared-kernel.md`'s `State` catalog.
-const ESTADOS_MEXICO = [
-  'Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua',
-  'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero',
-  'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro',
-  'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala',
-  'Veracruz', 'Yucatán', 'Zacatecas',
-]
-
-// Prototype-scope simplification: `00-shared-kernel.md`'s `Municipality`
-// catalog is a real INEGI-seeded, per-state list; this mock frontend has no
-// backend to seed it from, so every "Municipio" select in this screen shares
-// this single Morelos catalog (UTEZ's home state, and the state the mock
-// LlaveMX identity below reports) regardless of which Estado was picked. Pure
-// UI-mock limitation — not a business rule.
-const MUNICIPIOS_CATALOGO = ['Cuernavaca', 'Emiliano Zapata', 'Jiutepec', 'Temixco', 'Xochitepec', 'Yautepec']
 
 // Matches `00-shared-kernel.md`'s `MaritalStatus` enum (all values but `OTRO`, not requested by the PO's field list).
 const ESTADOS_CIVILES: EstadoCivil[] = ['Soltero/a', 'Casado/a', 'Unión libre', 'Divorciado/a', 'Viudo/a']
@@ -88,11 +127,15 @@ const ESTADOS_CIVILES: EstadoCivil[] = ['Soltero/a', 'Casado/a', 'Unión libre',
 // Español + catálogo de lenguas indígenas de México más habladas (reasonable, non-exhaustive judgment call).
 const LENGUAS_NATALES: LenguaNatal[] = ['Español', 'Náhuatl', 'Maya', 'Mixteco', 'Zapoteco', 'Otra']
 
-// Subsistemas de bachillerato más comunes en México (judgment call, non-exhaustive).
-const TIPOS_BACHILLERATO: TipoBachillerato[] = ['General', 'Tecnológico', 'Bachillerato Técnico', 'CONALEP', 'Otro']
-
-// Matches `00-shared-kernel.md`'s `ProgramModality` enum.
-const MODALIDADES: ModalidadPrograma[] = ['Presencial', 'Mixta']
+// Modalidad acts as a FILTER in the wizard (not a DTO field): modality is
+// defined on the ProgramAdmissionConfig's program, so choosing one narrows the
+// program list. `code` comes from the configs options endpoint ("PRESENCIAL"/"MIXTA").
+const MODALIDAD_FILTROS: Array<'' | 'Todas' | ModalidadPrograma> = ['Todas', 'Presencial', 'Mixta']
+const MODALIDAD_CODE_TO_LABEL: Record<string, ModalidadPrograma> = {
+  PRESENCIAL: 'Presencial',
+  MIXTA: 'Mixta',
+}
+const modalidadLabel = (code: string | null): ModalidadPrograma => (code ? MODALIDAD_CODE_TO_LABEL[code] ?? 'Presencial' : 'Presencial')
 
 const FICHA_MONTO = 500
 const INDUCCION_MONTO = 350
@@ -181,14 +224,21 @@ interface Paso2State {
 
 interface Paso3State {
   // Selección de Carrera
-  modalidad: ModalidadPrograma | ''
+  /** Filtro de modalidad (Narrowing), NO se envía al DTO. '' / 'Todas' = sin filtro. */
+  modalidad: '' | 'Todas' | ModalidadPrograma
+  /** Nombre del programa (display); `admissionConfigId` es el UUID para el POST. */
   programa: string
+  admissionConfigId: string
+  /** Nombre del canal (display); `outreachChannelId` es el UUID para el POST. */
   canal: string
+  outreachChannelId: string
   isFirstChoice: boolean | null
 
   // Antecedentes Escolares
   nombrePreparatoria: string
+  /** Nombre del tipo de bachillerato (display); `schoolTypeId` es el UUID para el POST. */
   tipoBachillerato: TipoBachillerato | ''
+  schoolTypeId: string
   estudioEnMexico: boolean
   estadoPreparatoria: string
   municipioPreparatoria: string
@@ -219,18 +269,10 @@ const emptyPaso2: Paso2State = {
 }
 
 const emptyPaso3: Paso3State = {
-  modalidad: '', programa: '', canal: '', isFirstChoice: null,
-  nombrePreparatoria: '', tipoBachillerato: '', estudioEnMexico: true,
+  modalidad: '', programa: '', admissionConfigId: '', canal: '', outreachChannelId: '', isFirstChoice: null,
+  nombrePreparatoria: '', tipoBachillerato: '', schoolTypeId: '', estudioEnMexico: true,
   estadoPreparatoria: '', municipioPreparatoria: '', paisPreparatoria: '', ciudadPreparatoria: '',
   promedio: '', cct: '', cctConfirmacion: '',
-}
-
-function nextFolio(): string {
-  const lastNum = mockCandidates.reduce((max, c) => {
-    const n = Number(c.folio.split('-').pop())
-    return Number.isFinite(n) ? Math.max(max, n) : max
-  }, 0)
-  return `ADM-2026-${String(lastNum + 1).padStart(6, '0')}`
 }
 
 // ─── Shared field helpers ─────────────────────────────────────────────────────
@@ -292,11 +334,98 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const [paso2, setPaso2] = useState<Paso2State>(emptyPaso2)
   const [paso3, setPaso3] = useState<Paso3State>(emptyPaso3)
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('ONLINE')
-  const [identityStatus, setIdentityStatus] = useState<'idle' | 'verifying' | 'verified'>('idle')
-  const [folio] = useState(nextFolio)
+  const [identityStatus, setIdentityStatus] = useState<'idle' | 'verifying' | 'verified' | 'manual'>('idle')
+  const [folio, setFolio] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  // ── Reference catalogs (anonymous GETs) ──
+  const [estados, setEstados] = useState<StateItem[]>([])
+  const [municipios, setMunicipios] = useState<Record<string, MunicipalityItem[]>>({})
+  const [canales, setCanales] = useState<OptionItem[]>([])
+  const [tiposBachillerato, setTiposBachillerato] = useState<OptionItem[]>([])
+  const [configsAdmision, setConfigsAdmision] = useState<OptionItem[]>([])
+  const [catalogsStatus, setCatalogsStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+
+  useEffect(() => {
+    let cancelled = false
+    setCatalogsStatus('loading')
+    Promise.all([
+      apiGet<StateListResponse>('/states'),
+      apiGet<OptionItem[]>('/outreach-channels/options'),
+      apiGet<OptionItem[]>('/high-school-types/options'),
+      apiGet<OptionItem[]>('/program-admission-configs/options'),
+    ])
+      .then(([statesRes, canalesRes, tiposRes, configsRes]) => {
+        if (cancelled) return
+        setEstados(statesRes.items)
+        setCanales(canalesRes)
+        setTiposBachillerato(tiposRes)
+        setConfigsAdmision(configsRes)
+        setCatalogsStatus('ready')
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogsStatus('error')
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  // Load a state's municipalities on demand (cascade) and cache by stateId.
+  const stateIdOf = (name: string): string => estados.find(e => e.name === name)?.id ?? ''
+  function loadMunicipios(stateId: string) {
+    if (!stateId || municipios[stateId]) return
+    apiGet<MunicipalityListResponse>('/municipalities', { stateId })
+      .then(res => setMunicipios(prev => (prev[stateId] ? prev : { ...prev, [stateId]: res.items })))
+      .catch(() => {/* non-critical — select just won't populate */})
+  }
+
+  // Estados/Municipios keep working with NAMES in state (validation + review
+  // display); the POST resolves names → UUIDs at submit time.
+  const estadoNames = estados.map(e => e.name)
+  const municipioNames = (stateName: string): string[] =>
+    (municipios[stateIdOf(stateName)] ?? []).map(m => m.name)
+
+  // Prefill cascade whenever a state-name lands in the form (user pick, or the
+  // LlaveMX-locked "Morelos" from `handleVerify`).
+  useEffect(() => {
+    const targets = [
+      paso1.estadoNacimiento,
+      paso1.estadoDomicilio,
+      paso3.estadoPreparatoria,
+    ]
+    targets.forEach(name => { if (name) loadMunicipios(stateIdOf(name)) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso1.estadoNacimiento, paso1.estadoDomicilio, paso3.estadoPreparatoria, estados])
+
+  // Selección de carrera: modalidad as filter over OPEN configs. A config's
+  // `code` is the program's modality (PRESENCIAL/MIXTA). ''/Todas → no filter.
+  const canalOptions: SelectOption[] = canales.map(c => ({ value: c.id, label: c.label }))
+  const bachilleratoOptions: SelectOption[] = tiposBachillerato.map(t => ({ value: t.id, label: t.label }))
+  const selectedConfig = configsAdmision.find(c => c.id === paso3.admissionConfigId)
+  const selectedProgramaModalidad: ModalidadPrograma | '' = selectedConfig
+    ? modalidadLabel(selectedConfig.code)
+    : ''
+  const programaOptions: SelectOption[] = configsAdmision
+    .filter(c => {
+      if (paso3.modalidad === '' || paso3.modalidad === 'Todas') return true
+      return modalidadLabel(c.code) === paso3.modalidad
+    })
+    .map(c => ({ value: c.id, label: c.label }))
 
   const isVerified = identityStatus === 'verified'
+  /** Captura manual activa: los campos de identidad son editables sin pasar por LlaveMX. */
+  const isManual = identityStatus === 'manual'
   const verifiedFullName = `${MOCK_LLAVE_MX_IDENTITY.nombres} ${MOCK_LLAVE_MX_IDENTITY.apellidoPaterno} ${MOCK_LLAVE_MX_IDENTITY.apellidoMaterno}`
+
+  function handleGoManual() {
+    if (identityStatus !== 'idle') return
+    setIdentityStatus('manual')
+  }
+
+  function handleRetryLlaveMx() {
+    if (!isManual) return
+    setIdentityStatus('idle')
+  }
 
   function handleVerify() {
     if (identityStatus !== 'idle') return
@@ -334,7 +463,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         : false
 
   const datosGeneralesValid =
-    isVerified &&
+    (isVerified || isManual) &&
     paso1.nombres.trim() !== '' &&
     paso1.apellidoPaterno.trim() !== '' &&
     curpValid &&
@@ -390,12 +519,11 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     : paso3.paisPreparatoria.trim() !== '' && paso3.estadoPreparatoria.trim() !== '' && paso3.ciudadPreparatoria.trim() !== ''
 
   const paso3Valid =
-    paso3.modalidad !== '' &&
-    paso3.programa !== '' &&
-    paso3.canal !== '' &&
+    paso3.admissionConfigId !== '' &&
+    paso3.outreachChannelId !== '' &&
     paso3.isFirstChoice !== null &&
     paso3.nombrePreparatoria.trim() !== '' &&
-    paso3.tipoBachillerato !== '' &&
+    paso3.schoolTypeId !== '' &&
     antecedentesUbicacionValid &&
     promedioValid &&
     paso3.cct.trim() !== '' &&
@@ -403,26 +531,40 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     !cctMismatch
 
   // ── Paso 4 validation (Confirmación) ──
-  const paso4Valid = metodoPago === 'ONLINE' || metodoPago === 'VENTANILLA'
+  const paso4Valid = !submitting && (metodoPago === 'ONLINE' || metodoPago === 'VENTANILLA')
 
   const nombreCompleto = `${paso1.nombres} ${paso1.apellidoPaterno} ${paso1.apellidoMaterno}`.trim()
 
-  function handleComplete() {
+  // Resolve a selected entity's UUID from the loaded catalog (by NAME — the
+  // form keeps working with names, the DTO needs ids). Returns null when the
+  // selection is empty/unknown so the payload stays `null` for those refs.
+  const idOf = (list: StateItem[] | MunicipalityItem[], name: string): string | null =>
+    name.trim() === '' ? null : (list.find(item => item.name === name)?.id ?? null)
+
+  async function handleComplete() {
+    if (submitting) return
+    setSubmitting(true)
+    setSubmitError('')
+
     const division = PROGRAMA_DIVISION[paso3.programa] ?? ''
 
-    const ficha: FichaAdmisionCompleta = {
+    const mex = paso1.nacionalidad === 'Mexicana'
+    const casaStateId = stateIdOf(paso1.estadoDomicilio)
+    const escuelaStateId = stateIdOf(paso3.estadoPreparatoria)
+
+    const payload = {
       datosGenerales: {
+        curp: paso1.curp.toUpperCase(),
         nombres: paso1.nombres,
         apellidoPaterno: paso1.apellidoPaterno,
         apellidoMaterno: paso1.apellidoMaterno,
-        curp: paso1.curp.toUpperCase(),
         fechaNacimiento: paso1.fechaNacimiento,
         sexo: paso1.sexo,
-        estadoNacimiento: paso1.estadoNacimiento,
         nacionalidad: paso1.nacionalidad as Nacionalidad,
-        municipioNacimiento: paso1.nacionalidad === 'Mexicana' ? paso1.municipioNacimiento : '',
-        paisNacimiento: paso1.nacionalidad === 'Extranjera' ? paso1.paisNacimiento : '',
-        ciudadNacimiento: paso1.nacionalidad === 'Extranjera' ? paso1.ciudadNacimiento : '',
+        birthStateId: mex ? idOf(estados, paso1.estadoNacimiento) : null,
+        birthMunicipalityId: mex ? idOf(municipios[stateIdOf(paso1.estadoNacimiento)] ?? [], paso1.municipioNacimiento) : null,
+        paisNacimiento: mex ? '' : paso1.paisNacimiento,
+        ciudadNacimiento: mex ? '' : paso1.ciudadNacimiento,
         estadoCivil: paso1.estadoCivil as EstadoCivil,
         lenguaNatal: paso1.lenguaNatal as LenguaNatal,
         tieneHijos: paso1.tieneHijos,
@@ -432,29 +574,30 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         numeroExterior: paso1.numeroExterior,
         numeroInterior: paso1.numeroInterior,
         colonia: paso1.colonia,
-        estado: paso1.estadoDomicilio,
-        municipio: paso1.municipioDomicilio,
         localidad: paso1.localidad,
         codigoPostal: paso1.codigoPostal,
+        stateId: casaStateId,
+        municipalityId: idOf(municipios[casaStateId] ?? [], paso1.municipioDomicilio),
       },
       contacto: {
+        personalEmail: paso1.email,
         telefonoCasa: paso1.telefonoCasa,
         celular: paso1.celular,
       },
       informacionComplementaria: {
         tieneEnfermedadPreexistente: paso2.tieneEnfermedadPreexistente,
-        descripcionEnfermedad: paso2.tieneEnfermedadPreexistente ? paso2.descripcionEnfermedad : undefined,
+        descripcionEnfermedad: paso2.tieneEnfermedadPreexistente ? paso2.descripcionEnfermedad : '',
         tieneDiscapacidad: paso2.tieneDiscapacidad,
-        descripcionDiscapacidad: paso2.tieneDiscapacidad ? paso2.descripcionDiscapacidad : undefined,
+        descripcionDiscapacidad: paso2.tieneDiscapacidad ? paso2.descripcionDiscapacidad : '',
         padresHablanLenguaIndigena: paso2.padresHablanLenguaIndigena,
-        lenguaIndigenaPadres: paso2.padresHablanLenguaIndigena ? paso2.lenguaIndigenaPadres : undefined,
+        lenguaIndigenaPadres: paso2.padresHablanLenguaIndigena ? paso2.lenguaIndigenaPadres : '',
         hablaLenguaIndigena: paso2.hablaLenguaIndigena,
-        lenguaIndigenaPropia: paso2.hablaLenguaIndigena ? paso2.lenguaIndigenaPropia : undefined,
+        lenguaIndigenaPropia: paso2.hablaLenguaIndigena ? paso2.lenguaIndigenaPropia : '',
         seIdentificaIndigena: paso2.seIdentificaIndigena,
         seIdentificaNoBinario: paso2.seIdentificaNoBinario,
         perteneceComunidadLgbttiq: paso2.perteneceComunidadLgbttiq,
         esAfrodescendiente: paso2.esAfrodescendiente,
-        seIdentificaAfrodescendiente: paso2.esAfrodescendiente ? paso2.seIdentificaAfrodescendiente : undefined,
+        seIdentificaAfrodescendiente: paso2.seIdentificaAfrodescendiente,
       },
       ingresos: {
         ingresoMensualFamiliar: Number(paso2.ingresoMensualFamiliar) || 0,
@@ -468,78 +611,213 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         horaFin: paso2.trabaja ? paso2.horaFin : '',
       },
       seleccionCarrera: {
-        modalidad: paso3.modalidad as ModalidadPrograma,
+        admissionConfigId: paso3.admissionConfigId,
+        outreachChannelId: paso3.outreachChannelId,
+        isFirstChoice: paso3.isFirstChoice === true,
       },
       antecedentesEscolares: {
         nombrePreparatoria: paso3.nombrePreparatoria,
-        tipoBachillerato: paso3.tipoBachillerato as TipoBachillerato,
+        schoolTypeId: paso3.schoolTypeId,
         estudioBachilleratoEnMexico: paso3.estudioEnMexico,
-        estadoPreparatoria: paso3.estadoPreparatoria,
-        municipioPreparatoria: paso3.estudioEnMexico ? paso3.municipioPreparatoria : '',
+        schoolStateId: paso3.estudioEnMexico ? escuelaStateId : null,
+        schoolMunicipalityId: paso3.estudioEnMexico ? idOf(municipios[escuelaStateId] ?? [], paso3.municipioPreparatoria) : null,
         paisPreparatoria: paso3.estudioEnMexico ? '' : paso3.paisPreparatoria,
         ciudadPreparatoria: paso3.estudioEnMexico ? '' : paso3.ciudadPreparatoria,
         promedio: promedioNum,
         cct: paso3.cct,
         cctConfirmacion: paso3.cctConfirmacion,
       },
+      llaveMxVerified: identityStatus === 'verified',
     }
 
-    const candidate: Candidate = {
-      id: crypto.randomUUID(),
-      folio,
-      nombre: nombreCompleto,
-      curp: paso1.curp.toUpperCase(),
-      email: paso1.email,
-      telefono: paso1.celular,
-      programa: paso3.programa,
-      division,
-      canal: paso3.canal,
-      status: 'REGISTERED',
-      fechaRegistro: formatDate(new Date()),
-      examen: null,
-      induccionResultado: null,
-      induccionHabilitada: false,
-      pagoFicha: { status: 'PENDIENTE', monto: FICHA_MONTO },
-      pagoInduccion: { status: 'PENDIENTE', monto: INDUCCION_MONTO },
-      fichaCompleta: ficha,
-    }
+    try {
+      const res = await apiPost<CandidateRegistrationResponse>('/candidates', payload)
+      setSubmitting(false)
+      setFolio(res.folio)
 
-    const state = { candidate, metodoPago }
+      const ficha: FichaAdmisionCompleta = {
+        datosGenerales: {
+          nombres: paso1.nombres,
+          apellidoPaterno: paso1.apellidoPaterno,
+          apellidoMaterno: paso1.apellidoMaterno,
+          curp: paso1.curp.toUpperCase(),
+          fechaNacimiento: paso1.fechaNacimiento,
+          sexo: paso1.sexo,
+          estadoNacimiento: paso1.estadoNacimiento,
+          nacionalidad: paso1.nacionalidad as Nacionalidad,
+          municipioNacimiento: mex ? paso1.municipioNacimiento : '',
+          paisNacimiento: mex ? '' : paso1.paisNacimiento,
+          ciudadNacimiento: mex ? '' : paso1.ciudadNacimiento,
+          estadoCivil: paso1.estadoCivil as EstadoCivil,
+          lenguaNatal: paso1.lenguaNatal as LenguaNatal,
+          tieneHijos: paso1.tieneHijos,
+        },
+        domicilio: {
+          calle: paso1.calle,
+          numeroExterior: paso1.numeroExterior,
+          numeroInterior: paso1.numeroInterior,
+          colonia: paso1.colonia,
+          estado: paso1.estadoDomicilio,
+          municipio: paso1.municipioDomicilio,
+          localidad: paso1.localidad,
+          codigoPostal: paso1.codigoPostal,
+        },
+        contacto: {
+          telefonoCasa: paso1.telefonoCasa,
+          celular: paso1.celular,
+        },
+        informacionComplementaria: {
+          tieneEnfermedadPreexistente: paso2.tieneEnfermedadPreexistente,
+          descripcionEnfermedad: paso2.tieneEnfermedadPreexistente ? paso2.descripcionEnfermedad : undefined,
+          tieneDiscapacidad: paso2.tieneDiscapacidad,
+          descripcionDiscapacidad: paso2.tieneDiscapacidad ? paso2.descripcionDiscapacidad : undefined,
+          padresHablanLenguaIndigena: paso2.padresHablanLenguaIndigena,
+          lenguaIndigenaPadres: paso2.padresHablanLenguaIndigena ? paso2.lenguaIndigenaPadres : undefined,
+          hablaLenguaIndigena: paso2.hablaLenguaIndigena,
+          lenguaIndigenaPropia: paso2.hablaLenguaIndigena ? paso2.lenguaIndigenaPropia : undefined,
+          seIdentificaIndigena: paso2.seIdentificaIndigena,
+          seIdentificaNoBinario: paso2.seIdentificaNoBinario,
+          perteneceComunidadLgbttiq: paso2.perteneceComunidadLgbttiq,
+          esAfrodescendiente: paso2.esAfrodescendiente,
+          seIdentificaAfrodescendiente: paso2.esAfrodescendiente ? paso2.seIdentificaAfrodescendiente : undefined,
+        },
+        ingresos: {
+          ingresoMensualFamiliar: Number(paso2.ingresoMensualFamiliar) || 0,
+          trabaja: paso2.trabaja,
+          tipoTrabajo: paso2.trabaja ? paso2.tipoTrabajo : '',
+          telefonoTrabajo: paso2.trabaja ? paso2.telefonoTrabajo : '',
+          ingresoMensual: paso2.trabaja ? (Number(paso2.ingresoMensual) || 0) : null,
+          nombreEmpresa: paso2.trabaja ? paso2.nombreEmpresa : '',
+          puesto: paso2.trabaja ? paso2.puesto : '',
+          horaInicio: paso2.trabaja ? paso2.horaInicio : '',
+          horaFin: paso2.trabaja ? paso2.horaFin : '',
+        },
+        seleccionCarrera: {
+          modalidad: selectedProgramaModalidad as ModalidadPrograma,
+        },
+        antecedentesEscolares: {
+          nombrePreparatoria: paso3.nombrePreparatoria,
+          tipoBachillerato: paso3.tipoBachillerato as TipoBachillerato,
+          estudioBachilleratoEnMexico: paso3.estudioEnMexico,
+          estadoPreparatoria: paso3.estadoPreparatoria,
+          municipioPreparatoria: paso3.estudioEnMexico ? paso3.municipioPreparatoria : '',
+          paisPreparatoria: paso3.estudioEnMexico ? '' : paso3.paisPreparatoria,
+          ciudadPreparatoria: paso3.estudioEnMexico ? '' : paso3.ciudadPreparatoria,
+          promedio: promedioNum,
+          cct: paso3.cct,
+          cctConfirmacion: paso3.cctConfirmacion,
+        },
+      }
 
-    // Navigate to Screen 13 (Ficha Confirmación), dual-mounted per origin.
-    if (origin === 'staff') {
-      navigate('/admision/candidatos/ficha', { state })
-    } else {
-      navigate('/portal/registro/ficha', { state })
+      const candidate: Candidate = {
+        id: res.id,
+        folio: res.folio,
+        nombre: nombreCompleto,
+        curp: paso1.curp.toUpperCase(),
+        email: paso1.email,
+        telefono: paso1.celular,
+        programa: paso3.programa,
+        division,
+        canal: paso3.canal,
+        status: 'REGISTERED',
+        fechaRegistro: formatDate(new Date(res.registeredAt)),
+        examen: null,
+        induccionResultado: null,
+        induccionHabilitada: res.isEnabledForInduction,
+        pagoFicha: { status: 'PENDIENTE', monto: res.payment.amount, referencia: res.payment.referenceNumber, metodo: metodoPago },
+        pagoInduccion: { status: 'PENDIENTE', monto: INDUCCION_MONTO },
+        fichaCompleta: ficha,
+      }
+
+      // Real backend ticket data handed to Screen 13 (ficha), per Screen 5/6/13
+      // ("Pago de ficha") — reference, amount and deadline now come from the
+      // `POST /candidates` response instead of mock `buildReferencia`/`addDays`.
+      const pagoFicha = {
+        referencia: res.payment.referenceNumber,
+        monto: res.payment.amount,
+        fechaLimite: res.payment.deadline ?? '',
+        estado: res.payment.status,
+        folio: res.folio,
+      }
+
+      const state = { candidate, metodoPago, pagoFicha }
+
+      // Navigate to Screen 13 (Ficha Confirmación), dual-mounted per origin.
+      // `?id=` survives a refresh — FichaConfirmacion re-fetches `GET
+      // /candidates/{id}` when route state is lost.
+      if (origin === 'staff') {
+        navigate(`/admision/candidatos/ficha?id=${res.id}`, { state })
+      } else {
+        navigate(`/portal/registro/ficha?id=${res.id}`, { state })
+      }
+    } catch (err) {
+      setSubmitting(false)
+      const apiErr = err as Partial<ApiError>
+      if (apiErr.status === 400) setSubmitError(apiErr.message ?? 'Revisa los datos capturados.')
+      else if (apiErr.status === 401) setSubmitError('Tu sesión expiró. Vuelve a iniciar sesión.')
+      else if (apiErr.status === 403) setSubmitError('No tienes permiso para realizar el registro.')
+      else if (apiErr.status === 409) setSubmitError(apiErr.message ?? 'Ya existe un candidato con ese CURP.')
+      else setSubmitError('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
     }
   }
 
   // ── Paso 1 content: Datos Generales + Domicilio Actual + Contacto ──
   const paso1Render = (
     <div>
-      {/* Verificación de Identidad requerida — mandatory LlaveMX gate. */}
+      {/* Verificación de Identidad — LlaveMX u captura manual. */}
       <div className="border-2 border-[#009574] rounded-lg p-5 mb-6 bg-[#e6f5f1]/40">
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 w-9 h-9 rounded-full bg-[#009574] flex items-center justify-center">
             <ShieldCheck size={18} className="text-white" />
           </div>
           <div className="flex-1">
-            <p className="text-[14px] font-semibold text-[#333333]">Verificación de Identidad requerida</p>
-            <p className="text-[13px] text-[#6B7280] mt-1">
-              Para registrar tu ficha debes verificar tu identidad con LlaveMX. Este paso es obligatorio.
-            </p>
+            <p className="text-[14px] font-semibold text-[#333333]">Verificación de Identidad</p>
+            {identityStatus === 'idle' && (
+              <div>
+                <p className="text-[13px] text-[#6B7280] mt-1">
+                  Recomendamos verificar tu identidad con LlaveMX para prellenar tus datos. Si no tienes LlaveMX, puedes capturarlos manualmente.
+                </p>
+                <div className="mt-4 flex flex-row items-start justify-between gap-2">
+                  <LlaveMxButton onClick={handleVerify} className="w-full" />
+                  <button
+                    type="button"
+                    onClick={handleGoManual}
+                    className="self-end text-[13px] text-[#d4d4d4] hover:text-[#c5c5c5] font-medium transition-colors"
+                  >
+                    Ingresa tus datos manualmente
+                  </button>
+                </div>
+              </div>
+            )}
 
-            {!isVerified ? (
-              <Button
-                type="button"
-                onClick={handleVerify}
-                disabled={identityStatus === 'verifying'}
-                className="mt-4"
-              >
-                {identityStatus === 'verifying' && <Loader2 size={14} className="animate-spin" />}
-                {identityStatus === 'verifying' ? 'Verificando...' : 'Verificar con LlaveMX'}
-              </Button>
-            ) : (
+            {identityStatus === 'verifying' && (
+              <div className="mt-4">
+                <LlaveMxButton onClick={handleVerify} loading disabled className="w-full" />
+                <p className="text-[13px] text-[#6B7280] mt-2">Verificando tu identidad con LlaveMX…</p>
+              </div>
+            )}
+
+            {identityStatus === 'manual' && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#fff8e1] text-[#B45309] border border-amber-200">
+                    <Lock size={13} />Captura manual
+                  </span>
+                </div>
+                <p className="text-[13px] text-[#6B7280] mt-2">
+                  Estás capturando tus datos a mano. También puedes intentar de nuevo con LlaveMX.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRetryLlaveMx}
+                  className="mt-2 text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
+                >
+                  Intentar de nuevo con LlaveMX
+                </button>
+              </div>
+            )}
+
+            {isVerified && (
               <div className="mt-4 flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <CheckCircle2 size={13} />Identidad verificada ✓
@@ -555,23 +833,66 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Datos Generales</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12 md:col-span-4">
-          <LockedField label="Nombre(s)" value={paso1.nombres} />
+          {isManual ? (
+            <TextField label="Nombre(s)" required value={paso1.nombres} onChange={v => setPaso1({ ...paso1, nombres: v })} />
+          ) : (
+            <LockedField label="Nombre(s)" value={paso1.nombres} />
+          )}
         </div>
         <div className="col-span-12 md:col-span-4">
-          <LockedField label="Primer Apellido" value={paso1.apellidoPaterno} />
+          {isManual ? (
+            <TextField label="Primer Apellido" required value={paso1.apellidoPaterno} onChange={v => setPaso1({ ...paso1, apellidoPaterno: v })} />
+          ) : (
+            <LockedField label="Primer Apellido" value={paso1.apellidoPaterno} />
+          )}
         </div>
         <div className="col-span-12 md:col-span-4">
-          <LockedField label="Segundo Apellido" value={paso1.apellidoMaterno} required={false} />
+          {isManual ? (
+            <TextField label="Segundo Apellido" value={paso1.apellidoMaterno} onChange={v => setPaso1({ ...paso1, apellidoMaterno: v })} />
+          ) : (
+            <LockedField label="Segundo Apellido" value={paso1.apellidoMaterno} required={false} />
+          )}
         </div>
 
         <div className="col-span-12 md:col-span-6">
-          <LockedField label="CURP" value={paso1.curp} />
+          {isManual ? (
+            <TextField
+              label="CURP"
+              required
+              value={paso1.curp}
+              onChange={v => setPaso1({ ...paso1, curp: v.toUpperCase() })}
+              maxLength={18}
+              placeholder="18 caracteres"
+              mono
+              error={paso1.curp !== '' && !curpValid ? 'La CURP debe tener 18 caracteres.' : undefined}
+            />
+          ) : (
+            <LockedField label="CURP" value={paso1.curp} />
+          )}
         </div>
         <div className="col-span-6 md:col-span-3">
-          <LockedField label="Fecha de Nacimiento" value={paso1.fechaNacimiento} />
+          {isManual ? (
+            <div>
+              <FieldLabel required>Fecha de Nacimiento</FieldLabel>
+              <DatePicker value={paso1.fechaNacimiento} onChange={v => setPaso1({ ...paso1, fechaNacimiento: v })} />
+            </div>
+          ) : (
+            <LockedField label="Fecha de Nacimiento" value={paso1.fechaNacimiento} />
+          )}
         </div>
         <div className="col-span-6 md:col-span-3">
-          <LockedField label="Sexo" value={paso1.sexo} />
+          {isManual ? (
+            <SelectField
+              label="Sexo"
+              required
+              options={['Femenino', 'Masculino'].map(v => ({ value: v, label: v }))}
+              value={paso1.sexo}
+              onChange={v => setPaso1({ ...paso1, sexo: v })}
+              placeholder="Seleccionar…"
+            />
+          ) : (
+            <LockedField label="Sexo" value={paso1.sexo} />
+          )}
         </div>
 
         <div className="col-span-12">
@@ -593,11 +914,18 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         {paso1.nacionalidad === 'Mexicana' && (
           <>
             <div className="col-span-12 md:col-span-6">
-              <LockedField label="Estado de Nacimiento" value={paso1.estadoNacimiento} />
+              {isManual ? (
+                <>
+                  <FieldLabel required>Estado de Nacimiento</FieldLabel>
+                  <SearchSelect options={estadoNames} value={paso1.estadoNacimiento} onChange={v => setPaso1({ ...paso1, estadoNacimiento: v, municipioNacimiento: '' })} placeholder="Selecciona un estado" />
+                </>
+              ) : (
+                <LockedField label="Estado de Nacimiento" value={paso1.estadoNacimiento} />
+              )}
             </div>
             <div className="col-span-12 md:col-span-6">
               <FieldLabel required>Municipio de Nacimiento</FieldLabel>
-              <SearchSelect options={MUNICIPIOS_CATALOGO} value={paso1.municipioNacimiento} onChange={v => setPaso1({ ...paso1, municipioNacimiento: v })} placeholder="Selecciona un municipio" />
+              <SearchSelect options={municipioNames(paso1.estadoNacimiento)} value={paso1.municipioNacimiento} onChange={v => setPaso1({ ...paso1, municipioNacimiento: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoNacimiento === ''} />
             </div>
           </>
         )}
@@ -660,11 +988,11 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         </div>
         <div className="col-span-12 md:col-span-3">
           <FieldLabel required>Estado</FieldLabel>
-          <SearchSelect options={ESTADOS_MEXICO} value={paso1.estadoDomicilio} onChange={v => setPaso1({ ...paso1, estadoDomicilio: v })} placeholder="Selecciona un estado" />
+          <SearchSelect options={estadoNames} value={paso1.estadoDomicilio} onChange={v => setPaso1({ ...paso1, estadoDomicilio: v, municipioDomicilio: '' })} placeholder="Selecciona un estado" />
         </div>
         <div className="col-span-12 md:col-span-3">
           <FieldLabel required>Municipio</FieldLabel>
-          <SearchSelect options={MUNICIPIOS_CATALOGO} value={paso1.municipioDomicilio} onChange={v => setPaso1({ ...paso1, municipioDomicilio: v })} placeholder="Selecciona un municipio" />
+          <SearchSelect options={municipioNames(paso1.estadoDomicilio)} value={paso1.municipioDomicilio} onChange={v => setPaso1({ ...paso1, municipioDomicilio: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoDomicilio === ''} />
         </div>
 
         <div className="col-span-12 md:col-span-6">
@@ -824,22 +1152,29 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12 md:col-span-4">
           <SelectField
-            label="Modalidad"
-            required
-            options={MODALIDADES.map(v => ({ value: v, label: v }))}
+            label="Modalidad (filtro)"
+            options={MODALIDAD_FILTROS.map(v => ({ value: v, label: v === '' ? 'Todas' : v }))}
             value={paso3.modalidad}
-            onChange={v => setPaso3({ ...paso3, modalidad: v as ModalidadPrograma })}
+            onChange={v => setPaso3({ ...paso3, modalidad: v as '' | 'Todas' | ModalidadPrograma, admissionConfigId: '', programa: '' })}
             placeholder="Seleccionar…"
           />
         </div>
-        <div className="col-span-12 md:col-span-8">
-          <FieldLabel required>Carrera</FieldLabel>
-          <SearchSelect options={PROGRAMAS} value={paso3.programa} onChange={v => setPaso3({ ...paso3, programa: v })} placeholder="Selecciona un programa" />
+        <div className="col-span-12 md:col-span-8 space-y-2">
+          <div>
+            <FieldLabel required>Carrera</FieldLabel>
+            <SearchSelectField options={programaOptions} value={paso3.admissionConfigId} onChange={v => {
+              const config = configsAdmision.find(c => c.id === v)
+              setPaso3(prev => ({ ...prev, admissionConfigId: v, programa: config?.label ?? '' }))
+            }} placeholder={programaOptions.length === 0 ? 'No hay programas para esa modalidad' : 'Selecciona un programa'} searchPlaceholder="Buscar carrera…" />
+          </div>
         </div>
 
         <div className="col-span-12 md:col-span-6">
           <FieldLabel required>Medio de Difusión por el que se enteró</FieldLabel>
-          <SearchSelect options={CANALES} value={paso3.canal} onChange={v => setPaso3({ ...paso3, canal: v })} placeholder="Selecciona un canal" />
+          <SearchSelectField options={canalOptions} value={paso3.outreachChannelId} onChange={v => {
+            const canal = canales.find(c => c.id === v)
+            setPaso3(prev => ({ ...prev, outreachChannelId: v, canal: canal?.label ?? '' }))
+          }} placeholder="Selecciona un canal" />
         </div>
 
         <div className="col-span-12">
@@ -865,14 +1200,11 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           <TextField label="Nombre de la Preparatoria de Procedencia" required value={paso3.nombrePreparatoria} onChange={v => setPaso3({ ...paso3, nombrePreparatoria: v })} />
         </div>
         <div className="col-span-12 md:col-span-4">
-          <SelectField
-            label="Tipo de Bachillerato"
-            required
-            options={TIPOS_BACHILLERATO.map(v => ({ value: v, label: v }))}
-            value={paso3.tipoBachillerato}
-            onChange={v => setPaso3({ ...paso3, tipoBachillerato: v as TipoBachillerato })}
-            placeholder="Seleccionar…"
-          />
+          <FieldLabel required>Tipo de Bachillerato</FieldLabel>
+          <SearchSelectField options={bachilleratoOptions} value={paso3.schoolTypeId} onChange={v => {
+            const tipo = tiposBachillerato.find(t => t.id === v)
+            setPaso3(prev => ({ ...prev, schoolTypeId: v, tipoBachillerato: (tipo?.label ?? '') as TipoBachillerato }))
+          }} placeholder="Selecciona un tipo" />
         </div>
 
         <div className="col-span-12">
@@ -883,11 +1215,11 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           <>
             <div className="col-span-12 md:col-span-6">
               <FieldLabel required>Estado de la Preparatoria</FieldLabel>
-              <SearchSelect options={ESTADOS_MEXICO} value={paso3.estadoPreparatoria} onChange={v => setPaso3({ ...paso3, estadoPreparatoria: v })} placeholder="Selecciona un estado" />
+              <SearchSelect options={estadoNames} value={paso3.estadoPreparatoria} onChange={v => setPaso3({ ...paso3, estadoPreparatoria: v, municipioPreparatoria: '' })} placeholder="Selecciona un estado" />
             </div>
             <div className="col-span-12 md:col-span-6">
               <FieldLabel required>Municipio de la Preparatoria</FieldLabel>
-              <SearchSelect options={MUNICIPIOS_CATALOGO} value={paso3.municipioPreparatoria} onChange={v => setPaso3({ ...paso3, municipioPreparatoria: v })} placeholder="Selecciona un municipio" />
+              <SearchSelect options={municipioNames(paso3.estadoPreparatoria)} value={paso3.municipioPreparatoria} onChange={v => setPaso3({ ...paso3, municipioPreparatoria: v })} placeholder="Selecciona un municipio" disabled={paso3.estadoPreparatoria === ''} />
             </div>
           </>
         ) : (
@@ -935,6 +1267,18 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   // ── Paso 4 content: Confirmación — revisión completa de la ficha antes de pagar ──
   const paso4Render = (
     <div>
+      {submitError && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-md px-4 py-3 text-[13px] text-red-700 flex items-start gap-2">
+          <ShieldCheck size={16} className="flex-shrink-0 mt-0.5" />
+          {submitError}
+        </div>
+      )}
+      {submitting && (
+        <div className="mb-6 bg-[#e6f5f1] border border-[#009574]/30 rounded-md px-4 py-3 text-[13px] text-[#007a5e]">
+          Registrando al candidato… generando folio.
+        </div>
+      )}
+
       <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
         <p className="text-[13px] text-[#6B7280] mb-6">
           Revisa con cuidado la información capturada. Una vez que confirmes, no podrás modificarla desde aquí.
@@ -1015,7 +1359,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         </SummarySection>
 
         <SummarySection title="Selección de Carrera">
-          <ReadField label="Modalidad" value={paso3.modalidad} />
+          <ReadField label="Modalidad" value={selectedProgramaModalidad || paso3.modalidad || '—'} />
           <ReadField label="Carrera" value={paso3.programa} />
           <ReadField label="Medio de Difusión" value={paso3.canal} />
           <ReadField label="¿Primera Opción?" value={paso3.isFirstChoice === null ? '' : paso3.isFirstChoice ? 'Sí, es mi primera opción' : 'No, es mi segunda opción'} />
@@ -1042,8 +1386,17 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         </SummarySection>
 
         <div className="pt-2">
-          <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio Generado</p>
-          <p className="text-[15px] font-bold text-[#333333] mb-4">{folio}</p>
+          {folio ? (
+            <>
+              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio Generado</p>
+              <p className="text-[15px] font-bold text-[#333333] mb-4">{folio}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio Generado</p>
+              <p className="text-[15px] font-bold text-[#333333] mb-4">—</p>
+            </>
+          )}
           <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Monto de la Ficha</p>
           <p className="text-[24px] font-bold text-[#009574]">${FICHA_MONTO.toFixed(2)}</p>
         </div>
@@ -1076,6 +1429,12 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
 
   const content = (
     <div className="bg-white border border-[#E5E7EB] rounded-lg p-8">
+      {catalogsStatus === 'error' && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-md px-4 py-3 text-[13px] text-red-700 flex items-start gap-2">
+          <ShieldCheck size={16} className="flex-shrink-0 mt-0.5" />
+          No se pudieron cargar los catálogos (programas, estados, canales). Verifica que el servidor esté disponible e intenta de nuevo.
+        </div>
+      )}
       <Wizard steps={steps} onComplete={handleComplete} finishLabel="Finalizar Registro" />
     </div>
   )
