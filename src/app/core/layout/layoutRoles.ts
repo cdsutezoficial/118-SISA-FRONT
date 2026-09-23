@@ -35,7 +35,15 @@ export const ADMISSION_ROLES: Role[] = [
   'SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION',
 ]
 
-export const ENROLLMENT_ROLES: Role[] = [
+export const CONFIG_GENERAL_ROLES: Role[] = [
+  'SERVICIOS_ESCOLARES',
+]
+
+export const FINANZAS_ROLES: Role[] = [
+  'FINANZAS',
+]
+
+export const STUDENT_TRACK_ROLES: Role[] = [
   'SERVICIOS_ESCOLARES',
 ]
 
@@ -73,7 +81,7 @@ export const ROLE_DEFAULT_PATHS: Record<Role, string> = {
   ADMINISTRADOR: '/usuarios',
   GESTOR_ACADEMICO: '/inscripciones',
   SERVICIOS_ESCOLARES: '/dashboard',
-  FINANZAS: '/admision',
+  FINANZAS: '/areas',
   DIRECTOR_DIVISION: '/admision',
   CANDIDATO: '/portal/induccion',
 }
