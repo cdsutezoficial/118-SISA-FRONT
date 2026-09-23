@@ -12,6 +12,7 @@ import { FormPage, FormHeader, FormCard, Button, MiniTable } from '@app/core/com
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { ROLE_LABELS, ROLE_BADGE_STYLE, DIVISION_SCOPED_ROLES, ROLE_OPTIONS } from '../data/roles'
 import type { RoleType } from '../data/roles'
+import { fetchRoleIdByType } from '../data/rolesApi'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ export default function UsuarioDetalle() {
 
   const [user, setUser] = useState<UserDetail | null>(null)
   const [divisions, setDivisions] = useState<DivisionSummary[]>([])
+  const [roleIds, setRoleIds] = useState<Partial<Record<RoleType, string>>>({})
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>(id ? 'loading' : 'error')
   const [loadErrorMsg, setLoadErrorMsg] = useState(id ? '' : 'Falta el identificador del usuario.')
   const [revokeTarget, setRevokeTarget] = useState<UserRoleDetailItem | null>(null)
@@ -129,6 +131,9 @@ export default function UsuarioDetalle() {
     apiGet<DivisionsPageResponse>('/divisions', { size: 100 })
       .then(data => setDivisions(data.items))
       .catch(() => {/* non-critical — division names just won't resolve */})
+    fetchRoleIdByType()
+      .then(map => setRoleIds(map))
+      .catch(() => {/* non-critical — role submit will surface the resolution error */})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -188,9 +193,14 @@ export default function UsuarioDetalle() {
     const ok: string[] = []
     const bad: string[] = []
     for (const rt of toAdd) {
+      const roleId = roleIds[rt]
+      if (!roleId) {
+        bad.push(ROLE_LABELS[rt])
+        continue
+      }
       try {
         await apiPost(`/users/${user.userId}/roles`, {
-          roleType: rt,
+          roleId,
           divisionId: DIVISION_SCOPED_ROLES.has(rt) ? addDivision : undefined,
         })
         ok.push(ROLE_LABELS[rt])

@@ -76,6 +76,7 @@ export const SYSTEM_NAV: NavEntry[] = [
     children: [
       { icon: <LayoutDashboard size={16} />, label: 'Dashboard',              base: 'admision-dash',   path: '/admision',                  roles: ADMISSION_ROLES },
       { icon: <Megaphone size={16} />,        label: 'Canales de Difusión',   base: 'canales',          path: '/admision/canales',          roles: ['SERVICIOS_ESCOLARES'] },
+      { icon: <GraduationCap size={16} />,    label: 'Tipos de Bachillerato', base: 'tipos-bachillerato', path: '/admision/tipos-bachillerato', roles: ['SERVICIOS_ESCOLARES'] },
       { icon: <Users size={16} />,            label: 'Candidatos',            base: 'candidatos',       path: '/admision/candidatos',       roles: ['SERVICIOS_ESCOLARES'] },
       { icon: <UserPlus size={16} />,         label: 'Registrar Candidato',   base: 'candidato-registrar', path: '/admision/candidatos/registrar', roles: ['SERVICIOS_ESCOLARES'] },
       { icon: <ClipboardCheck size={16} />,   label: 'Selección de Candidatos', base: 'seleccion',     path: '/admision/seleccion',        roles: ['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION'] },

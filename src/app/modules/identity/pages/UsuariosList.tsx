@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { apiGet } from '@app/core/infra/apiClient'
+import { apiGet, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 import { Toast, ActionBtn, SearchSelectField, ConfirmModal } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
@@ -282,8 +282,23 @@ export default function UsuariosList() {
   function handleResetConfirm() {
     if (!resetTarget) return
     const nombre = resetTarget.nombre
+    const username = resetTarget.usuario
     setResetTarget(null)
-    setToast(`Correo de restablecimiento enviado a ${nombre}.`)
+    void (async () => {
+      try {
+        // 204 regardless of account existence — never reveal whether a given
+        // username is registered (matches the backend's silent-success contract).
+        await apiPost('/auth/forgot-password', { username })
+        setToast(`Correo de restablecimiento enviado a ${nombre}.`)
+      } catch (err) {
+        const apiErr = err as Partial<ApiError>
+        if (apiErr.status === 400 || apiErr.status === 422) {
+          setToast(apiErr.message ?? 'No se pudo enviar el correo de restablecimiento.')
+        } else {
+          setToast('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+        }
+      }
+    })()
   }
 
   function handleUnlockConfirm() {
