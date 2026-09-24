@@ -1,5 +1,5 @@
-import type { Role } from './RoleContext'
-import { apiPost } from './apiClient'
+import type { Role, RoleUser } from './RoleContext'
+import { apiGet, apiPost } from './apiClient'
 
 /**
  * Real backend integration for login/session only (see
@@ -111,6 +111,18 @@ export interface CapabilityResponse {
 }
 
 /**
+ * Body of `GET /auth/me` — the CALLER's own profile (fullName from its linked
+ * `Person`, username, best email). The backend never returns anyone else's:
+ * the `sub` claim picks the row, no id is ever sent by the client.
+ */
+export interface MeProfile {
+  userId: string
+  fullName: string
+  username: string
+  email: string
+}
+
+/**
  * Decodes the base64url capability envelope from {@code GET /auth/me/capabilities}
  * into the caller's own permission keys. The payload is obfuscated on the wire
  * (not plaintext JSON), but the backend remains the real authority — decoding
@@ -145,6 +157,7 @@ const REFRESH_TOKEN_KEY = 'sisa.refreshToken'
 const AUTH_MODE_KEY = 'sisa.authMode'
 const MUST_CHANGE_PASSWORD_KEY = 'sisa.mustChangePassword'
 const SIGNED_OUT_KEY = 'sisa.signedOut'
+const USER_PROFILE_KEY = 'sisa.userProfile'
 
 export function getStoredMustChangePassword(): boolean {
   try {
@@ -227,6 +240,35 @@ export function persistMustChangePasswordCleared(): void {
   }
 }
 
+/**
+ * Reads the cached shell user (from `GET /auth/me`) for real-session reloads.
+ * Anything that isn't a well-formed `{ name, email }` object — or a storage
+ * failure — is treated as "no profile yet" so the shell's placeholder
+ * `'Usuario'` avatar shows instead of a corrupted string. `clearSession()`
+ * removes the key on logout like every other `sisa.*` entry.
+ */
+export function getStoredUserProfile(): RoleUser | null {
+  try {
+    const raw = sessionStorage.getItem(USER_PROFILE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<RoleUser>
+    return typeof parsed.name === 'string' && typeof parsed.email === 'string'
+      ? { name: parsed.name, email: parsed.email }
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** Caches the shell user so a real session survives a reload without re-fetching on mount. */
+export function persistUserProfile(profile: RoleUser): void {
+  try {
+    sessionStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile))
+  } catch {
+    // sessionStorage unavailable — profile just won't survive a reload.
+  }
+}
+
 // ─── API calls ──────────────────────────────────────────────────────────────
 // Both go through `apiPost` (apiClient.ts) — it auto-attaches
 // `Authorization: Bearer <token>` when one exists in storage and parses
@@ -239,6 +281,16 @@ export function persistMustChangePasswordCleared(): void {
 
 export async function apiLogin(username: string, password: string): Promise<LoginResponse> {
   return apiPost<LoginResponse>('/auth/login', { username, password })
+}
+
+/**
+ * Self-service profile lookup: the CALLER's own fullName/email from its
+ * linked `Person`. Auth header attaches automatically via `apiGet`, so no
+ * token parameter is needed — callers invoke it only after a real `login()`
+ * has stored the access token.
+ */
+export async function apiMeProfile(): Promise<MeProfile> {
+  return apiGet<MeProfile>('/auth/me')
 }
 
 /**

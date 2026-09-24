@@ -1,17 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  mapRoles,
-  mapFrontendRoleKey,
-  decodeJwtPayload,
+  apiMeProfile,
   decodeCapabilities,
+  decodeJwtPayload,
   getStoredMustChangePassword,
+  getStoredUserProfile,
+  mapFrontendRoleKey,
+  mapRoles,
+  markSignedOut,
   persistSession,
+  persistUserProfile,
   clearSession,
   persistMustChangePasswordCleared,
-  markSignedOut,
 } from './auth'
-import type { LoginResponse, JwtClaims, CapabilityResponse } from './auth'
+import type { LoginResponse, JwtClaims, CapabilityResponse, MeProfile } from './auth'
 import { apiGet, getAccessToken, getStoredAuthMode, setUnauthorizedHandler } from './apiClient'
 import type { ApiError } from './apiClient'
 
@@ -249,6 +252,13 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     return token ? decodeJwtPayload(token) : null
   })
 
+  // The shell user for a real session (Navbar/Sidebar footer): hydrated from
+  // `GET /auth/me` and cached in sessionStorage. Lazy initializer (same
+  // rationale as `claims`) so the name/email is right on the very first render
+  // of a hard reload. `null` = not fetched yet or fetch failed — the shell's
+  // `'Usuario'` placeholder shows meanwhile, never a wrong name.
+  const [userProfile, setUserProfile] = useState<RoleUser | null>(() => getStoredUserProfile())
+
   // Every real role the current session may activate (JWT-mapped). Re-derives
   // from `claims` — set at login and lazily hydrated on reload alike — so it
   // is never stale independently of them.
@@ -298,6 +308,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const decoded = decodeJwtPayload(res.accessToken)
     setClaims(decoded)
     setActiveRoleState(readStoredActiveRole(decoded ? mapRoles(decoded.roles) : []))
+    // Drop any cached profile from a previous session so a different account
+    // never flashes the old owner's name while the fresh `/auth/me` loads.
+    setUserProfile(null)
     setAuthModeState('real')
     // Drop the mock permission set and re-enter `pending` so guards never
     // treat stale mock keys as real permissions during the login transition.
@@ -306,6 +319,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     setPermissionsError('')
     setMustChangePasswordState(res.mustChangePassword)
     setSessionExpired(false) // a fresh login clears the expiry flag so a future expiry can alert again
+    // Real-profile fetch rides on the login event itself, not on a state-guard:
+    // on re-login `authMode` is already `'real'`, so a `[authMode]` effect
+    // would never re-fire. `persistSession` already wrote `sisa.authMode`,
+    // so `refreshProfile`'s storage-based guard passes here.
+    void refreshProfile()
   }
 
   async function refreshCapabilities(): Promise<void> {
@@ -342,6 +360,29 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }
 
   /**
+   * Loads and caches the caller's own profile from `GET /auth/me`. Deliberately
+   * decoupled from `refreshCapabilities`: a failure here must never fail the
+   * permission refresh (they only share the same 401 reaction), and vice-versa.
+   * On error the last stored profile (if any) is kept; with none, the shell's
+   * `'Usuario'` placeholder shows.
+   */
+  async function refreshProfile(): Promise<void> {
+    // Storage-backed (not the `authMode` state): by the time `login()` calls
+    // this, the state update hasn't rendered yet — but `persistSession` has
+    // already written `sisa.authMode`, so this guard is correct in both the
+    // login and the hard-reload paths.
+    if (getStoredAuthMode() !== 'real') return
+    try {
+      const profile: MeProfile = await apiMeProfile()
+      const user = { name: profile.fullName, email: profile.email }
+      setUserProfile(user)
+      persistUserProfile(user)
+    } catch {
+      // Keep whatever profile is already stored; a failed lookup never wipes a working shell.
+    }
+  }
+
+  /**
    * Deliberate sign-out (Navbar's "Cerrar sesión", cancelar selección de rol).
    * Marks the tab as intentionally signed out so `RequireAuth` redirects
    * instantly — that tab must never show the 3-second "sesión expirada" gate.
@@ -351,6 +392,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     markSignedOut()
     setClaims(null)
     setActiveRoleState(null)
+    // No previous-session name may linger in the shell during the sign-out
+    // transition (`clearSession` already wiped the cached key).
+    setUserProfile(null)
     setMustChangePasswordState(false)
     setAuthModeState('real') // stays 'real' — re-access must route to /login, not fall back to mock mode
   }, [])
@@ -419,6 +463,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     void refreshCapabilities()
   }, [activeRoleKey, authMode, mockRole])
 
+  // Profile fetch rides on real-mode mount (hard reload restores the shell
+  // without a `login()` event). On fresh logins `login()` fires the fetch
+  // itself, so a `[authMode]` effect would double-request — the mount-only
+  // effect avoids that entirely.
+  useEffect(() => {
+    if (getStoredAuthMode() !== 'real') return
+    void refreshProfile()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const value: RoleContextValue = {
     role: activeShellRole,
     setRole,
@@ -426,7 +480,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     // entry; multi-role get the full list the switcher can move between).
     // Mock mode: the full switchable staff catalog.
     availableRoles: authMode === 'real' ? realRoles : AVAILABLE_ROLES,
-    user: activeShellRole === null ? null : MOCK_USER,
+    // Real mode: the account's real profile from `GET /auth/me` (null until
+    // fetched/failed → 'Usuario' placeholder). Mock mode: the fixed sample user.
+    user: activeShellRole === null ? null : authMode === 'real' ? userProfile : MOCK_USER,
     authMode,
     mustChangePassword,
     activeRoleKey,
