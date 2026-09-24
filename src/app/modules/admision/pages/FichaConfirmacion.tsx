@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import {
   CheckCircle2,
@@ -25,6 +25,7 @@ import { mockCandidates } from '../data/mockData'
 import type {
   Candidate,
   CandidateFichaBackend,
+  CheckoutInitiationBackend,
   FichaRouteState,
   PaymentConfirmationBackend,
 } from '../data/types'
@@ -47,11 +48,18 @@ import type {
  *   the route is also navigated with `?id=<candidateId>` (same convention as
  *   `CandidatoDetalle.tsx`/`ConfirmarPagoFicha.tsx`) and this screen falls back
  *   to `GET /candidates/{id}` to rebuild the display from the backend.
- * - "Pagar en línea" calls `POST /candidates/{id}/payments/confirm` (the EVO
- *   stand-in endpoint): on success the header flips to "¡Registro exitoso!"
- *   with the backend receipt (`REC-...`) and the confirmation email is sent
- *   server-side. A repeat attempt right after a success returns 409 (already
- *   paid) — treated as already-paid rather than an error.
+ * - "Pagar en línea" (Fase 6, real EVO Hosted Checkout): calls
+ *   `POST /candidates/{id}/payments/checkout`, stores the returned `orderId` in
+ *   `sessionStorage` and redirects to the gateway payment page
+ *   (`checkoutUrl`). On the return to `/portal/registro/ficha` EVO appends
+ *   `resultIndicator` (success only) — the page then posts
+ *   `POST /candidates/{id}/payments/confirm {orderId}`, which the backend only
+ *   approves after EVO reports `SUCCESS` + matching amount (Fase 5); on success
+ *   the header flips to "¡Registro exitoso!" with the backend receipt (`REC-...`)
+ *   and the confirmation email is sent server-side. A repeat right after
+ *   success returns 409 (already paid) — treated as already-paid. A return
+ *   without `resultIndicator` (canceled/error) leaves the ficha `PENDING` with
+ *   a "Pago cancelado" toast; a backend failure shows the REAL `err.message`.
  * - "Descargar ficha en PDF" → `GET /candidates/{id}/ficha.pdf` (real PDF blob).
  * - "Enviar instrucciones a mi correo" → `POST /candidates/{id}/send-instructions`.
  * - Only real candidates (UUID ids, i.e. backend-created) call the backend;
@@ -101,7 +109,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const state = location.state as FichaRouteState | null
 
   const routeCandidate: Candidate = state?.candidate ?? mockCandidates[0]
@@ -110,6 +118,31 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
   const candidateId: string = UUID_RE.test(idFromUrl) ? idFromUrl : routeCandidate.id
   const esCandidatoReal: boolean = UUID_RE.test(candidateId)
   const metodoPagoInicial: MetodoPago = state?.metodoPago ?? 'ONLINE'
+
+  // Ensures the EVO return handling (redirect → confirmed checkout) runs once per mount:
+  // dev StrictMode double-invokes effects, and the confirm is idempotent but must not re-fire
+  // after `resultIndicator` was already consumed and the query cleaned up.
+  const returnHandledRef = useRef(false)
+
+  function checkoutStorageKey(): string {
+    return `sisa.checkout.${candidateId}`
+  }
+
+  function getStoredOrderId(): string | null {
+    try {
+      return sessionStorage.getItem(checkoutStorageKey())
+    } catch {
+      return null
+    }
+  }
+
+  function clearStoredOrderId(): void {
+    try {
+      sessionStorage.removeItem(checkoutStorageKey())
+    } catch {
+      // sessionStorage unavailable — nothing to clean
+    }
+  }
 
   function buildInitial(): FichaDisplay {
     const pf = state?.pagoFicha
@@ -135,6 +168,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
   const [confirmData, setConfirmData] = useState<PaymentConfirmationBackend | null>(null)
   const [alreadyPaid, setAlreadyPaid] = useState(false)
   const [processing, setProcessing] = useState(false)
+  const [redirecting, setRedirecting] = useState(false)
   const [busyPdf, setBusyPdf] = useState(false)
   const [busyMail, setBusyMail] = useState(false)
 
@@ -166,8 +200,76 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
       })
   }, [candidateId, esCandidatoReal])
 
-  // Pay online → POST the ficha-payment confirmation (EVO stand-in). On success
-  // the backend sets the candidate PAID and emails the confirmation reference.
+  // Pay online → start a real EVO Hosted Checkout session. On success the
+  // candidate is redirected to the gateway payment page (`checkoutUrl`), which
+  // returns to this same route appended with `resultIndicator` (success only).
+  const orderId = getStoredOrderId()
+
+  // EVO return cases (params appended by the gateway to the returnUrl per
+  // evo.txt — `resultIndicator` set on SUCCESS only):
+  // - success   → `resultIndicator` present → confirm now.
+  // - cancelled → `resultIndicator` absent, no `error` param → PENDING + cancel toast.
+  // - error     → `error` param present → PENDING + gateway error toast.
+  function onReturnFromGateway() {
+    if (returnHandledRef.current || !esCandidatoReal || !orderId) return
+    returnHandledRef.current = true
+    const errorParam = searchParams.get('error')
+    if (searchParams.has('resultIndicator')) {
+      // Payment succeeded on the gateway — confirm from the persisted order id.
+      void confirmAfterReturn(orderId)
+    } else if (errorParam) {
+      clearStoredOrderId()
+      setToast('No se pudo completar el pago en Evo Payments. Tu ficha sigue pendiente.')
+      setSearchParams({ id: candidateId }, { replace: true })
+    } else {
+      // Payer cancelled on the EVO payment page before paying.
+      clearStoredOrderId()
+      setToast('Pago cancelado. Tu ficha sigue pendiente.')
+      setSearchParams({ id: candidateId }, { replace: true })
+    }
+  }
+
+  // POST the verified confirmation → `POST /candidates/{id}/payments/confirm`.
+  async function confirmAfterReturn(orderId: string) {
+    setProcessing(true)
+    try {
+      const res = await apiPost<PaymentConfirmationBackend>(`/candidates/${candidateId}/payments/confirm`, {
+        orderId,
+      })
+      clearStoredOrderId()
+      setConfirmData(res)
+      setFicha(prev => ({
+        ...prev,
+        estado: 'PAID',
+        referencia: res.referenceNumber,
+        monto: Number(res.amount),
+        folio: res.folio,
+      }))
+      setToast(`Pago confirmado. Tu recibo es ${res.receiptNumber}.`)
+    } catch (err) {
+      const apiErr = err as Partial<ApiError>
+      clearStoredOrderId()
+      if (apiErr.status === 409) {
+        // Already paid (idempotent re-confirm or Finanzas confirmed meanwhile).
+        setAlreadyPaid(true)
+        setFicha(prev => ({ ...prev, estado: 'PAID' }))
+        setToast('La ficha ya figura como pagada.')
+      } else if (apiErr.status === 404) {
+        setToast('No se encontró el candidato. Vuelve a intentar.')
+      } else {
+        // 400 = EVO verification failed (no SUCCESS / amount mismatch); 502 = gateway down.
+        setToast(apiErr.message ?? 'No se pudo confirmar el pago. Tu ficha sigue pendiente.')
+      }
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  useEffect(() => {
+    onReturnFromGateway()
+  })
+
+  // Pay online → start a real EVO Hosted Checkout (or keep the mock simulation).
   async function handlePagarEnLinea() {
     if (!esCandidatoReal) {
       // Mock simulation (same as pre-integration) so the staff mock demo still behaves.
@@ -181,28 +283,22 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     }
     setProcessing(true)
     try {
-      const res = await apiPost<PaymentConfirmationBackend>(`/candidates/${candidateId}/payments/confirm`)
-      setConfirmData(res)
-      setFicha(prev => ({
-        ...prev,
-        estado: 'PAID',
-        referencia: res.referenceNumber,
-        monto: Number(res.amount),
-        folio: res.folio,
-      }))
-      setToast(`Pago confirmado. Tu recibo es ${res.receiptNumber}.`)
+      // Fase 4/6: create the EVO session and hold the order id for the return call.
+      const res = await apiPost<CheckoutInitiationBackend>(`/candidates/${candidateId}/payments/checkout`)
+      try {
+        sessionStorage.setItem(checkoutStorageKey(), res.orderId)
+      } catch {
+        // sessionStorage unavailable — the return call will just miss the cross-check.
+      }
+      setProcessing(false)
+      setRedirecting(true)
+      setToast('Redirigiendo a Evo Payments…')
+      window.location.assign(res.checkoutUrl)
     } catch (err) {
       const apiErr = err as Partial<ApiError>
-      if (apiErr.status === 409) {
-        // Already paid (idempotent re-confirm) — flip to the paid view without a new receipt.
-        setAlreadyPaid(true)
-        setFicha(prev => ({ ...prev, estado: 'PAID' }))
-        setToast('La ficha ya figura como pagada.')
-      } else {
-        setToast(apiErr.status === 404 ? 'No se encontró el candidato. Vuelve a intentar.' : 'No se pudo confirmar el pago. Intenta de nuevo más tarde.')
-      }
-    } finally {
       setProcessing(false)
+      setRedirecting(false)
+      setToast(apiErr.message ?? 'No se pudo iniciar el pago en línea. Intenta de nuevo más tarde.')
     }
   }
 
@@ -328,7 +424,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           <div className="bg-blue-50 border border-blue-200 rounded-md px-4 py-3 mb-4 text-[13px] text-blue-700">
             Haz clic en el botón de abajo para pagar de forma segura con tarjeta o transferencia. Serás redirigido a Evo Payments.
           </div>
-          <Button onClick={handlePagarEnLinea} loading={processing} className="w-full sm:w-auto">
+          <Button onClick={handlePagarEnLinea} loading={processing || redirecting} className="w-full sm:w-auto">
             Pagar en línea — ${ficha.monto.toFixed(2)}
           </Button>
           <p className="text-[12px] text-[#6B7280] mt-3">
@@ -365,11 +461,13 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     </div>
   )
 
-  const overlay = processing && (
+  const overlay = (processing || redirecting) && (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-lg px-8 py-6 flex flex-col items-center gap-3 shadow-2xl">
         <Loader2 size={28} className="animate-spin text-[#009574]" />
-        <p className="text-[13px] font-medium text-[#333333]">Procesando tu pago...</p>
+        <p className="text-[13px] font-medium text-[#333333]">
+          {redirecting ? 'Redirigiendo a Evo Payments…' : 'Procesando tu pago...'}
+        </p>
       </div>
     </div>
   )

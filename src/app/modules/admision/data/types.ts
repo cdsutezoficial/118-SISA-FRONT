@@ -58,6 +58,22 @@ export interface PaymentConfirmationBackend {
   receiptNumber: string
 }
 
+/**
+ * `POST /candidates/{id}/payments/checkout` — EVO Hosted Checkout session
+ * (Fase 4). The frontend stores {@code orderId} (for the return call) and
+ * redirects the applicant to {@code checkoutUrl}, where the gateway hosts the
+ * payment page; on success EVO appends {@code resultIndicator} to the returnUrl.
+ */
+export interface CheckoutInitiationBackend {
+  candidateId: string
+  orderId: string
+  sessionId: string
+  version: string | null
+  merchant: string
+  successIndicator: string
+  checkoutUrl: string
+}
+
 /** `GET /candidates/{id}` — ficha projection for route-refresh fallback. */
 export interface CandidateFichaBackend {
   candidateId: string
