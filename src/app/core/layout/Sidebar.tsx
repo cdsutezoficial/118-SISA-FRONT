@@ -14,7 +14,9 @@ import {
   ACADEMIC_CONFIG_ROLES,
   ADMINISTRATION_ROLES,
   ADMISSION_ROLES,
-  ENROLLMENT_ROLES,
+  CONFIG_GENERAL_ROLES,
+  FINANZAS_ROLES,
+  STUDENT_TRACK_ROLES,
   ROLE_LABELS,
 } from './layoutRoles'
 
@@ -49,22 +51,6 @@ function isGroup(e: NavEntry): e is NavGroup {
 /** System-wide navigation tree — any module/shell can render its own subset. */
 export const SYSTEM_NAV: NavEntry[] = [
   {
-    id: 'config', icon: <Settings size={18} />, label: 'Configuración Académica',
-    children: [
-      { icon: <LayoutDashboard size={18} />, label: 'Dashboard', base: 'dashboard', path: '/dashboard', roles: ACADEMIC_CONFIG_ROLES },
-      { icon: <Building2 size={18} />,     label: 'Divisiones Académicas',   base: 'divisiones', path: '/divisiones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['DIVISIONS_READ'] },
-      { icon: <GraduationCap size={18} />, label: 'Carreras',           base: 'carreras',   path: '/carreras',   roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['CARRERAS_READ'] },
-      { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PLANS_READ'] },
-      { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['SUBJECT_CLASSIFICATIONS_READ'] },
-      { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PERIODS_READ'] },
-      { icon: <Users2 size={18} />,        label: 'Generaciones',            base: 'generaciones', path: '/generaciones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['GENERATIONS_READ'] },
-      { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['GROUPS_READ'] },
-      { icon: <Ticket size={18} />,        label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
-      { icon: <Building2 size={18} />,     label: 'Áreas de Facturación',     base: 'areas',      path: '/areas',      roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PAYMENT_AREAS_READ'] },
-      { icon: <CreditCard size={18} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
-    ],
-  },
-  {
     id: 'admin', icon: <UserCog size={18} />, label: 'Administración',
     children: [
       { icon: <IdCard size={18} />, label: 'Usuarios', base: 'usuarios', path: '/usuarios', roles: ADMINISTRATION_ROLES, permissionKeys: ['USERS_READ'] },
@@ -72,29 +58,55 @@ export const SYSTEM_NAV: NavEntry[] = [
     ],
   },
   {
-    id: 'admision', icon: <UserPlus size={18} />, label: 'Admisión',
+    id: 'config', icon: <Settings size={18} />, label: 'Configuración Académica',
     children: [
-      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',              base: 'admision-dash',   path: '/admision',                  roles: ADMISSION_ROLES },
-      { icon: <Megaphone size={16} />,        label: 'Canales de Difusión',   base: 'canales',          path: '/admision/canales',          roles: ['SERVICIOS_ESCOLARES'] },
-      { icon: <GraduationCap size={16} />,    label: 'Tipos de Bachillerato', base: 'tipos-bachillerato', path: '/admision/tipos-bachillerato', roles: ['SERVICIOS_ESCOLARES'] },
-      { icon: <Users size={16} />,            label: 'Candidatos',            base: 'candidatos',       path: '/admision/candidatos',       roles: ['SERVICIOS_ESCOLARES'] },
-      { icon: <UserPlus size={16} />,         label: 'Registrar Candidato',   base: 'candidato-registrar', path: '/admision/candidatos/registrar', roles: ['SERVICIOS_ESCOLARES'] },
-      { icon: <ClipboardCheck size={16} />,   label: 'Selección de Candidatos', base: 'seleccion',     path: '/admision/seleccion',        roles: ['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION'] },
-      { icon: <IdCard size={16} />,           label: 'Generar Matrículas',    base: 'matriculas',       path: '/admision/matriculas',       roles: ['SERVICIOS_ESCOLARES'] },
-      { icon: <Megaphone size={16} />,        label: 'Publicar Resultados',   base: 'publicar',         path: '/admision/publicar',         roles: ['SERVICIOS_ESCOLARES'] },
-      { icon: <BadgePercent size={16} />,     label: 'Aplicar Descuentos',    base: 'descuentos',       path: '/admision/descuentos',       roles: ['SERVICIOS_ESCOLARES'] },
-      { icon: <Unlock size={16} />,           label: 'Habilitar Inducción',   base: 'habilitacion',     path: '/admision/habilitacion',     roles: ['SERVICIOS_ESCOLARES'] },
+      { icon: <LayoutDashboard size={18} />, label: 'Dashboard', base: 'dashboard', path: '/dashboard', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['DIVISIONS_READ'] },
+      { icon: <Building2 size={18} />,     label: 'Divisiones Académicas',   base: 'divisiones', path: '/divisiones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['DIVISIONS_READ'] },
+      { icon: <GraduationCap size={18} />, label: 'Carreras',           base: 'carreras',   path: '/carreras',   roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['CARRERAS_READ'] },
+      { icon: <BookOpen size={18} />,      label: 'Planes de Estudio',       base: 'planes',     path: '/planes',     roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PLANS_READ'] },
+      { icon: <Tags size={18} />,          label: 'Clasificaciones de Materias', base: 'clasificaciones', path: '/clasificaciones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['SUBJECT_CLASSIFICATIONS_READ'] },
+      { icon: <CalendarRange size={18} />, label: 'Periodos Académicos',     base: 'periodos',   path: '/periodos',   roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['PERIODS_READ'] },
+      { icon: <Users2 size={18} />,        label: 'Generaciones',            base: 'generaciones', path: '/generaciones', roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['GENERATIONS_READ'] },
+      { icon: <Users size={18} />,         label: 'Grupos',                  base: 'grupos',     path: '/grupos',     roles: ACADEMIC_CONFIG_ROLES, permissionKeys: ['GROUPS_READ'] },
     ],
   },
   {
-    id: 'inscripciones', icon: <ClipboardCheck size={18} />, label: 'Inscripciones',
+    id: 'config-general', icon: <Megaphone size={18} />, label: 'Configuración General',
     children: [
-      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',                   base: 'inscripciones-dash', path: '/inscripciones',               roles: ENROLLMENT_ROLES },
-      { icon: <Users size={16} />,            label: 'Estudiantes',                 base: 'estudiantes',        path: '/inscripciones/estudiantes',  roles: ENROLLMENT_ROLES },
-      { icon: <UserPlus size={16} />,         label: 'Nuevo Ingreso',               base: 'nuevo-ingreso',      path: '/inscripciones/nuevo-ingreso', roles: ENROLLMENT_ROLES },
-      { icon: <RotateCcw size={16} />,        label: 'Reinscripción',               base: 'reinscripcion',      path: '/inscripciones/reinscripcion', roles: ENROLLMENT_ROLES },
-      { icon: <FileText size={16} />,         label: 'Documentos Institucionales',  base: 'documentos',         path: '/inscripciones/documentos',   roles: ENROLLMENT_ROLES },
-      { icon: <Archive size={16} />,          label: 'Expediente',                  base: 'expediente',         path: '/inscripciones/expediente',   roles: ENROLLMENT_ROLES },
+      { icon: <Megaphone size={16} />,        label: 'Canales de Difusión',   base: 'canales',          path: '/admision/canales',          roles: CONFIG_GENERAL_ROLES, permissionKeys: ['OUTREACH_CHANNELS_READ'] },
+      { icon: <GraduationCap size={16} />,    label: 'Tipos de Bachillerato', base: 'tipos-bachillerato', path: '/admision/tipos-bachillerato', roles: CONFIG_GENERAL_ROLES, permissionKeys: ['HIGH_SCHOOL_TYPES_READ'] },
+    ],
+  },
+  {
+    id: 'finanzas', icon: <CreditCard size={18} />, label: 'Finanzas',
+    children: [
+      { icon: <Building2 size={16} />,     label: 'Áreas de Facturación',     base: 'areas',      path: '/areas',      roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_AREAS_READ'] },
+      { icon: <CreditCard size={16} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
+      { icon: <BadgePercent size={16} />,  label: 'Aplicar Descuentos',      base: 'descuentos', path: '/admision/descuentos', roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
+    ],
+  },
+  {
+    id: 'admision', icon: <UserPlus size={18} />, label: 'Admisión',
+    children: [
+      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',                 base: 'admision-dash',   path: '/admision',                  roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <Ticket size={16} />,          label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <Users size={16} />,           label: 'Candidatos',                base: 'candidatos',       path: '/admision/candidatos',       roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <UserPlus size={16} />,        label: 'Registrar Candidato',       base: 'candidato-registrar', path: '/admision/candidatos/registrar', roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <ClipboardCheck size={16} />,  label: 'Selección de Candidatos',   base: 'seleccion',        path: '/admision/seleccion',        roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <IdCard size={16} />,          label: 'Generar Matrículas',        base: 'matriculas',       path: '/admision/matriculas',       roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <Megaphone size={16} />,       label: 'Publicar Resultados',       base: 'publicar',         path: '/admision/publicar',         roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <Unlock size={16} />,          label: 'Habilitar Inducción',       base: 'habilitacion',     path: '/admision/habilitacion',     roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+    ],
+  },
+  {
+    id: 'trayectoria', icon: <ClipboardCheck size={18} />, label: 'Trayectoria Estudiantil',
+    children: [
+      { icon: <LayoutDashboard size={16} />, label: 'Dashboard',                   base: 'inscripciones-dash', path: '/inscripciones',               roles: STUDENT_TRACK_ROLES },
+      { icon: <Users size={16} />,            label: 'Estudiantes',                 base: 'estudiantes',        path: '/inscripciones/estudiantes',  roles: STUDENT_TRACK_ROLES },
+      { icon: <UserPlus size={16} />,         label: 'Nuevo Ingreso',               base: 'nuevo-ingreso',      path: '/inscripciones/nuevo-ingreso', roles: STUDENT_TRACK_ROLES },
+      { icon: <RotateCcw size={16} />,        label: 'Reinscripción',               base: 'reinscripcion',      path: '/inscripciones/reinscripcion', roles: STUDENT_TRACK_ROLES },
+      { icon: <FileText size={16} />,         label: 'Documentos Institucionales',  base: 'documentos',         path: '/inscripciones/documentos',   roles: STUDENT_TRACK_ROLES },
+      { icon: <Archive size={16} />,          label: 'Expediente',                  base: 'expediente',         path: '/inscripciones/expediente',   roles: STUDENT_TRACK_ROLES },
     ],
   },
 ]

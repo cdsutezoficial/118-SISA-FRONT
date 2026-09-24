@@ -183,19 +183,19 @@ const router = createBrowserRouter([
           },
           {
             path: 'candidatos',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatosList /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><CandidatosList /></RequireRole>,
           },
           {
             path: 'candidatos/detalle',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatoDetalle /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><CandidatoDetalle /></RequireRole>,
           },
           {
             path: 'candidatos/registrar',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatoRegistro origin="staff" /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><CandidatoRegistro origin="staff" /></RequireRole>,
           },
           {
             path: 'candidatos/ficha',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><FichaConfirmacion origin="staff" /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><FichaConfirmacion origin="staff" /></RequireRole>,
           },
           {
             path: 'candidatos/pago-ficha',
@@ -207,31 +207,31 @@ const router = createBrowserRouter([
           },
           {
             path: 'candidatos/induccion',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RegistroInduccion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><RegistroInduccion /></RequireRole>,
           },
           {
             path: 'candidatos/examen',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RegistroExamen /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><RegistroExamen /></RequireRole>,
           },
           {
             path: 'seleccion',
-            element: <RequireRole allowedRoles={['DIRECTOR_DIVISION']}><SeleccionCandidatos /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><SeleccionCandidatos /></RequireRole>,
           },
           {
             path: 'matriculas',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><GenerarMatriculas /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><GenerarMatriculas /></RequireRole>,
           },
           {
             path: 'publicar',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><PublicarResultados /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><PublicarResultados /></RequireRole>,
           },
           {
             path: 'descuentos',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><AplicarDescuento /></RequireRole>,
+            element: <RequireRole allowedRoles={['FINANZAS']}><AplicarDescuento /></RequireRole>,
           },
           {
             path: 'habilitacion',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><HabilitarInduccion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><HabilitarInduccion /></RequireRole>,
           },
         ],
       },
@@ -382,13 +382,15 @@ const router = createBrowserRouter([
       // Role guard: only the list route is wrapped here, mirroring the
       // `divisiones`/`clasificaciones`/`periodos`/`generaciones` precedent —
       // every `/program-admission-configs` verb is enforced server-side to
-      // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
-      // redirect instead of a raw 403/blank state for any other role.
+      // ADMIN/SERVICIOS_ESCOLARES (its GET also grants DIRECTOR_DIVISION
+      // read, part of the Admisión module's roles), so wrapping the list
+      // gives a clean redirect instead of a raw 403/blank state for any other
+      // role.
       // `configuracion-admision/new`/`configuracion-admision/form` are
       // untouched — out of scope for this change.
       {
         path: 'configuracion-admision',
-        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PROGRAM_ADMISSION_CONFIGS_READ']} redirectTo="/dashboard"><ConfiguracionAdmisionList /></RequirePermission></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PROGRAM_ADMISSION_CONFIGS_READ']} redirectTo="/dashboard"><ConfiguracionAdmisionList /></RequirePermission></RequireRole>,
       },
       { path: 'configuracion-admision/new',  element: <ConfiguracionAdmisionForm /> },
       { path: 'configuracion-admision/form', element: <ConfiguracionAdmisionForm /> },
@@ -398,7 +400,7 @@ const router = createBrowserRouter([
       // Role guard: the list route is wrapped here, mirroring the
       // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`grupos`
       // precedent — every `/concepts` verb is enforced server-side to
-      // ADMIN/SERVICIOS_ESCOLARES.
+      // ADMIN/PERSONAL_FINANZAS, and the Finanzas module owns the screen.
       //
       // `conceptos/tarifa/form` follows the exact route pattern established by
       // `planes/materia/form`/`planes/escala/form` — a SEPARATE screen (not a
@@ -406,7 +408,7 @@ const router = createBrowserRouter([
       // `?conceptId=`. Unlike those two, there is no `?mode=` here: `PaymentRate`
       // is an append-only history with no edit, so this route is ALWAYS
       // registration (2026-07-28 wiring plan, Fase 4 of 4).
-      { path: 'conceptos',            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_CONCEPTS_READ']} redirectTo="/dashboard"><ConceptosList /></RequirePermission></RequireRole> },
+      { path: 'conceptos',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_CONCEPTS_READ']} redirectTo="/dashboard"><ConceptosList /></RequirePermission></RequireRole> },
       { path: 'conceptos/new',        element: <ConceptosForm /> },
       { path: 'conceptos/form',       element: <ConceptosForm /> },
       { path: 'conceptos/tarifa/form', element: <ConceptosTarifaForm /> },
@@ -415,8 +417,8 @@ const router = createBrowserRouter([
       //
       // Catálogo compañero de `conceptos` — misma convención: la lista lleva
       // RoleGuard (los verbos `/payment-areas` los exige ADMIN o
-      // SERVICIOS_ESCOLARES en el backend) y el form queda abierto.
-      { path: 'areas',            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_AREAS_READ']} redirectTo="/dashboard"><AreasList /></RequirePermission></RequireRole> },
+      // PERSONAL_FINANZAS en el backend) y el form queda abierto.
+      { path: 'areas',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_AREAS_READ']} redirectTo="/dashboard"><AreasList /></RequirePermission></RequireRole> },
       { path: 'areas/new',        element: <AreasForm /> },
       { path: 'areas/form',       element: <AreasForm /> },
 
