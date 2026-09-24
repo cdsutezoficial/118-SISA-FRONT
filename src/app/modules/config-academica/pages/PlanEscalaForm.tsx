@@ -227,6 +227,49 @@ export default function PlanEscalaForm() {
       e.entries = 'Agrega al menos un rango.'
     } else if (rErrors.some(Boolean)) {
       e.entries = 'Completa todos los campos de los rangos marcados.'
+    } else if (!e.numericMin && !e.numericMax) {
+      // ---- Cobertura del rango [numericMin, numericMax] ----
+      // Espejo del backend (GradeScale.validateEntries): sin huecos ni
+      // traslapes, primer rango inicia en el mínimo y el último termina en
+      // el máximo, con paso de 0.1 entre rangos adyacentes.
+      const STEP = 0.1
+      const around = (a: number, b: number) => Math.abs(a - b) < 1e-9
+      const fmt = (n: number) => (Math.round(n * 10) / 10).toFixed(1)
+      const nums = entries.map((row, i) => ({ index: i, from: Number(row.fromValue), to: Number(row.toValue) }))
+
+      const inverted = nums.find(r => r.from > r.to)
+      if (inverted) {
+        e.entries = `El rango de la fila ${inverted.index + 1} tiene el valor 'Desde' mayor que el valor 'Hasta'.`
+        rErrors[inverted.index] = true
+      } else {
+        const sorted = [...nums].sort((a, b) => a.from - b.from)
+        const first = sorted[0]
+        if (!around(first.from, min)) {
+          e.entries = `Hueco inicial: los rangos deben comenzar en la calificación mínima (${fmt(min)}).`
+          rErrors[first.index] = true
+        } else {
+          for (let i = 0; i < sorted.length; i++) {
+            const cur = sorted[i]
+            if (i === sorted.length - 1) {
+              if (!around(cur.to, max)) {
+                e.entries = `Hueco final: los rangos deben terminar en la calificación máxima (${fmt(max)}).`
+                rErrors[cur.index] = true
+              }
+            } else {
+              const next = sorted[i + 1]
+              const expected = cur.to + STEP
+              if (around(next.from, expected)) continue
+              if (next.from > expected) {
+                e.entries = `Hueco entre el rango de la fila ${i + 1} (termina en ${fmt(cur.to)}) y el de la fila ${next.index + 1} (inicia en ${fmt(next.from)}).`
+              } else {
+                e.entries = `Traslape entre el rango de la fila ${i + 1} (termina en ${fmt(cur.to)}) y el de la fila ${next.index + 1} (inicia en ${fmt(next.from)}).`
+              }
+              rErrors[next.index] = true
+            }
+            if (e.entries) break
+          }
+        }
+      }
     }
 
     return { errors: e, rowErrors: rErrors }
