@@ -224,7 +224,8 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     }
   }
 
-  // Send payment instructions email → `POST /candidates/{id}/send-instructions` (204).
+  // Send payment instructions email → `POST /candidates/{id}/send-instructions`,
+  // now synchronous: 204 only when delivered, 502 with the SMTP cause on failure.
   async function handleEnviarCorreo() {
     if (!esCandidatoReal) {
       setToast(`Instrucciones enviadas (simulado) a ${ficha.email || 'tu correo registrado'}.`)
@@ -234,8 +235,9 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     try {
       await apiPost(`/candidates/${candidateId}/send-instructions`)
       setToast(`Instrucciones enviadas a ${ficha.email}.`)
-    } catch {
-      setToast('No se pudo enviar el correo. Intenta de nuevo más tarde.')
+    } catch (err) {
+      const apiErr = err as Partial<ApiError>
+      setToast(apiErr.message || 'No se pudo enviar el correo. Intenta de nuevo más tarde.')
     } finally {
       setBusyMail(false)
     }
