@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Info, AlertCircle } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, ModeSwitcher, SearchSelectField, Switch } from '@app/core/components/ui'
+import { FieldLabel, FieldHelp, FieldError, ModeSwitcher, SearchSelectField, Switch, DatePicker } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
@@ -104,6 +104,20 @@ type FormErrors = Partial<Record<
   | 'totalLevels' | 'minPassingGrade' | 'maxExtraordinaryExamsPerPeriod' | 'levels',
   string
 >>
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+// La API trabaja con ISO (YYYY-MM-DD); el DatePicker muestra dd/mm/yyyy.
+function isoToDisplay(iso: string): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return d && m && y ? `${d}/${m}/${y}` : ''
+}
+
+function displayToIso(display: string): string {
+  if (!display) return ''
+  const [d, m, y] = display.split('/')
+  return y && m && d ? `${y}-${m}-${d}` : ''
+}
 
 function newLevelRow(levelNumber: number): LevelRow {
   return { key: crypto.randomUUID(), originalId: null, levelNumber, type: 'REGULAR', description: '' }
@@ -350,6 +364,25 @@ export default function PlanForm() {
   }
   function addLevel() {
     setLevels(prev => [...prev, newLevelRow(prev.length + 1)])
+  }
+  // Mantiene la lista de niveles sincronizada con el campo "Total de Niveles":
+  // al escribir un total mayor se agregan filas y, si se reduce, se recortan.
+  // Los niveles ya guardados que se recorten limpian la selección de servicio
+  // social (igual que removeLevel) para no reenviar un uuid eliminado.
+  function syncLevelsToTotal(total: number) {
+    if (!Number.isInteger(total) || total < 1) return
+    if (levels.length < total) {
+      const next: LevelRow[] = [...levels]
+      for (let i = levels.length + 1; i <= total; i++) next.push(newLevelRow(i))
+      setLevels(next)
+    } else if (levels.length > total) {
+      const removed = levels.slice(total)
+      if (removed.some(r => r.originalId !== null && r.originalId === socialServiceMinLevelId)) {
+        setSocialServiceMinLevelId(null)
+        setSocialServiceClearedHint(true)
+      }
+      setLevels(levels.slice(0, total))
+    }
   }
   function handleRequiresSocialServiceChange(v: boolean) {
     setRequiresSocialService(v)
@@ -716,16 +749,15 @@ export default function PlanForm() {
               />
 
               {/* Vigente desde */}
-              <TextField
-                label="Vigente Desde"
-                required={!isView}
-                type="date"
-                value={effectiveFrom}
-                onChange={v => { setEffectiveFrom(v); setErrors(prev => ({ ...prev, effectiveFrom: undefined })) }}
-                disabled={disabled}
-                error={errors.effectiveFrom}
-                className="col-span-12 sm:col-span-4"
-              />
+              <div className="col-span-12 sm:col-span-4">
+                <FieldLabel required={!isView}>Vigente Desde</FieldLabel>
+                <DatePicker
+                  value={isoToDisplay(effectiveFrom)}
+                  onChange={v => { setEffectiveFrom(displayToIso(v)); setErrors(prev => ({ ...prev, effectiveFrom: undefined })) }}
+                  disabled={disabled}
+                />
+                {errors.effectiveFrom && <FieldError>{errors.effectiveFrom}</FieldError>}
+              </div>
 
               {/* Total de niveles */}
               <TextField
@@ -734,7 +766,12 @@ export default function PlanForm() {
                 type="number"
                 min={1}
                 value={totalLevels}
-                onChange={v => { setTotalLevels(v); setErrors(prev => ({ ...prev, totalLevels: undefined })) }}
+                onChange={v => {
+                  setTotalLevels(v)
+                  setErrors(prev => ({ ...prev, totalLevels: undefined }))
+                  const num = Number(v)
+                  if (Number.isInteger(num) && num >= 1) syncLevelsToTotal(num)
+                }}
                 disabled={disabled}
                 error={errors.totalLevels}
                 numeric
