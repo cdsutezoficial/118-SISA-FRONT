@@ -319,6 +319,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     setPermissionsError('')
     setMustChangePasswordState(res.mustChangePassword)
     setSessionExpired(false) // a fresh login clears the expiry flag so a future expiry can alert again
+    // Real-profile fetch rides on the login event itself, not on a state-guard:
+    // on re-login `authMode` is already `'real'`, so a `[authMode]` effect
+    // would never re-fire. `persistSession` already wrote `sisa.authMode`,
+    // so `refreshProfile`'s storage-based guard passes here.
+    void refreshProfile()
   }
 
   async function refreshCapabilities(): Promise<void> {
@@ -362,7 +367,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
    * `'Usuario'` placeholder shows.
    */
   async function refreshProfile(): Promise<void> {
-    if (authMode !== 'real') return
+    // Storage-backed (not the `authMode` state): by the time `login()` calls
+    // this, the state update hasn't rendered yet — but `persistSession` has
+    // already written `sisa.authMode`, so this guard is correct in both the
+    // login and the hard-reload paths.
+    if (getStoredAuthMode() !== 'real') return
     try {
       const profile: MeProfile = await apiMeProfile()
       const user = { name: profile.fullName, email: profile.email }
@@ -454,14 +463,15 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     void refreshCapabilities()
   }, [activeRoleKey, authMode, mockRole])
 
-  // Profile fetch rides on real-mode entry only (login + hard reload); the
-  // profile doesn't change when the role switcher moves, so it intentionally
-  // does not depend on `activeRoleKey`.
+  // Profile fetch rides on real-mode mount (hard reload restores the shell
+  // without a `login()` event). On fresh logins `login()` fires the fetch
+  // itself, so a `[authMode]` effect would double-request — the mount-only
+  // effect avoids that entirely.
   useEffect(() => {
-    if (authMode !== 'real') return
+    if (getStoredAuthMode() !== 'real') return
     void refreshProfile()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authMode])
+  }, [])
 
   const value: RoleContextValue = {
     role: activeShellRole,
