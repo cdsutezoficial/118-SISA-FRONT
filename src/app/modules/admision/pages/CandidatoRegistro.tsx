@@ -93,6 +93,12 @@ interface OptionItem {
   label: string
   code: string | null
 }
+interface FichaAmountQuote {
+  amount: number
+  currency: string
+  conceptName: string
+  programName: string
+}
 interface CandidateRegistrationResponse {
   id: string
   personId: string
@@ -137,7 +143,6 @@ const MODALIDAD_CODE_TO_LABEL: Record<string, ModalidadPrograma> = {
 }
 const modalidadLabel = (code: string | null): ModalidadPrograma => (code ? MODALIDAD_CODE_TO_LABEL[code] ?? 'Presencial' : 'Presencial')
 
-const FICHA_MONTO = 500
 const INDUCCION_MONTO = 350
 
 // Simulated LlaveMX identity response — no real OAuth, per spec. A fixed mock
@@ -338,6 +343,9 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const [folio, setFolio] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  // Ficha price comes from the backend's active ENROLLMENT concept, never from
+  // a constant here: Paso 4 quotes what the candidate will actually be charged.
+  const [fichaAmount, setFichaAmount] = useState<FichaAmountQuote | null>(null)
 
   // ── Reference catalogs (anonymous GETs) ──
   const [estados, setEstados] = useState<StateItem[]>([])
@@ -530,8 +538,26 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     paso3.cctConfirmacion.trim() !== '' &&
     !cctMismatch
 
+  // El precio de la ficha se cotiza al vuelo contra el catálogo (concepto
+  // ENROLLMENT activo del programa). Se limpia al cambiar de carrera para no
+  // mostrar un monto ajeno; 409 (sin concepto / ambiguo) se trata como no
+  // cotizable y bloquea el paso 4 en vez de inventar un precio.
+  useEffect(() => {
+    const configId = paso3.admissionConfigId
+    if (configId === '') {
+      setFichaAmount(null)
+      return
+    }
+    let cancelled = false
+    setFichaAmount(null)
+    apiGet<FichaAmountQuote>(`/program-admission-configs/${configId}/ficha-amount`)
+      .then(quote => { if (!cancelled) setFichaAmount(quote) })
+      .catch(() => { if (!cancelled) setFichaAmount(null) })
+    return () => { cancelled = true }
+  }, [paso3.admissionConfigId])
+
   // ── Paso 4 validation (Confirmación) ──
-  const paso4Valid = !submitting && (metodoPago === 'ONLINE' || metodoPago === 'VENTANILLA')
+  const paso4Valid = !submitting && fichaAmount !== null && (metodoPago === 'ONLINE' || metodoPago === 'VENTANILLA')
 
   const nombreCompleto = `${paso1.nombres} ${paso1.apellidoPaterno} ${paso1.apellidoMaterno}`.trim()
 
@@ -1398,7 +1424,18 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             </>
           )}
           <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Monto de la Ficha</p>
-          <p className="text-[24px] font-bold text-[#009574]">${FICHA_MONTO.toFixed(2)}</p>
+          {fichaAmount ? (
+            <p className="text-[24px] font-bold text-[#009574]">
+              {`$${fichaAmount.amount.toLocaleString('es-MX', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} ${fichaAmount.currency}`}
+            </p>
+          ) : (
+            <p className="text-[13px] text-[#6B7280]">
+              No disponible para la carrera seleccionada; no puedes finalizar el registro.
+            </p>
+          )}
         </div>
       </div>
 
