@@ -50,9 +50,12 @@ import type {
  *   to `GET /candidates/{id}` to rebuild the display from the backend.
  * - "Pagar en línea" (Fase 6, real EVO Hosted Checkout): calls
  *   `POST /candidates/{id}/payments/checkout`, stores the returned `orderId` in
- *   `sessionStorage` and redirects to the gateway payment page
- *   (`checkoutUrl`). On the return to `/portal/registro/ficha` EVO appends
- *   `resultIndicator` (success only) — the page then posts
+ *   `sessionStorage` and opens the gateway payment page embedded in this very
+ *   view — an in-page iframe fed by a form POST to the EVO payment page
+ *   (`.../api/page/version/{version}/pay`, fields `merchant` + `session`), so
+ *   the payer never leaves SISA. When EVO finishes it points the iframe back at
+ *   the configured `returnUrl`; the iframe's `onLoad` detects the same-origin
+ *   return and the page then posts
  *   `POST /candidates/{id}/payments/confirm {orderId}`, which the backend only
  *   approves after EVO reports `SUCCESS` + matching amount (Fase 5); on success
  *   the header flips to "¡Registro exitoso!" with the backend receipt (`REC-...`)
@@ -168,9 +171,11 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
   const [confirmData, setConfirmData] = useState<PaymentConfirmationBackend | null>(null)
   const [alreadyPaid, setAlreadyPaid] = useState(false)
   const [processing, setProcessing] = useState(false)
-  const [redirecting, setRedirecting] = useState(false)
+  const [evoOpen, setEvoOpen] = useState(false)
   const [busyPdf, setBusyPdf] = useState(false)
   const [busyMail, setBusyMail] = useState(false)
+
+  const evoFrameRef = useRef<HTMLIFrameElement>(null)
 
   const pagado = ficha.estado === 'PAID'
 
@@ -200,13 +205,14 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
       })
   }, [candidateId, esCandidatoReal])
 
-  // Pay online → start a real EVO Hosted Checkout session. On success the
-  // candidate is redirected to the gateway payment page (`checkoutUrl`), which
-  // returns to this same route appended with `resultIndicator` (success only).
+  // Pay online → start a real EVO Hosted Checkout session. The gateway payment
+  // page opens embedded (see `handleEvoFrameLoad`); this branch handles the
+  // edge case of a full-page return landing directly on this route.
   const orderId = getStoredOrderId()
 
   // EVO return cases (params appended by the gateway to the returnUrl per
-  // evo.txt — `resultIndicator` set on SUCCESS only):
+  // evo.txt — `resultIndicator` set on SUCCESS only). Used both by the embedded
+  // panel (iframe query) and this direct-load path (parent search params):
   // - success   → `resultIndicator` present → confirm now.
   // - cancelled → `resultIndicator` absent, no `error` param → PENDING + cancel toast.
   // - error     → `error` param present → PENDING + gateway error toast.
@@ -290,16 +296,83 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
       } catch {
         // sessionStorage unavailable — the return call will just miss the cross-check.
       }
+      // The payer stays inside SISA: open the EVO hosted payment page in an
+      // embedded panel (fixed section of this view). The page is frame-loadable
+      // only via a form POST (`merchant` + `session`) to the payment page URL
+      // returned by the backend (`/api/page/version/{version}/pay`).
       setProcessing(false)
-      setRedirecting(true)
-      setToast('Redirigiendo a Evo Payments…')
-      window.location.assign(res.checkoutUrl)
+      setEvoOpen(true)
+      setToast('Completa tu pago seguro en el panel de abajo.')
+      postToEvoFrame(res.checkoutUrl, res.merchant, res.sessionId)
     } catch (err) {
       const apiErr = err as Partial<ApiError>
       setProcessing(false)
-      setRedirecting(false)
       setToast(apiErr.message ?? 'No se pudo iniciar el pago en línea. Intenta de nuevo más tarde.')
     }
+  }
+
+  // Build a hidden form targeting the embedded iframe and submit it — EVO's
+  // hosted payment page rejects plain GET navigation.
+  function postToEvoFrame(action: string, merchant: string, sessionId: string): void {
+    const form = document.createElement('form')
+    form.method = 'POST'
+    form.action = action
+    form.target = 'sisa-evo-panel'
+    form.style.display = 'none'
+    const addHidden = (name: string, value: string) => {
+      const input = document.createElement('input')
+      input.type = 'hidden'
+      input.name = name
+      input.value = value
+      form.appendChild(input)
+    }
+    addHidden('merchant', merchant)
+    addHidden('session', sessionId)
+    document.body.appendChild(form)
+    form.submit()
+    form.remove()
+  }
+
+  // EVO's page is cross-origin, so reads on its location throw a SecurityError
+  // → blend in. Once EVO finishes, it points the iframe back at the SISA
+  // `returnUrl`/`cancelUrl` (same origin) → we can read the appended outcome
+  // params (`resultIndicator` on SUCCESS only) and close the panel.
+  function handleEvoFrameLoad() {
+    const frame = evoFrameRef.current
+    if (!frame || !evoOpen) return
+    let url: string | null = null
+    try {
+      url = frame.contentWindow?.location.toString() ?? null
+    } catch {
+      // Cross-origin — still on the EVO hosted payment page. Nothing to do.
+      return
+    }
+    if (!url || url === 'about:blank') return
+    setEvoOpen(false)
+    const query = new URLSearchParams(url.split('?')[1] ?? '')
+    const orderId = getStoredOrderId()
+    if (!orderId) {
+      setToast('Tu ficha sigue pendiente. Vuelve a intentar el pago.')
+      return
+    }
+    if (query.has('resultIndicator')) {
+      // Payment succeeded on the gateway — confirm from the persisted order id.
+      void confirmAfterReturn(orderId)
+    } else if (query.get('error')) {
+      clearStoredOrderId()
+      setToast('No se pudo completar el pago en Evo Payments. Tu ficha sigue pendiente.')
+    } else {
+      // Payer cancelled on the EVO payment page before paying.
+      clearStoredOrderId()
+      setToast('Pago cancelado. Tu ficha sigue pendiente.')
+    }
+  }
+
+  // Manual close — the gateway session expires server-side; treat it as a cancel.
+  function cerrarPanelPago() {
+    setEvoOpen(false)
+    clearStoredOrderId()
+    setToast('Pago cancelado. Tu ficha sigue pendiente.')
   }
 
   // Download the real PDF ficha → `GET /candidates/{id}/ficha.pdf` (OpenPDF blob).
@@ -422,9 +495,10 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
       {activeTab === 'ONLINE' ? (
         <div>
           <div className="bg-blue-50 border border-blue-200 rounded-md px-4 py-3 mb-4 text-[13px] text-blue-700">
-            Haz clic en el botón de abajo para pagar de forma segura con tarjeta o transferencia. Serás redirigido a Evo Payments.
+            Haz clic en el botón de abajo y completa tu pago con tarjeta o transferencia en el panel de Evo Payments
+            que se abre en esta misma página.
           </div>
-          <Button onClick={handlePagarEnLinea} loading={processing || redirecting} className="w-full sm:w-auto">
+          <Button onClick={handlePagarEnLinea} loading={processing} className="w-full sm:w-auto">
             Pagar en línea — ${ficha.monto.toFixed(2)}
           </Button>
           <p className="text-[12px] text-[#6B7280] mt-3">
@@ -461,13 +535,11 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     </div>
   )
 
-  const overlay = (processing || redirecting) && (
+  const overlay = processing && (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-lg px-8 py-6 flex flex-col items-center gap-3 shadow-2xl">
         <Loader2 size={28} className="animate-spin text-[#009574]" />
-        <p className="text-[13px] font-medium text-[#333333]">
-          {redirecting ? 'Redirigiendo a Evo Payments…' : 'Procesando tu pago...'}
-        </p>
+        <p className="text-[13px] font-medium text-[#333333]">Iniciando pago seguro…</p>
       </div>
     </div>
   )
@@ -478,6 +550,24 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
       {fichaCard}
       {paymentDone}
       {tabsSection}
+      {evoOpen && !pagado && (
+        <div className="bg-white border border-[#E5E7EB] rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[13px] font-semibold text-[#333333]">Pago seguro — Evo Payments</p>
+            <Button variant="ghost" size="sm" onClick={cerrarPanelPago}>
+              Cancelar y volver
+            </Button>
+          </div>
+          <iframe
+            ref={evoFrameRef}
+            name="sisa-evo-panel"
+            title="Pago seguro Evo Payments"
+            src="about:blank"
+            className="w-full min-h-[520px] rounded-md border border-[#E5E7EB] bg-white"
+            onLoad={handleEvoFrameLoad}
+          />
+        </div>
+      )}
       {actionsRow}
       {/* Staff-only per spec scenario "Público mount hides the staff 'back to
           listing' link" — an anonymous candidate has no candidate listing to
