@@ -20,8 +20,14 @@ type BackendUserStatus = 'ACTIVE' | 'INACTIVE' | 'LOCKED'
 
 interface UserRoleDetailItem {
   userRoleId: string
-  roleType: RoleType
+  roleId: string
+  roleKey: RoleType
+  roleName?: string
   divisionId: string | null
+}
+
+function roleLabel(item: Pick<UserRoleDetailItem, 'roleKey' | 'roleName'>): string {
+  return ROLE_LABELS[item.roleKey] ?? item.roleName ?? item.roleKey
 }
 
 interface UserDetail {
@@ -95,7 +101,7 @@ export default function UsuarioDetalle() {
   const [adding, setAdding] = useState(false)
   const [addSubmitted, setAddSubmitted] = useState(false)
 
-  const assignedRoleTypes = new Set((user?.roles ?? []).map(r => r.roleType))
+  const assignedRoleTypes = new Set((user?.roles ?? []).map(r => r.roleKey))
   const addScopedNeeded = toAdd.some(r => DIVISION_SCOPED_ROLES.has(r))
   const selectableRoles = ROLE_OPTIONS.filter(o => !assignedRoleTypes.has(o.value as RoleType))
   const divisionOptions: SelectOption[] = divisions.map(d => ({ value: d.id, label: `${d.code} — ${d.name}` }))
@@ -149,7 +155,7 @@ export default function UsuarioDetalle() {
     setActionErrorMsg('')
     try {
       await apiDelete(`/users/${user.userId}/roles/${revokeTarget.userRoleId}`)
-      const label = ROLE_LABELS[revokeTarget.roleType]
+      const label = roleLabel(revokeTarget)
       setRevokeTarget(null)
       await loadUser()
       setToast(`Rol "${label}" revocado exitosamente.`)
@@ -237,7 +243,7 @@ export default function UsuarioDetalle() {
       {revokeTarget && (
         <ConfirmModal
           title="Revocar rol"
-          message={`Estás a punto de revocar el rol "${ROLE_LABELS[revokeTarget.roleType]}" a ${user?.fullName ?? 'este usuario'}. Esta acción no se puede deshacer.`}
+          message={`Estás a punto de revocar el rol "${roleLabel(revokeTarget)}" a ${user?.fullName ?? 'este usuario'}. Esta acción no se puede deshacer.`}
           confirmLabel={revoking ? 'Revocando...' : 'Sí, revocar'}
           onConfirm={handleRevokeConfirm}
           onCancel={() => setRevokeTarget(null)}
@@ -346,8 +352,8 @@ export default function UsuarioDetalle() {
                     header: 'Rol',
                     className: 'w-[calc(50%-32px)]',
                     render: row => (
-                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${ROLE_BADGE_STYLE[row.roleType]}`}>
-                        {ROLE_LABELS[row.roleType]}
+                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${ROLE_BADGE_STYLE[row.roleKey] ?? 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                        {roleLabel(row)}
                       </span>
                     ),
                   },

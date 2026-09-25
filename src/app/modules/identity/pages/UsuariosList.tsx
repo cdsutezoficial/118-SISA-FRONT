@@ -52,7 +52,9 @@ type BackendRoleType =
 type BackendUserStatus = 'ACTIVE' | 'INACTIVE' | 'LOCKED'
 
 interface UserRoleAssignment {
-  roleType: BackendRoleType
+  roleId: string
+  roleKey: BackendRoleType
+  roleName: string
   divisionId: string | null
 }
 
@@ -178,7 +180,7 @@ function formatUltimoAcceso(iso: string | null): string {
 }
 
 function mapUserToRow(item: UserListItem): Usuario {
-  const roles = item.roles.map(r => r.roleType)
+  const roles = item.roles.map(r => r.roleKey)
   return {
     id: item.userId,
     nombre: item.fullName,
