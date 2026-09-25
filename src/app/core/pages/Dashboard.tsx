@@ -1,16 +1,25 @@
-import { useState } from 'react'
-import { Building2, GraduationCap, BookOpen, BookMarked, CalendarRange, Users, CreditCard, Tags, Users2, CheckCircle2, Activity } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Building2, GraduationCap, BookOpen, BookMarked, CalendarRange, Users, CreditCard, Tags, Users2, CheckCircle2 } from 'lucide-react'
 import { usePendingToast } from '../infra/hooks'
 import { useRole } from '../infra/RoleContext'
-import { Breadcrumb, PageHeader, DataTable, type ColumnDef, type BadgeStyle } from '@app/core/components/list'
-import { KpiCards, QuickAccess, InitialAvatar, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
+import { Breadcrumb, PageHeader, ErrorBanner } from '@app/core/components/list'
+import { KpiCards, QuickAccess, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
+import { apiGet } from '@app/core/infra/apiClient'
+import type { ApiError } from '@app/core/infra/apiClient'
 
-const kpiCards: KpiCardData[] = [
-  { label: 'Divisiones Académicas', value: '4', sub: '+1 este ciclo', color: 'bg-blue-50 text-blue-600', icon: <Building2 size={20} /> },
-  { label: 'Carreras', value: '12', sub: '+2 este ciclo', color: 'bg-violet-50 text-violet-600', icon: <GraduationCap size={20} /> },
-  { label: 'Materias Registradas', value: '148', sub: '+8 este ciclo', color: 'bg-amber-50 text-amber-600', icon: <BookMarked size={20} /> },
-  { label: 'Grupos Activos', value: '36', sub: 'Periodo ENE-ABR 2026', color: 'bg-emerald-50 text-emerald-600', icon: <Users size={20} /> },
-]
+// ─── Types ─────────────────────────────────────────────────────────────────────
+// El dashboard NO hace una consulta por módulo: el BACK expone
+// `GET /config-academica/statistics` (backend `ConfigurationStatisticsController`),
+// que responde todos los contadores KPI en una sola llamada. La sección
+// "Actividad reciente" no existe todavía porque no hay auditoría.
+
+interface ConfigStatistics {
+  divisions: number
+  programs: number
+  subjects: number
+  groupsForCurrentPeriod: number
+  currentPeriod: { id: string; name: string } | null
+}
 
 interface DashboardQuickAccessItem extends QuickAccessItem {
   permissionKey?: string
@@ -27,52 +36,50 @@ const quickAccess: DashboardQuickAccessItem[] = [
   { label: 'Generaciones', icon: <Users2 size={20} />, url: '/generaciones', permissionKey: 'GENERATIONS_READ' },
 ]
 
-const recentActivity = [
-  { fecha: '28/06/2026', usuario: 'M. González', accion: 'Registró el grupo IDGS-101-A para ENE-ABR 2026', tipo: 'Grupo' },
-  { fecha: '27/06/2026', usuario: 'A. Ramírez', accion: 'Actualizó la materia Fundamentos de Programación', tipo: 'Materia' },
-  { fecha: '25/06/2026', usuario: 'L. Hernández', accion: 'Cerró el periodo AGO-DIC 2025', tipo: 'Periodo' },
-  { fecha: '20/06/2026', usuario: 'M. González', accion: 'Registró el concepto Cuota Cuatrimestral con 3 tarifas', tipo: 'Concepto' },
-  { fecha: '15/06/2026', usuario: 'C. Mendoza', accion: 'Agregó la carrera Ing. en Inteligencia Artificial', tipo: 'Carrera' },
-]
-
-const tipoBadge: Record<string, BadgeStyle> = {
-  Grupo: { label: 'Grupo', className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-  Materia: { label: 'Materia', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
-  Periodo: { label: 'Periodo', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
-  Concepto: { label: 'Concepto', className: 'bg-violet-50 text-violet-700 border border-violet-200' },
-  Carrera: { label: 'Carrera', className: 'bg-teal-50 text-teal-700 border border-teal-200' },
-}
-
-type RecentActivityItem = {
-  fecha: string
-  usuario: string
-  accion: string
-  tipo: string
-}
-
-const activityColumns: ColumnDef<RecentActivityItem>[] = [
-  { key: 'fecha', header: 'Fecha', type: 'muted', value: row => row.fecha, className: 'w-32' },
-  {
-    key: 'usuario',
-    header: 'Usuario',
-    type: 'text',
-    className: 'w-36',
-    render: row => (
-      <div className="flex items-center gap-2">
-        <InitialAvatar name={row.usuario} />
-        <span className="text-[#333333] font-medium">{row.usuario}</span>
-      </div>
-    ),
-  },
-  { key: 'accion', header: 'Acción', type: 'name', value: row => row.accion },
-  { key: 'tipo', header: 'Módulo', type: 'badge', value: row => row.tipo, badge: tipoBadge, className: 'w-28' },
-]
-
 export default function Dashboard() {
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
+  const [statistics, setStatistics] = useState<ConfigStatistics | null>(null)
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'idle' | 'error'>('loading')
+  const [errorMsg, setErrorMsg] = useState('')
   const { hasAnyPermission } = useRole()
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadStatus('loading')
+    setErrorMsg('')
+    apiGet<ConfigStatistics>('/config-academica/statistics')
+      .then(data => {
+        if (cancelled) return
+        setStatistics(data)
+        setLoadStatus('idle')
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setLoadStatus('error')
+        const apiErr = err as Partial<ApiError>
+        if (apiErr.status === 401) {
+          setErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
+        } else if (apiErr.status === 403) {
+          setErrorMsg('No tienes permiso para consultar las estadísticas.')
+        } else {
+          setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+        }
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const loading = loadStatus === 'loading'
+
+  const kpiCards: KpiCardData[] = [
+    { label: 'Divisiones Académicas', value: loading ? '—' : String(statistics?.divisions ?? 0), sub: loading ? 'Consultando datos…' : 'Divisiones registradas', color: 'bg-blue-50 text-blue-600', icon: <Building2 size={20} />, trend: false },
+    { label: 'Carreras', value: loading ? '—' : String(statistics?.programs ?? 0), sub: loading ? 'Consultando datos…' : 'Carreras registradas', color: 'bg-violet-50 text-violet-600', icon: <GraduationCap size={20} />, trend: false },
+    { label: 'Materias', value: loading ? '—' : String(statistics?.subjects ?? 0), sub: loading ? 'Consultando datos…' : 'Materias registradas', color: 'bg-amber-50 text-amber-600', icon: <BookMarked size={20} />, trend: false },
+    { label: 'Grupos', value: loading ? '—' : String(statistics?.groupsForCurrentPeriod ?? 0), sub: loading ? 'Consultando datos…' : statistics?.currentPeriod ? `Periodo ${statistics.currentPeriod.name}` : 'Sin periodo vigente', color: 'bg-emerald-50 text-emerald-600', icon: <Users size={20} />, trend: false },
+  ]
+
   const visibleQuickAccess = quickAccess.filter(item => !item.permissionKey || hasAnyPermission([item.permissionKey]))
+
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
       {toast && (
@@ -90,28 +97,16 @@ export default function Dashboard() {
       />
 
       {/* KPI Cards */}
-      <KpiCards cards={kpiCards} />
+      {loadStatus === 'error' ? (
+        <div className="mb-8">
+          <ErrorBanner message={errorMsg} />
+        </div>
+      ) : (
+        <KpiCards cards={kpiCards} />
+      )}
 
       {/* Quick access */}
       <QuickAccess items={visibleQuickAccess} />
-
-      {/* Recent activity */}
-      <DataTable
-        columns={activityColumns}
-        status="idle"
-        items={recentActivity}
-        keyFor={row => `${row.fecha}-${row.usuario}-${row.accion}`}
-        loadingLabel="Cargando actividad..."
-        emptyTitle="Sin actividad reciente"
-        emptyHint="Los movimientos del sistema aparecerán aquí."
-        showOnMobile
-        header={
-          <>
-            <Activity size={15} className="text-[#6B7280]" />
-            <h2 className="text-[14px] font-semibold text-[#333333]">Actividad reciente</h2>
-          </>
-        }
-      />
     </div>
   )
 }

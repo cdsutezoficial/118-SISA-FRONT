@@ -116,7 +116,6 @@ export interface CapabilityResponse {
  * the `sub` claim picks the row, no id is ever sent by the client.
  */
 export interface MeProfile {
-  userId: string
   fullName: string
   username: string
   email: string
