@@ -923,11 +923,28 @@ export function ActionBtn({ icon, tooltip, onClick, danger = false, disabled = f
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
+const TOAST_AUTO_CLOSE_MS = 3500
+
 export function Toast({ message, onClose }: { message: string; onClose: () => void }) {
+  // `onClose` is an inline arrow at essentially every call site, so depending on
+  // it re-armed the timer on EVERY parent render: any view that re-rendered more
+  // often than the timeout never dismissed its toast. Hold the callback in a ref
+  // and re-arm only when the text actually changes, so a new message restarts
+  // the countdown (desirable) but an unrelated re-render does not (not).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
-    const t = setTimeout(onClose, 3500)
+    const t = setTimeout(() => onCloseRef.current(), TOAST_AUTO_CLOSE_MS)
     return () => clearTimeout(t)
-  }, [onClose])
+  }, [message])
+
+  // An empty message renders the card with its icon and close button but no text:
+  // an alert the user cannot read, which also cannot be dismissed — the state was
+  // already empty, so the auto-close was a no-op and the card stayed forever. Call
+  // sites are expected to guard with `{toast && ...}`; this makes the whole class
+  // of mistake impossible rather than relying on 30+ call sites to stay careful.
+  if (!message) return null
 
   return (
     <div className="fixed top-4 right-4 z-[200] flex items-center gap-3 bg-white border border-emerald-200 shadow-lg rounded-lg px-4 py-3 animate-in slide-in-from-top-2">
