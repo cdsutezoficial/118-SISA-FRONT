@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { ShieldCheck, CheckCircle2, GraduationCap, Lock } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, GraduationCap, Lock, AlertCircle } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
 import {
   FieldLabel,
@@ -160,8 +160,6 @@ const MOCK_LLAVE_MX_IDENTITY = {
   sexo: 'Femenino',
   estadoNacimiento: 'Morelos',
 }
-
-type MetodoPago = 'ONLINE' | 'VENTANILLA'
 
 interface Paso1State {
   // Datos Generales — LlaveMX-locked once verified
@@ -338,7 +336,6 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const [paso1, setPaso1] = useState<Paso1State>(emptyPaso1)
   const [paso2, setPaso2] = useState<Paso2State>(emptyPaso2)
   const [paso3, setPaso3] = useState<Paso3State>(emptyPaso3)
-  const [metodoPago, setMetodoPago] = useState<MetodoPago>('ONLINE')
   const [identityStatus, setIdentityStatus] = useState<'idle' | 'verifying' | 'verified' | 'manual'>('idle')
   const [folio, setFolio] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -557,7 +554,9 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   }, [paso3.admissionConfigId])
 
   // ── Paso 4 validation (Confirmación) ──
-  const paso4Valid = !submitting && fichaAmount !== null && (metodoPago === 'ONLINE' || metodoPago === 'VENTANILLA')
+  // The payment method is no longer a choice: the ficha is online-only, so
+  // there is nothing left to validate beyond having a quotable amount.
+  const paso4Valid = !submitting && fichaAmount !== null
 
   const nombreCompleto = `${paso1.nombres} ${paso1.apellidoPaterno} ${paso1.apellidoMaterno}`.trim()
 
@@ -750,7 +749,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         examen: null,
         induccionResultado: null,
         induccionHabilitada: res.isEnabledForInduction,
-        pagoFicha: { status: 'PENDIENTE', monto: res.payment.amount, referencia: res.payment.referenceNumber, metodo: metodoPago },
+        pagoFicha: { status: 'PENDIENTE', monto: res.payment.amount, referencia: res.payment.referenceNumber, metodo: 'ONLINE' },
         pagoInduccion: { status: 'PENDIENTE', monto: INDUCCION_MONTO },
         fichaCompleta: ficha,
       }
@@ -766,7 +765,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         folio: res.folio,
       }
 
-      const state = { candidate, metodoPago, pagoFicha }
+      const state = { candidate, metodoPago: 'ONLINE' as const, pagoFicha }
 
       // Navigate to Screen 13 (Ficha Confirmación), dual-mounted per origin.
       // `?id=` survives a refresh — FichaConfirmacion re-fetches `GET
@@ -1439,20 +1438,24 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         </div>
       </div>
 
-      <FieldLabel required>¿Cómo quieres pagar tu ficha?</FieldLabel>
-      <div className="space-y-3 mt-1">
-        <RadioCard
-          selected={metodoPago === 'ONLINE'}
-          title="Pagar en línea (Evo Payments)"
-          description="Pagas ahora con tarjeta o transferencia. Serás redirigido a la plataforma de pago."
-          onSelect={() => setMetodoPago('ONLINE')}
-        />
-        <RadioCard
-          selected={metodoPago === 'VENTANILLA'}
-          title="Pagar en ventanilla de Finanzas"
-          description="Recibirás una referencia bancaria para pagar presencialmente en Finanzas."
-          onSelect={() => setMetodoPago('VENTANILLA')}
-        />
+      {/* Payment is online-only: the ventanilla option and the
+          "send instructions by email" action were both removed, so this is
+          information, not a choice. */}
+      <div className='flex flex-col gap-4'>
+        <div className="bg-[#e6f5f1] border border-[#009574]/30 rounded-md px-4 py-3.5">
+        <p className="text-[13px] font-semibold text-[#333333] mb-1">Pago de la ficha: en línea</p>
+        <p className="text-[12px] text-[#6B7280] leading-relaxed">
+          Al finalizar el registro se redigira al pago de la ficha para completar el pago.
+        </p>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-md px-4 py-3.5 flex items-start gap-2.5">
+        <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+        <p className="text-[12px] text-amber-800 leading-relaxed">
+          El llenado de esta ficha no garantiza tu ingreso al proceso de admisión. Tu registro solo
+          será válido después de realizar el pago de la ficha.
+        </p>
+      </div>
       </div>
     </div>
   )
