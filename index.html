@@ -8,6 +8,11 @@
       <title>SISAv2</title>
       <meta name="description" content="This web application enables users to easily share content with others, fostering collaboration and enhancing communication among teams and individuals." />
       <meta name="robots" content="noindex, nofollow" />
+      <!-- El ícono ya existía en `public/`, pero nadie lo declaraba: el navegador
+           caía al fallback automático de /favicon.ico, que se rompe con cualquier
+           CDN o base path. Declararlo lo hace explícito y confiable. -->
+      <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="32x32" />
+      <link rel="shortcut icon" href="/favicon.ico" />
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
       
     </head>
