@@ -669,7 +669,7 @@ export default function NuevoIngresoWizard() {
         <>
           <FieldLabel required>¿Cómo desea pagar la inscripción?</FieldLabel>
           <div className="space-y-3 mt-1">
-            <RadioCard selected={paso5.metodoPago === 'ONLINE'} title="Pagar en línea (Evo Payments)" onSelect={() => setPaso5({ metodoPago: 'ONLINE' })} />
+            <RadioCard selected={paso5.metodoPago === 'ONLINE'} title="Pagar en línea" onSelect={() => setPaso5({ metodoPago: 'ONLINE' })} />
             <RadioCard selected={paso5.metodoPago === 'VENTANILLA'} title="Pagar en ventanilla de Finanzas" onSelect={() => setPaso5({ metodoPago: 'VENTANILLA' })} />
           </div>
         </>

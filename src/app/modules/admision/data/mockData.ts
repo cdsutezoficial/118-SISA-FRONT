@@ -153,8 +153,8 @@ export const mockCandidates: Candidate[] = [
     examen: { fecha: '10/06/2026', calificacion: 82 },
     induccionResultado: null,
     induccionHabilitada: true,
-    pagoFicha: { status: 'CONFIRMADO', monto: 500, referencia: 'REF-88214', metodo: 'Evo Payments', fecha: '22/05/2026' },
-    pagoInduccion: { status: 'CONFIRMADO', monto: 350, referencia: 'REF-91002', metodo: 'Evo Payments', fecha: '01/06/2026' },
+    pagoFicha: { status: 'CONFIRMADO', monto: 500, referencia: 'REF-88214', metodo: 'Pago en línea', fecha: '22/05/2026' },
+    pagoInduccion: { status: 'CONFIRMADO', monto: 350, referencia: 'REF-91002', metodo: 'Pago en línea', fecha: '01/06/2026' },
   },
   {
     id: '5',
@@ -189,8 +189,8 @@ export const mockCandidates: Candidate[] = [
     examen: { fecha: '05/06/2026', calificacion: 90 },
     induccionResultado: { fecha: '12/06/2026', calificacion: 88, resultado: 'Asistió' },
     induccionHabilitada: true,
-    pagoFicha: { status: 'CONFIRMADO', monto: 500, referencia: 'REF-88216', metodo: 'Evo Payments', fecha: '11/05/2026' },
-    pagoInduccion: { status: 'CONFIRMADO', monto: 350, referencia: 'REF-91003', metodo: 'Evo Payments', fecha: '15/05/2026' },
+    pagoFicha: { status: 'CONFIRMADO', monto: 500, referencia: 'REF-88216', metodo: 'Pago en línea', fecha: '11/05/2026' },
+    pagoInduccion: { status: 'CONFIRMADO', monto: 350, referencia: 'REF-91003', metodo: 'Pago en línea', fecha: '15/05/2026' },
     fichaCompleta: makeFichaDiegoHerrera(),
   },
   {
@@ -226,8 +226,8 @@ export const mockCandidates: Candidate[] = [
     examen: { fecha: '28/05/2026', calificacion: 95 },
     induccionResultado: { fecha: '03/06/2026', calificacion: 93, resultado: 'Asistió' },
     induccionHabilitada: true,
-    pagoFicha: { status: 'CONFIRMADO', monto: 500, referencia: 'REF-88218', metodo: 'Evo Payments', fecha: '03/05/2026' },
-    pagoInduccion: { status: 'CONFIRMADO', monto: 350, referencia: 'REF-91004', metodo: 'Evo Payments', fecha: '06/05/2026' },
+    pagoFicha: { status: 'CONFIRMADO', monto: 500, referencia: 'REF-88218', metodo: 'Pago en línea', fecha: '03/05/2026' },
+    pagoInduccion: { status: 'CONFIRMADO', monto: 350, referencia: 'REF-91004', metodo: 'Pago en línea', fecha: '06/05/2026' },
     matricula: '2026LADM0087',
   },
   {

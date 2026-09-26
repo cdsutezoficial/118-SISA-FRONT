@@ -81,7 +81,7 @@ export default function PortalInduccionPago() {
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-lg px-8 py-6 flex flex-col items-center gap-3 shadow-2xl">
         <Loader2 size={28} className="animate-spin text-[#009574]" />
-        <p className="text-[13px] font-medium text-[#333333]">Redirigiendo a Evo Payments...</p>
+        <p className="text-[13px] font-medium text-[#333333]">Abriendo tu panel de pago seguro...</p>
       </div>
     </div>
   )
@@ -183,7 +183,8 @@ export default function PortalInduccionPago() {
                   Pagar en línea — ${candidate.pagoInduccion.monto.toFixed(2)}
                 </Button>
                 <p className="text-[12px] text-[#6B7280] mt-3">
-                  Serás redirigido a Evo Payments para completar tu pago.
+                  Se abrirá tu panel de pago seguro en esta misma página. Te enviaremos el comprobante al
+                  correo con el que te registraste.
                 </p>
               </div>
             ) : (

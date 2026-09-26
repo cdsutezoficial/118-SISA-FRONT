@@ -36,7 +36,7 @@ import type { Candidate, CandidateFichaBackend, PaymentConfirmationBackend } fro
 // (not imported) since that constant isn't exported there either.
 const FICHA_MONTO = 500
 
-const METODOS_PAGO = ['Transferencia bancaria', 'Depósito en ventanilla', 'Pago en línea (Evo Payments)']
+const METODOS_PAGO = ['Transferencia bancaria', 'Depósito en ventanilla', 'Pago en línea']
 
 // Backend candidate ids are UUIDs; mock candidates use ids like "cand-01".
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
