@@ -73,6 +73,30 @@ export interface CheckoutInitiationBackend {
   checkoutJsUrl: string
 }
 
+/**
+ * `POST /candidates/payment-access` — the "vuelve a pagar mi ficha" lookup.
+ *
+ * Reached with a sequential folio plus the last 3 characters of the CURP, so
+ * this is deliberately a PAYMENT-ONLY projection: no address, no health or
+ * income profile, no GPA. See the backend `AccessFichaPaymentUseCase` for why.
+ * `alreadyPaid` + `receiptNumber` + `paidAt` let the screen show a receipt
+ * without hitting EVO again (a checkout attempt would just 409).
+ */
+export interface FichaPaymentAccessBackend {
+  candidateId: string
+  folio: string
+  nombre: string | null
+  programName: string | null
+  amount: number
+  referenceNumber: string
+  deadline: string | null
+  paymentStatus: 'PENDING' | 'PAID'
+  receiptNumber: string | null
+  /** ISO instant, present only when `alreadyPaid`. */
+  paidAt: string | null
+  alreadyPaid: boolean
+}
+
 /** `GET /candidates/{id}` — ficha projection for route-refresh fallback. */
 export interface CandidateFichaBackend {
   candidateId: string

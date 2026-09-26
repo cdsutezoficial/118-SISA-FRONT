@@ -127,7 +127,8 @@ function writeStoredRole(role: Role | null) {
  * 1. Staff roles (`ADMINISTRADOR`, `GESTOR_ACADEMICO`, `SERVICIOS_ESCOLARES`,
  *    `FINANZAS`, `DIRECTOR_DIVISION`) — authenticated shell, `/admision/*`.
  * 2. `CANDIDATO` — post-registration portal access, set after a simulated
- *    folio+CURP "login" on `/portal/induccion`. Not part of `availableRoles`.
+ *    folio+CURP "login" on `/portal/ficha` (real backend) or `/portal/induccion`
+ *    (mock). Not part of `availableRoles`.
  * 3. `null` (anonymous visitor) — pre-registration public flow
  *    (`/portal/registro*`). No login at all.
  *
