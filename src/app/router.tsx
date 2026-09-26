@@ -31,7 +31,11 @@ import PublicarResultados from '@app/modules/admision/pages/PublicarResultados'
 import AplicarDescuento from '@app/modules/admision/pages/AplicarDescuento'
 import HabilitarInduccion from '@app/modules/admision/pages/HabilitarInduccion'
 
-// Portal (público — Screens 16/17)
+// Portal (público). Two DISTINCT public flows, deliberately not merged:
+// - ficha: pay an admission ticket that was registered but never paid (REAL backend)
+// - inducción: access/induction-course payment (still mock, per admision-screens spec)
+import PortalFicha from '@app/portal/PortalFicha'
+import PortalFichaPago from '@app/portal/PortalFichaPago'
 import PortalInduccion from '@app/portal/PortalInduccion'
 import PortalInduccionPago from '@app/portal/PortalInduccionPago'
 
@@ -113,13 +117,18 @@ const router = createBrowserRouter([
       { path: 'reset-confirm', element: <ResetConfirm /> },
 
       // Portal — public candidate-facing routes (anonymous + CANDIDATO tiers).
-      // Screens 4 & 13 are dual-mounted here from `pages/admision/*`; screens
-      // 16/17 live in `pages/portal/*` (candidate-only, not dual-mounted).
+      // Screens 4 & 13 are dual-mounted here from `pages/admision/*`; the four
+      // portal screens live in `pages/portal/*` (candidate-only, not
+      // dual-mounted) and come in two unrelated pairs:
+      //   /portal/ficha*      → pagar una ficha ya registrada (backend real)
+      //   /portal/induccion*  → curso de inducción (mock, spec Screens 16/17)
       {
         path: 'portal',
         children: [
           { path: 'registro', element: <CandidatoRegistro origin="public" /> },
           { path: 'registro/ficha', element: <FichaConfirmacion origin="public" /> },
+          { path: 'ficha', element: <PortalFicha /> },
+          { path: 'ficha/pago', element: <PortalFichaPago /> },
           { path: 'induccion', element: <PortalInduccion /> },
           { path: 'induccion/pago', element: <PortalInduccionPago /> },
         ],

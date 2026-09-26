@@ -70,7 +70,9 @@ export const ROLE_LABELS: Record<Role, string> = {
  * Main view each role lands on after a role switch (Navbar/Sidebar). Derives
  * from the module each role actually operates in — see `openspec/specs/`
  * (`admision-screens.md`, `inscripciones-screens.md`). `CANDIDATO` never
- * mounts inside the shell; its value is defensive only.
+ * mounts inside the shell; its value is defensive only. It points at the ficha
+ * payment portal rather than the induction one because that is the only public
+ * candidate screen backed by a real API today.
  *
  * When a role is switched while on a route it may not see in its sidebar,
  * `AppLayout` navigates here instead of leaving the user stranded (the old
@@ -83,5 +85,5 @@ export const ROLE_DEFAULT_PATHS: Record<Role, string> = {
   SERVICIOS_ESCOLARES: '/dashboard',
   FINANZAS: '/areas',
   DIRECTOR_DIVISION: '/admision',
-  CANDIDATO: '/portal/induccion',
+  CANDIDATO: '/portal/ficha',
 }

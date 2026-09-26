@@ -52,7 +52,7 @@ import type { Candidate } from '../data/types'
 // discrepancy.
 const INDUCCION_MONTO = 350
 
-const METODOS_PAGO = ['Transferencia bancaria', 'Depósito en ventanilla', 'Pago en línea (Evo Payments)']
+const METODOS_PAGO = ['Transferencia bancaria', 'Depósito en ventanilla', 'Pago en línea']
 
 /** Placeholder induction-payment reference generator — same deterministic, backend-less style as `ConfirmarPagoFicha.tsx`'s `buildReferencia`, prefixed `REF-IND-` per the spec's `REF-IND-...` format. */
 function buildReferencia(folio: string): string {
