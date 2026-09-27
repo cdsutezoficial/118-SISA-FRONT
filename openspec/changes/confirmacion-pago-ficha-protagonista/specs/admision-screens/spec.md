@@ -89,11 +89,11 @@ El componente MUST aceptar un aviso de correo con la dirección como dato opcion
 
 El estado PENDIENTE de la ficha MUST ser un componente compartido único, usado por los mismos dos puntos de entrada que aceptan el pago, y MUST NOT duplicar su marcado en cada vista. El folio MUST usar el mismo bloque destacado que la confirmación —mismo componente, mismo tamaño, misma posición—, porque el folio no cambia al pagar: si se ve distinto antes y después, se está comunicando que el dato solo cobra importancia post-pago, que es falso.
 
-El estado pendiente MUST presentar la información en el orden en que el Aspirante la necesita: (1) que la ficha está lista y falta el pago, (2) el folio, (3) el monto a pagar y la fecha límite, (4) los datos de apoyo —nombre, CURP, carrera, referencia—, y (5) la acción de pago. El monto MUST destacar al menos tanto como en la confirmación: es el segundo dato que el Aspirante conserva, y su tamaño no depende de que el pago esté hecho.
+El estado pendiente MUST presentar la información en el orden en que el Aspirante la necesita: (1) que la ficha está lista y falta el pago, (2) el folio, (3) el monto a pagar y la fecha límite de pago, (4) los datos de apoyo —nombre, CURP, carrera, referencia, fecha límite de inscripción—, y (5) la acción de pago. El monto MUST destacar al menos tanto como en la confirmación: es el segundo dato que el Aspirante conserva, y su tamaño no depende de que el pago esté hecho.
 
 La acción de pagar MUST estar DENTRO de la tarjeta de estado pendiente, MUST ser la acción primaria de la pantalla, y MUST NOT quedar en una caja separada debajo de la ficha: es la razón por la que el Aspirante está en esa pantalla. La descarga del PDF MUST ser una acción secundaria, debajo de pagar, y MUST NOT aparecer por encima del pago.
 
-La banda de estado pendiente MUST NOT usar el verde institucional `#009574`, que en la confirmación significa "pago recibido"; un pendiente que se lee con el color de un pagado comunica un estado que no ocurrió. MUST NOT afirmar que la fecha límite hace expirar el pago: el backend la guarda y la proyecta, pero ningún caso de uso la compara contra el reloj, así que mostrarla MUST NOT inventar una consecuencia. Si la fecha límite no viene, el bloque MUST reducirse a folio y monto sin renderizar un placeholder de fecha.
+La banda de estado pendiente MUST NOT usar el verde institucional `#009574`, que en la confirmación significa "pago recibido"; un pendiente que se lee con el color de un pagado comunica un estado que no ocurrió.
 
 #### Scenario: The folio reads the same before and after paying
 - GIVEN the same folio, unpaid
@@ -113,12 +113,45 @@ La banda de estado pendiente MUST NOT usar el verde institucional `#009574`, que
 #### Scenario: A pending ficha is not dressed as a paid one
 - GIVEN an unpaid ficha
 - WHEN the pending state renders
-- THEN the status band MUST NOT use the institutional green that marks a confirmed payment, and no wording MUST state or imply that the payment deadline has passed or expired the ficha
+- THEN the status band MUST NOT use the institutional green that marks a confirmed payment, and no wording MUST state that the ficha has been voided or that payment is impossible
 
 #### Scenario: The recovery pending view shows the same hierarchy
 - GIVEN a candidate who reached `/portal/ficha/pago` and has not paid
 - WHEN the view renders
 - THEN it MUST use the shared pending component, MUST NOT render the separate "Datos del candidato" card, and MUST NOT render any email address
+
+### Requirement: Las dos ventanas de la ficha se nombran por separado
+
+El estado pendiente MUST distinguir la ventana de inscripción de la ventana de pago, porque contestan preguntas distintas y una sola columna no puede contestarlas bien.
+
+La fecha límite de inscripción es el cierre de la venta, snapshot con el que se emitió la ficha; para cuando el Aspirante la lee ya pasó, y por eso explica por qué existe su ficha, no qué tiene que hacer hoy. La fecha límite de pago es `payment_concept.available_until`, se lee en vivo en cada request, y es la única que hoy decide si el cobro entra: el checkout la compara contra el reloj. MUST NOT colapsarse en una sola columna `deadline`; una fecha de inscripción rotulada como fecha de pago promete un pago para el día en que ya se cerró el registro.
+
+La ventana que gobierna el pago MUST ser la fecha destacada del bloque de folio, y la de inscripción MUST aparecer como dato de apoyo. Cuando la de pago está presente, la pantalla MUST explicar en su propio texto por qué esa fecha manda, para que no se lea como decorativa y no dependa de que el Aspirante haya leído un aviso previo. Ese texto MUST NOT calcular un "quedan N días" ni afirmar que el pago expira, porque la fecha puede cambiar en el catálogo. Cuando cualquiera de las dos fechas no viene, su fila MUST omitirse sin renderizar un placeholder: un concepto sin `available_until` es un periodo sin fin, no una fecha perdida.
+
+#### Scenario: The payment window is labelled as the payment window
+- GIVEN an unpaid ficha whose registration window closed on 30/09 and whose payment concept closes on 05/10
+- WHEN the pending state renders
+- THEN 05/10 MUST be the highlighted "Fecha límite de pago" and 30/09 MUST appear separately as "Fecha límite de inscripción", because the number under a promise of "pay by" must be the date the payment is actually accepted
+
+#### Scenario: The screen says why that date governs the payment
+- GIVEN an unpaid ficha with a payment closing date
+- WHEN the pending state renders
+- THEN the screen MUST state in its own text that the date comes from the payment concept and is checked when the payment starts, so the consequence is visible on the screen itself rather than only in a notice the Aspirante may have missed
+
+#### Scenario: A ficha that predates an extension pays by the extended date
+- GIVEN a ficha registered before the payment concept's closing date was extended
+- WHEN the Aspirante returns to the pending state
+- THEN the displayed payment closing date MUST be the one read live from the catalog, not the snapshot taken at registration, so an extension reaches fichas issued weeks earlier
+
+#### Scenario: A concept with no closing date shows no payment row
+- GIVEN an unpaid ficha whose payment concept has no `available_until`
+- WHEN the pending state renders
+- THEN no "Fecha límite de pago" row MUST appear, and no dash or placeholder MUST stand in for it, because an open-ended period is not a missing date
+
+#### Scenario: A missing registration deadline is not invented
+- GIVEN a ficha whose registration deadline was not returned
+- WHEN the pending state renders
+- THEN no "Fecha límite de inscripción" row MUST appear and the screen MUST NOT substitute a computed date such as "ten days from today", because a date not derived from either catalog is a contradiction of both
 
 ### Requirement: Correo de confirmación de ficha
 

@@ -113,7 +113,10 @@ interface CandidateRegistrationResponse {
   payment: {
     referenceNumber: string
     amount: number
-    deadline: string | null
+    // Two windows, two fields — see `VentanaFechas` in data/types.ts. Collapsing
+    // them back into one `deadline` is what produced the original bug.
+    registrationDeadline: string | null
+    paymentClosesOn: string | null
     status: 'PENDING' | 'PAID'
   }
 }
@@ -755,12 +758,16 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       }
 
       // Real backend ticket data handed to Screen 13 (ficha), per Screen 5/6/13
-      // ("Pago de ficha") — reference, amount and deadline now come from the
+      // ("Pago de ficha") — reference and amount now come from the
       // `POST /candidates` response instead of mock `buildReferencia`/`addDays`.
+      // The two window dates travel under their own names: the sales window is
+      // already shut by the time anyone reads this, and the payment window is
+      // the one the applicant has to act on.
       const pagoFicha = {
         referencia: res.payment.referenceNumber,
         monto: res.payment.amount,
-        fechaLimite: res.payment.deadline ?? '',
+        fechaLimiteInscripcion: res.payment.registrationDeadline ?? '',
+        fechaLimitePago: res.payment.paymentClosesOn ?? '',
         estado: res.payment.status,
         folio: res.folio,
       }

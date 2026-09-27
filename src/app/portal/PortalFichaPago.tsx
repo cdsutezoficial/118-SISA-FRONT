@@ -212,7 +212,10 @@ export default function PortalFichaPago() {
             <FichaPagoPendiente
               folio={folio}
               monto={monto}
-              fechaLimite={acceso?.deadline ? formatDate(new Date(`${acceso.deadline}T00:00:00`)) : null}
+              fechaLimitePago={acceso?.paymentClosesOn ? formatDate(new Date(`${acceso.paymentClosesOn}T00:00:00`)) : null}
+              fechaLimiteInscripcion={
+                acceso?.registrationDeadline ? formatDate(new Date(`${acceso.registrationDeadline}T00:00:00`)) : null
+              }
               referencia={referencia}
               nombre={acceso?.nombre ?? null}
               carrera={acceso?.programName ?? null}

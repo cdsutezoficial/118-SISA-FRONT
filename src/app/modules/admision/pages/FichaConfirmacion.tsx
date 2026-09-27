@@ -63,12 +63,6 @@ interface FichaConfirmacionProps {
 // (see `CandidatosList.tsx`/`AdmisionDashboard.tsx`).
 const PERIODO_ACTIVO = 'Enero – Abril 2026'
 
-function addDays(base: Date, days: number): Date {
-  const d = new Date(base)
-  d.setDate(d.getDate() + days)
-  return d
-}
-
 /** Lens over the mock `Candidate` + route `pagoFicha` + optional `GET /ficha`. */
 interface FichaDisplay {
   id: string
@@ -79,7 +73,20 @@ interface FichaDisplay {
   email: string
   referencia: string
   monto: number
-  fechaLimite: string
+  /**
+   * Cierre de la ventana de venta, ya snapshot en la ficha.
+   *
+   * Formatada o `null`: cuando el backend no la manda no hay fecha que inventar.
+   * El fallback anterior (`addDays(new Date(), 10)`)iba por libre y por eso
+   * llegaba a contradecir a los dos catálogos.
+   */
+  fechaLimiteInscripcion: string | null
+  /**
+   * Cierre de la ventana de pago — la fecha que sí gobierna el cobro, leída en
+   * vivo del concepto. `null` cuando el concepto no tiene fecha de cierre y la
+   * pantalla omite la fila en vez de poner un guion.
+   */
+  fechaLimitePago: string | null
   estado: 'PENDING' | 'PAID'
   /**
    * Comprobante y fecha de pago, no derivables de `estado`.
@@ -122,9 +129,13 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
       email: routeCandidate.email,
       referencia: pf?.referencia ?? routeCandidate.pagoFicha.referencia ?? '',
       monto: pf?.monto ?? routeCandidate.pagoFicha.monto,
-      fechaLimite: pf?.fechaLimite
-        ? formatDate(new Date(`${pf.fechaLimite}T00:00:00`))
-        : formatDate(addDays(new Date(), 10)),
+      // Sin `addDays(new Date(), 10)`: esa fecha no venía de nada y era la
+      // Mentira que el bug traía en pantalla. Si el backend no la manda, no hay
+      // fecha que mostrar.
+      fechaLimiteInscripcion: pf?.fechaLimiteInscripcion
+        ? formatDate(new Date(`${pf.fechaLimiteInscripcion}T00:00:00`))
+        : null,
+      fechaLimitePago: pf?.fechaLimitePago ? formatDate(new Date(`${pf.fechaLimitePago}T00:00:00`)) : null,
       estado: pf?.estado ?? 'PENDING',
       // El route state viene del `POST /candidates`, que recién crea el pago:
       // todavía no hay comprobante que mostrar.
@@ -191,7 +202,15 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           email: f.email,
           referencia: f.referenceNumber,
           monto: Number(f.amount),
-          fechaLimite: f.deadline ? formatDate(new Date(`${f.deadline}T00:00:00`)) : prev.fechaLimite,
+          // Cada fecha conserva su propia ventana al refrescar: la del GET es
+          // más fresca que la del route state (el concepto pudo extenderse entre
+          // el registro y ahora), así que solo se cae si el backend no la manda.
+          fechaLimiteInscripcion: f.registrationDeadline
+            ? formatDate(new Date(`${f.registrationDeadline}T00:00:00`))
+            : prev.fechaLimiteInscripcion,
+          fechaLimitePago: f.paymentClosesOn
+            ? formatDate(new Date(`${f.paymentClosesOn}T00:00:00`))
+            : prev.fechaLimitePago,
           estado: f.paymentStatus,
           // La fila pagada trae el comprobante; sin esto, recargar la pantalla
           // lo mostraba como "—".
@@ -305,7 +324,8 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
         <FichaPagoPendiente
           folio={ficha.folio}
           monto={ficha.monto}
-          fechaLimite={ficha.fechaLimite}
+          fechaLimitePago={ficha.fechaLimitePago}
+          fechaLimiteInscripcion={ficha.fechaLimiteInscripcion}
           referencia={ficha.referencia}
           nombre={ficha.nombre}
           curp={ficha.curp}

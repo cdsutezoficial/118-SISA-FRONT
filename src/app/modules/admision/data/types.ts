@@ -36,13 +36,38 @@ export interface PaymentRecord {
 // ── Screen 13 (ficha) real-backend flow types — mirror the backend DTOs ──
 // Distinct from the mock `PaymentRecord` shape: `POST /candidates`, the ficha
 // PDF route and `POST /candidates/{id}/payments/confirm` speak the backend's
-// language (`referenceNumber`/`amount`/`deadline`/`PENDING|PAID`).
+// language (`referenceNumber`/`amount`/`registrationDeadline`/`PENDING|PAID`).
+
+/**
+ * The two window dates, and why they are two fields.
+ *
+ * `registrationDeadline` is the sales window's closing day, snapshotted onto the
+ * ticket at registration — the same boundary that stops new fichas from being
+ * issued. `paymentClosesOn` is the tuition concept's `available_until`, read
+ * live on every request, and it is the only one that still constrains anything:
+ * extending a period means editing Conceptos de Pago, which must move the date
+ * on fichas that were issued weeks earlier.
+ *
+ * Never merge these into one field again. The single `deadline` they replaced was
+ * the registration snapshot labelled "Fecha límite de pago", so the number under
+ * a promise of "pay by" was a date that had already passed and was enforced by
+ * nothing.
+ */
+export interface VentanaFechas {
+  /** `yyyy-MM-dd` — snapshot of `program_admission_config.closes_at`. */
+  registrationDeadline: string | null
+  /**
+   * `yyyy-MM-dd` — live `payment_concept.available_until`, the date that really
+   * gates the payment. `null` when the concept has no closing date configured;
+   * callers omit the row rather than printing a placeholder.
+   */
+  paymentClosesOn: string | null
+}
 
 /** `RegisterCandidateUseCase.FichaPayment` — the ticket the POST generates. */
-export interface FichaPaymentBackend {
+export interface FichaPaymentBackend extends VentanaFechas {
   referenceNumber: string
   amount: number
-  deadline: string | null
   /** Backend enum — `PENDING` (ficha generated, unpaid) or `PAID`. */
   status: 'PENDING' | 'PAID'
 }
@@ -82,14 +107,13 @@ export interface CheckoutInitiationBackend {
  * `alreadyPaid` + `receiptNumber` + `paidAt` let the screen show a receipt
  * without hitting EVO again (a checkout attempt would just 409).
  */
-export interface FichaPaymentAccessBackend {
+export interface FichaPaymentAccessBackend extends VentanaFechas {
   candidateId: string
   folio: string
   nombre: string | null
   programName: string | null
   amount: number
   referenceNumber: string
-  deadline: string | null
   paymentStatus: 'PENDING' | 'PAID'
   receiptNumber: string | null
   /** ISO instant, present only when `alreadyPaid`. */
@@ -98,7 +122,7 @@ export interface FichaPaymentAccessBackend {
 }
 
 /** `GET /candidates/{id}` — ficha projection for route-refresh fallback. */
-export interface CandidateFichaBackend {
+export interface CandidateFichaBackend extends VentanaFechas {
   candidateId: string
   folio: string
   candidateStatus: CandidateStatus
@@ -112,7 +136,6 @@ export interface CandidateFichaBackend {
   email: string
   referenceNumber: string
   amount: number
-  deadline: string | null
   paymentStatus: 'PENDING' | 'PAID'
   receiptNumber: string | null
   paidAt: string | null
@@ -129,7 +152,13 @@ export interface FichaRouteState {
   pagoFicha?: {
     referencia: string
     monto: number
-    fechaLimite: string
+    /** Snapshot of the sales window, under its own name — see {@link VentanaFechas}. */
+    fechaLimiteInscripcion: string
+    /**
+     * The date the payment really closes. `''` means the concept has no closing
+     * date, which the screen renders as no row at all.
+     */
+    fechaLimitePago: string
     estado: 'PENDING' | 'PAID'
     folio: string
   }
