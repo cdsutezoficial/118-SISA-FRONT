@@ -79,7 +79,6 @@ import ConfiguracionAdmisionForm from '@app/modules/config-academica/pages/Confi
 // Conceptos
 import ConceptosList from '@app/modules/config-academica/pages/ConceptosList'
 import ConceptosForm from '@app/modules/config-academica/pages/ConceptosForm'
-import ConceptosTarifaForm from '@app/modules/config-academica/pages/ConceptosTarifaForm'
 
 // Áreas de conceptos de pago
 import AreasList from '@app/modules/config-academica/pages/AreasList'
@@ -404,23 +403,22 @@ const router = createBrowserRouter([
       { path: 'configuracion-admision/new',  element: <ConfiguracionAdmisionForm /> },
       { path: 'configuracion-admision/form', element: <ConfiguracionAdmisionForm /> },
 
-      // Conceptos (includes extra: tarifa/form)
+      // Conceptos
       //
       // Role guard: the list route is wrapped here, mirroring the
       // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`grupos`
       // precedent — every `/concepts` verb is enforced server-side to
       // ADMIN/PERSONAL_FINANZAS, and the Finanzas module owns the screen.
       //
-      // `conceptos/tarifa/form` follows the exact route pattern established by
-      // `planes/materia/form`/`planes/escala/form` — a SEPARATE screen (not a
-      // modal) to add a new child record, taking the parent id via
-      // `?conceptId=`. Unlike those two, there is no `?mode=` here: `PaymentRate`
-      // is an append-only history with no edit, so this route is ALWAYS
-      // registration (2026-07-28 wiring plan, Fase 4 of 4).
+      // `conceptos/new` y `conceptos/form` son el MISMO componente
+      // (`ConceptosForm`), con el modo derivado de la URL: Registrar edita el
+      // precio inline en la sección Tarifas (el alcance se elige una vez y todas
+      // las tarifas lo comparten: general / por nivel / por carreras), y
+      // Ver/Editar muestran el historial append-only de `PaymentRate`. Ya no
+      // existe una pantalla separada para agregar una tarifa.
       { path: 'conceptos',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_CONCEPTS_READ']} redirectTo="/dashboard"><ConceptosList /></RequirePermission></RequireRole> },
       { path: 'conceptos/new',        element: <ConceptosForm /> },
       { path: 'conceptos/form',       element: <ConceptosForm /> },
-      { path: 'conceptos/tarifa/form', element: <ConceptosTarifaForm /> },
 
       // Áreas de conceptos de pago
       //
