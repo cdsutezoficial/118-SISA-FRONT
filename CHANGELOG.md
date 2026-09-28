@@ -4,6 +4,63 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-09-27] Panel de pago, aviso de cupo agotado y refresco del desplegable
+
+Dos commits: `9a5f9ee` y `412be4a`.
+
+### El Aspirante no ve por qué le rechazan
+
+El flujo ramificaba por `message`, que es copy y se reescribe sin avisar. Tres fallos
+distintos que llegan los tres como 409 mandaban a tres lugares distintos y no se
+podían expresar sin adivinar la palabra.
+
+- `ApiError` suma `code`, el discriminador estable que ya manda el backend.
+- `ADMISSION_ERROR_CODES` (`apiClient.ts`) con los cuatro que el flujo necesita
+  distinguir: `quotaReached`, `salesWindowClosed`, `candidateAlreadyExists`,
+  `paymentWindowClosed`. `message` sigue siendo el respaldo donde el handler todavía
+  no publica un código.
+- `PagoNoDisponibleNotice` cubre el caso en que ya no se puede pagar, leyendo su
+  código del backend. El cupo lleno **no** se contesta con un "intenta más tarde":
+  no hay cola a la que unirse, es un tope y no una fila.
+- `EvoPaymentPanel` (nuevo) junta en un solo lugar lo que el Aspirante necesita saber
+  de su pago.
+
+### Las carreras se piden al abrir el desplegable
+
+La lista de carreras es un snapshot de lo que todavía tiene lugar, y otra persona
+puede vender el último lugar después de que la página cargó: un Aspirante con el
+formulario abierto hace rato estaba eligiendo sobre una lista que ya no decía la
+verdad. Ahora `SearchSelectField` acepta `onOpen` y la lista se vuelve a pedir ahí.
+
+Al abrir se compra la garantía de que la lista que se lee es la que acaba de llegar;
+al montar el request no compra nada, porque si no elige carrera no se usa. Cambiar la
+modalidad **no** la vuelve a pedir: la modalidad es un filtro puramente local sobre el
+mismo arreglo, y pedirlo en cada toque solo agrega un spinner y una falla de red que
+dejaría al Aspirante sin carreras. El refresh no muestra spinner ni error porque no
+es indispensable, y ante un fallo se conservan las opciones previas.
+
+### Fix: la carrera elegida sobrevivía al refresco que la quita
+
+Era el bug de fondo. `selectedConfig` se derivaba de `configsAdmision` — la misma lista
+que el refresco acababa de reemplazar — así que perder a la carrera justo cuando había
+que conservarla, y el `&&` cortocircuitaba antes de poder re-agregarla. Cambiar de
+modalidad además revivía la carrera anterior dentro del filtro nuevo.
+
+- `lastKnownConfig` conserva el último config conocido.
+- El fallback al snapshot se condiciona a que siga habiendo `admissionConfigId`, que es
+  lo que se limpia al cambiar de modalidad.
+- `resolveConfig(id)` hace lo mismo en el `onChange`, sin el cual volver a elegir la
+  carrera retenida dejaba `programa` en vacío.
+- La opción seleccionada se conserva aunque el refresco la quite de la lista, y el
+  placeholder ya no dice "No hay carreras" cuando hay una selección retenida.
+
+### Verificación
+
+`npm run typecheck` y `npm run build` en verde. El warning de chunk >500 kB es
+preexistente.
+
+---
+
 ## [2026-07-15] Conexión con backend real — Detalle del Plan de Estudios (Fase 1b)
 
 `PlanDetalle.tsx` reescrito de mock a datos reales:
