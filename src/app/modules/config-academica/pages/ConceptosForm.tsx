@@ -20,7 +20,7 @@ import type { ApiError } from '@app/core/infra/apiClient'
 // isExternal, isAccumulable, isMulticoncept, linkedConceptIds, programIds y
 // quotaLimit. El mapeo estado local ↔ payload está en `handleSubmit`/carga.
 
-type PaymentConceptType = 'ENROLLMENT' | 'REINSCRIPTION' | 'EXTRAORDINARY' | 'DOCUMENT' | 'OTHER'
+type PaymentConceptType = 'ADMISSION' | 'ENROLLMENT' | 'REINSCRIPTION' | 'EXTRAORDINARY' | 'DOCUMENT' | 'OTHER'
 type PaymentConceptStatus = 'ACTIVE' | 'INACTIVE'
 
 // `AcademicLevel` — shared-kernel enum, mismo set de labels que
@@ -36,6 +36,7 @@ const LEVEL_LABELS: Record<AcademicLevel, string> = {
 }
 
 const TYPE_LABELS: Record<PaymentConceptType, string> = {
+  ADMISSION: 'Admisión',
   ENROLLMENT: 'Inscripción',
   REINSCRIPTION: 'Reinscripción',
   EXTRAORDINARY: 'Extraordinario',
