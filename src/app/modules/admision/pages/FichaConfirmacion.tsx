@@ -10,6 +10,8 @@ import { mockCandidates } from '../data/mockData'
 import { useFichaPayment } from '../hooks/useFichaPayment'
 import { FichaPagoConfirmado } from '../components/FichaPagoConfirmado'
 import { FichaPagoPendiente } from '../components/FichaPagoPendiente'
+import { EvoPaymentPanel } from '../components/EvoPaymentPanel'
+import { PagoNoDisponibleNotice } from '../components/PagoNoDisponibleNotice'
 import type { Candidate, CandidateFichaBackend, FichaRouteState } from '../data/types'
 
 /**
@@ -164,9 +166,11 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     processing,
     confirmData,
     alreadyPaid,
+    pagoNoDisponible,
   } = useFichaPayment({
     candidateId: esCandidatoReal ? candidateId : '',
     // After a 3DS challenge the gateway must come back HERE. Must be on the
+
     // backend allowlist (`sisa.evo.allowed-return-paths`) or it is ignored and
     // the gateway falls back to the globally configured return URL.
     returnPath: '/portal/registro/ficha',
@@ -184,6 +188,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     onAlreadyPaid: () => setFicha(prev => ({ ...prev, estado: 'PAID' })),
     preserveQuery: { id: candidateId },
   })
+
 
   // Refresh/fallback: direct mount or hard refresh has no `pagoFicha` in route
   // state — sync from `GET /candidates/{id}`, the same projection CandidatoRegistro's
@@ -262,8 +267,16 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
   // pantalla, y la confirmación ya hace lo mismo con su botón de descarga. Por
   // simetría el PDF baja a acción secundaria — antes estaba por encima del pago,
   // que es el orden invertido respecto a la intención.
+  //
+  // El panel de EVO va aquí dentro y no en una tarjeta aparte: es la continuación
+  // del botón que lo abre, y separado se leía como otra pantalla. Lo comparte con
+  // `PortalFichaPago` para que las dos maquetas no vuelvan a divergir.
   const paymentAction = (
     <div className="flex flex-col items-center gap-3">
+      {/* Aviso persistente, arriba del botón: quien ya intentó y le rechazaron el
+          pago vuelve a caer aquí, y el motivo tiene que estar en su línea de
+          lectura antes de volver a pulsar. */}
+      {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
       <Button onClick={startCheckout} loading={processing} className="w-full sm:w-auto">
         Pagar en línea — ${ficha.monto.toFixed(2)}
       </Button>
@@ -288,6 +301,12 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           El PDF es una copia sin validez oficial; la ficha oficial es la que expide la Universidad.
         </p>
       </div>
+      {/* Sin el `!pagado` que traía la tarjeta aparte: este bloque solo se monta
+          dentro de la rama de estado pendiente, así que la condición ya no
+          comprueba nada. */}
+      {evoCheckout && (
+        <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
+      )}
     </div>
   )
 
@@ -334,27 +353,6 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
         >
           {paymentAction}
         </FichaPagoPendiente>
-      )}
-      {evoCheckout && !pagado && (
-        <div className="bg-white border border-[#E5E7EB] rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[13px] font-semibold text-[#333333]">Pago seguro</p>
-            <Button variant="ghost" size="sm" onClick={cancelCheckout}>
-              Cancelar y volver
-            </Button>
-          </div>
-          <div className="relative w-full min-h-[520px] rounded-md border border-[#E5E7EB] bg-white">
-            <div id={containerId} className="w-full" />
-            {evoLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/90">
-                <div className="flex items-center gap-2 text-[13px] text-[#6B7280]">
-                  <Loader2 size={16} className="animate-spin text-[#009574]" />
-                  Cargando panel de pago seguro…
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       )}
       {/* Staff-only per spec scenario "Público mount hides the staff 'back to
           listing' link" — an anonymous candidate has no candidate listing to

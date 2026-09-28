@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { apiPost } from '@app/core/infra/apiClient'
+import { ADMISSION_ERROR_CODES, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 import type { CheckoutInitiationBackend, PaymentConfirmationBackend } from '../data/types'
 
@@ -104,6 +104,20 @@ function installEvoSdkGlobals(): void {
 
 installEvoSdkGlobals()
 
+/**
+ * Outcomes where the applicant is not looking at a malfunction, so "intenta de
+ * nuevo más tarde" is the wrong thing to say.
+ *
+ * - Quota reached: the career sold all its places. The cap is doing its job.
+ * - Payment window closed: the period ended. It will not reopen on its own.
+ *
+ * Both are permanent facts about this ficha rather than transient faults, and both
+ * arrive with a message from the backend worth showing verbatim.
+ */
+function isNoRetryOutcome(code: string | undefined): boolean {
+  return code === ADMISSION_ERROR_CODES.quotaReached || code === ADMISSION_ERROR_CODES.paymentWindowClosed
+}
+
 /** Global surface installed by EVO's `checkout.min.js` (no official typings). */
 interface EvoCheckoutSdk {
   configure(options: { session: { id: string } }): void
@@ -178,6 +192,18 @@ export interface UseFichaPaymentOptions {
   preserveQuery?: Record<string, string>
 }
 
+/**
+ * A permanent fact about this ficha: the online payment cannot be started, and
+ * retrying will not change that. Set from the backend's own wording so there is a
+ * single place that decides what a full career says.
+ */
+export interface PagoNoDisponible {
+  /** `ADMISSION_QUOTA_REACHED` / `ADMISSION_PAYMENT_WINDOW_CLOSED`, when sent. */
+  code?: string
+  /** The backend's message, shown verbatim by the persistent notice. */
+  message: string
+}
+
 export interface UseFichaPaymentResult {
   /** Opens the EVO panel. Call from the "Pagar en línea" button. */
   startCheckout: () => Promise<void>
@@ -202,6 +228,15 @@ export interface UseFichaPaymentResult {
 
   /** True when the ficha was already paid before this attempt. */
   alreadyPaid: boolean
+
+  /**
+   * Non-null when the payment cannot be started for a permanent reason, so the
+   * view can show it as a notice that stays instead of a toast that leaves. It
+   * records a fact about the ficha, so only a checkout that actually starts clears
+   * it — a network error on the next attempt does not make a full career open up,
+   * and forgetting the notice there would claim it did.
+   */
+  pagoNoDisponible: PagoNoDisponible | null
 
   /** Exposed for the mock demo path, which skips the backend entirely. */
   notify: (message: string) => void
@@ -237,6 +272,7 @@ export function useFichaPayment({
   const [processing, setProcessing] = useState(false)
   const [confirmData, setConfirmData] = useState<PaymentConfirmationBackend | null>(null)
   const [alreadyPaid, setAlreadyPaid] = useState(false)
+  const [pagoNoDisponible, setPagoNoDisponible] = useState<PagoNoDisponible | null>(null)
 
   // Callbacks read inside effects; keeping them in refs avoids re-running the
   // SDK mount effect on every parent re-render.
@@ -465,9 +501,32 @@ export function useFichaPayment({
       // The payer stays inside SISA: the panel mounts the SDK and renders the
       // hosted payment form inline (mounted by the `evoCheckout` effect).
       setEvoCheckout({ checkoutJsUrl: res.checkoutJsUrl, sessionId: res.sessionId })
+      // A checkout that starts is proof the ficha is payable, which is the only
+      // thing that retires a previous refusal.
+      setPagoNoDisponible(null)
       notifyRef.current('Completa tu pago seguro en el panel de abajo.')
     } catch (err) {
       const apiErr = err as Partial<ApiError>
+      // Show the backend's wording verbatim for the outcomes that are not
+      // transient faults. The quota refusal used to be dressed up here as
+      // recoverable — "vuelve a intentar, se liberará un lugar" — which invented a
+      // waiting queue that does not exist and made a normal state of affairs look
+      // like a loss. A cap on fichas sold is not a race: many people register, the
+      // cap decides who pays, and running out of places is the rule working. What
+      // matters is keeping the generic fallback off these two, since "intenta de
+      // nuevo más tarde" is wrong for a closed window and for a full career alike.
+      //
+      // These two also set the persistent notice. A toast was the only channel, and
+      // it leaves on its own: an Aspirante who pressed the button and looked away
+      // kept a registered ficha and no idea why nothing happened. Every other error
+      // deliberately does NOT clear the notice — a career that is full stays full
+      // across a retry, and a dropped connection is not evidence it opened up.
+      if (isNoRetryOutcome(apiErr.code)) {
+        const message = apiErr.message ?? 'El pago en línea de esta carrera no está disponible.'
+        setPagoNoDisponible({ code: apiErr.code, message })
+        notifyRef.current(message)
+        return
+      }
       notifyRef.current(apiErr.message ?? 'No se pudo iniciar el pago en línea. Intenta de nuevo más tarde.')
     } finally {
       // The view renders this as `fixed inset-0 z-[200]`, so a leaked `true`
@@ -494,6 +553,7 @@ export function useFichaPayment({
     processing,
     confirmData,
     alreadyPaid,
+    pagoNoDisponible,
     notify,
   }
 }

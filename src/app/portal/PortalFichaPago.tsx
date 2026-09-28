@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { CreditCard, Download, FileText, GraduationCap, Loader2, X } from 'lucide-react'
+import { CreditCard, Download, GraduationCap, Loader2 } from 'lucide-react'
 import { Button } from '@app/core/components/form'
 import { Toast } from '@app/core/components/ui'
 import { useRole } from '@app/core/infra/RoleContext'
@@ -9,6 +9,8 @@ import { formatDate } from '@app/core/infra/utils'
 import { useFichaPayment, fichaAccessStorageKey } from '@app/modules/admision/hooks/useFichaPayment'
 import { FichaPagoConfirmado } from '@app/modules/admision/components/FichaPagoConfirmado'
 import { FichaPagoPendiente } from '@app/modules/admision/components/FichaPagoPendiente'
+import { EvoPaymentPanel } from '@app/modules/admision/components/EvoPaymentPanel'
+import { PagoNoDisponibleNotice } from '@app/modules/admision/components/PagoNoDisponibleNotice'
 import type {
   FichaPaymentAccessBackend,
   PaymentConfirmationBackend,
@@ -74,29 +76,38 @@ export default function PortalFichaPago() {
 
   const candidateId = acceso?.candidateId ?? candidateIdFromUrl
 
-  const { startCheckout, cancelCheckout, containerId, evoCheckout, evoLoading, processing, confirmData, alreadyPaid } =
-    useFichaPayment({
-      candidateId,
-      returnPath: RETURN_PATH,
-      notify: setToast,
-      preserveQuery: { id: candidateId },
-      onConfirmed: (data: PaymentConfirmationBackend) => {
-        // Reflect the confirmed payment in the header fields too.
-        setAcceso(prev =>
-          prev
-            ? {
-                ...prev,
-                paymentStatus: 'PAID',
-                receiptNumber: data.receiptNumber,
-                paidAt: data.paidAt,
-                alreadyPaid: true,
-                amount: Number(data.amount),
-                referenceNumber: data.referenceNumber,
-              }
-            : prev
-        )
-      },
-    })
+  const {
+    startCheckout,
+    cancelCheckout,
+    containerId,
+    evoCheckout,
+    evoLoading,
+    processing,
+    confirmData,
+    alreadyPaid,
+    pagoNoDisponible,
+  } = useFichaPayment({
+    candidateId,
+    returnPath: RETURN_PATH,
+    notify: setToast,
+    preserveQuery: { id: candidateId },
+    onConfirmed: (data: PaymentConfirmationBackend) => {
+      // Reflect the confirmed payment in the header fields too.
+      setAcceso(prev =>
+        prev
+          ? {
+              ...prev,
+              paymentStatus: 'PAID',
+              receiptNumber: data.receiptNumber,
+              paidAt: data.paidAt,
+              alreadyPaid: true,
+              amount: Number(data.amount),
+              referenceNumber: data.referenceNumber,
+            }
+          : prev
+      )
+    },
+  })
 
   // Nothing to show without a ficha: a direct visit or a stale link. Send the
   // applicant back to the lookup form rather than rendering an empty screen.
@@ -236,6 +247,10 @@ export default function PortalFichaPago() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
+                  {/* Aviso persistente, arriba del botón: quien ya intentó y le
+                      rechazaron el pago vuelve a caer aquí, y el motivo tiene que
+                      estar en su línea de lectura antes de volver a pulsar. */}
+                  {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
                   <Button onClick={startCheckout} loading={processing} disabled={processing}>
                     <span className="inline-flex items-center gap-2">
                       <CreditCard size={14} />
@@ -270,30 +285,8 @@ export default function PortalFichaPago() {
                   </div>
 
                   {evoCheckout && (
-                  <div className="mt-2 w-full border-t border-[#E5E7EB] pt-5 text-left">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-[12px] font-semibold text-[#333333] flex items-center gap-1.5">
-                        <FileText size={13} className="text-amber-700" />
-                        Panel de pago seguro
-                      </p>
-                      <button
-                        type="button"
-                        onClick={cancelCheckout}
-                        className="text-[12px] text-[#6B7280] hover:text-[#333333] inline-flex items-center gap-1"
-                      >
-                        <X size={12} />
-                        Cerrar
-                      </button>
-                    </div>
-                    {evoLoading && (
-                      <p className="flex items-center gap-2 text-[12px] text-[#6B7280] mb-2">
-                        <Loader2 size={13} className="animate-spin text-[#009574]" />
-                        Cargando el panel de pago seguro...
-                      </p>
-                    )}
-                    <div id={containerId} className="w-full" />
-                  </div>
-                )}
+                    <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
+                  )}
               </div>
               )}
             </FichaPagoPendiente>

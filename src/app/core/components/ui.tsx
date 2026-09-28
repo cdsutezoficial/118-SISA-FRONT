@@ -149,6 +149,20 @@ interface SearchSelectFieldProps {
   disabled?: boolean
   hasError?: boolean
   searchPlaceholder?: string
+  /**
+   * Called every time the dropdown is ABOUT TO open, never on close.
+   *
+   * For fields whose options can go stale while the form is open: the career list
+   * is a snapshot of what is still payable, and somebody else can sell the last
+   * place after the page loaded. Refetching here rather than on mount means the
+   * request is paid for by an actual intent to choose something, and the list
+   * cannot have gone stale between opening and reading.
+   *
+   * The dropdown opens regardless of what this does and of whether it succeeds —
+   * it is a refresh, not a gate, so the caller must not use it to block opening
+   * or to surface an error. Keep the previously loaded options on failure.
+   */
+  onOpen?: () => void
 }
 
 export function SearchSelectField({
@@ -159,6 +173,7 @@ export function SearchSelectField({
   disabled = false,
   hasError = false,
   searchPlaceholder = 'Buscar…',
+  onOpen,
 }: SearchSelectFieldProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -197,7 +212,14 @@ export function SearchSelectField({
     <div ref={ref} className="relative w-full">
       <button
         type="button"
-        onClick={() => { if (!open) measureAndSet(); setOpen(o => !o); setQuery('') }}
+        onClick={() => {
+          if (!open) {
+            measureAndSet()
+            onOpen?.()
+          }
+          setOpen(o => !o)
+          setQuery('')
+        }}
         className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${triggerBorder}`}
       >
         <span className={`truncate ${selected ? 'text-[#333333]' : 'text-[#6B7280]'}`}>

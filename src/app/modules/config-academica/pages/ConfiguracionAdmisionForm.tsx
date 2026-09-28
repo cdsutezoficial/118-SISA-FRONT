@@ -360,7 +360,7 @@ export default function ConfiguracionAdmisionForm() {
             disabled={disabled}
             numeric
             placeholder="Ej. 120"
-            help="Máximo de fichas pagadas antes de que la carrera deje de aparecer disponible."
+            help="Máximo de fichas que pueden llegar a pagarse en esta carrera. El registro nunca se limita por este número: pueden inscribirse cuantas personas quieran, y solo compiten por un lugar quienes llegan al paso de pago. Cuenta como ocupado tanto un pago confirmado como uno que está en proceso, así que este tope se alcanza antes de que entre el mismo dinero."
             className="col-span-12 sm:col-span-4"
           />
           <div className="col-span-12 sm:col-span-4">

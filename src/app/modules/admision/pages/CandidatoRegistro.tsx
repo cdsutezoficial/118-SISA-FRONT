@@ -17,7 +17,7 @@ import {
 import { FormPage, FormHeader, SelectField, TextField, TimeField } from '@app/core/components/form'
 import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 import { Breadcrumb } from '@app/core/components/list'
-import { apiGet, apiPost, type ApiError } from '@app/core/infra/apiClient'
+import { ADMISSION_ERROR_CODES, apiGet, apiPost, type ApiError } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
 import type {
   Candidate,
@@ -68,7 +68,7 @@ interface CandidatoRegistroProps {
 //   GET /municipalities?stateId=<id>                                   → MunicipalityListItemResponse[] (id + name)
 //   GET /outreach-channels/options                                     → OptionResponse[] { id, label, code }
 //   GET /high-school-types/options                                     → OptionResponse[] { id, label, code }
-//   GET /program-admission-configs/options                             → OptionResponse[] { id(program), label(programName), code(modality) }
+//   GET /program-admission-configs/options                             → OptionResponse[] { id(config), label(programName), code(modality) }
 //
 // The wizard keeps working with catalog NAMES in `paso{1,2,3}` state (so the
 // validation/rendering/summary code is unchanged), and resolves names → UUIDs
@@ -92,6 +92,27 @@ interface OptionItem {
   id: string
   label: string
   code: string | null
+}
+
+/**
+ * Las carreras que todavía aceptan fichas, en su propia función y no en línea dentro
+ * del `useEffect` de catálogos, porque es la única lista que se vuelve a pedir.
+ *
+ * Las otras tres (estados, bachilleratos, canales) son catálogos que cambian con un
+ * despliegue y no mientras alguien llena un formulario. Esta cambia por lo que haga
+ * otra persona: cuando se agota el cupo de una carrera desaparece de la respuesta,
+ * y un Aspirante con el formulario abierto desde hace diez minutos está eligiendo
+ * sobre una lista que ya no dice la verdad.
+ *
+ * Por eso se pide al ABRIR el desplegable y no al montar. Al montar el request no
+ * compra nada —si el Aspirante no elige carrera, la lista no se usa— y al elegir
+ * garantiza que la lista que se lee es la que acaba de llegar. Cambiar la modalidad
+ * no la vuelve a pedir: la modalidad es un filtro puramente local sobre este mismo
+ * arreglo, así que pedirlo en cada toque no trae nada más fresco y sí agrega un
+ * spinner y una falla de red que dejaría al Aspirante sin carreras.
+ */
+function loadAdmissionConfigs(): Promise<OptionItem[]> {
+  return apiGet<OptionItem[]>('/program-admission-configs/options')
 }
 interface FichaAmountQuote {
   amount: number
@@ -353,6 +374,15 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const [canales, setCanales] = useState<OptionItem[]>([])
   const [tiposBachillerato, setTiposBachillerato] = useState<OptionItem[]>([])
   const [configsAdmision, setConfigsAdmision] = useState<OptionItem[]>([])
+  /**
+   * Último config conocido de la carrera ya elegida.
+   *
+   * Sobrevive a un refresco que la quite de la lista. Sin esto, `selectedConfig` se
+   * derivaría de `configsAdmision` —la misma lista que el refresco acaba de
+   * reemplazar—, así que perdería a la carrera justo cuando hay que conservarla, y
+   * el `&&` de abajo cortocircuitaría antes de poder re-agregarla.
+   */
+  const [lastKnownConfig, setLastKnownConfig] = useState<OptionItem | null>(null)
   const [catalogsStatus, setCatalogsStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   useEffect(() => {
@@ -362,7 +392,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       apiGet<StateListResponse>('/states'),
       apiGet<OptionItem[]>('/outreach-channels/options'),
       apiGet<OptionItem[]>('/high-school-types/options'),
-      apiGet<OptionItem[]>('/program-admission-configs/options'),
+      loadAdmissionConfigs(),
     ])
       .then(([statesRes, canalesRes, tiposRes, configsRes]) => {
         if (cancelled) return
@@ -387,6 +417,23 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       .catch(() => {/* non-critical — select just won't populate */})
   }
 
+  /**
+   * Vuelve a pedir las carreras al abrir el desplegable, sin nada de ceremony.
+   *
+   * Sin spinner y sin toast a propósito. Este request no es indispensable: la lista
+   * que ya está en pantalla es un snapshot aceptable, así que un fallo no le quita
+   * nada al Aspirante y un error en pantalla lo alarma sin motivo. Peor todavía
+   * sería vaciar las opciones mientras corre, porque cerrarle el desplegable encima
+   * de la lista que ya está leyéndose.
+   *
+   * Ante un fallo se conservan las opciones previas —es decir, este `catch` no
+   * toca el estado— y ante un éxito la lista se reemplaza completa, porque la
+   * respuesta ES la lista de lo que todavía tiene lugar.
+   */
+  function refreshAdmissionConfigs() {
+    loadAdmissionConfigs().then(setConfigsAdmision).catch(() => {/* keep what we have */})
+  }
+
   // Estados/Municipios keep working with NAMES in state (validation + review
   // display); the POST resolves names → UUIDs at submit time.
   const estadoNames = estados.map(e => e.name)
@@ -409,16 +456,57 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   // `code` is the program's modality (PRESENCIAL/MIXTA). ''/Todas → no filter.
   const canalOptions: SelectOption[] = canales.map(c => ({ value: c.id, label: c.label }))
   const bachilleratoOptions: SelectOption[] = tiposBachillerato.map(t => ({ value: t.id, label: t.label }))
-  const selectedConfig = configsAdmision.find(c => c.id === paso3.admissionConfigId)
+  const liveConfig = configsAdmision.find(c => c.id === paso3.admissionConfigId)
+  // Solo se sincroniza cuando el config existe: si el refresco lo quitó, el
+  // snapshot previo es justamente lo que hay que conservar.
+  useEffect(() => {
+    if (liveConfig) setLastKnownConfig(liveConfig)
+  }, [liveConfig])
+  // El fallback al snapshot solo aplica si sigue habiendo una carrera elegida.
+  // Cambiar la modalidad limpia `admissionConfigId` a propósito, y sin este guard
+  // `lastKnownConfig` reviviría la carrera anterior dentro del filtro nuevo.
+  const selectedConfig = paso3.admissionConfigId ? liveConfig ?? lastKnownConfig : null
   const selectedProgramaModalidad: ModalidadPrograma | '' = selectedConfig
     ? modalidadLabel(selectedConfig.code)
     : ''
+  /**
+   * Resuelve un id de config contra la lista viva y, si no está, contra el
+   * snapshot. Lo necesita el `onChange` del selector: sin el fallback, volver a
+   * elegir la carrera retenida dejaría `programa` en vacío.
+   */
+  const resolveConfig = (id: string): OptionItem | undefined =>
+    configsAdmision.find(c => c.id === id) ?? (lastKnownConfig?.id === id ? lastKnownConfig : undefined)
   const programaOptions: SelectOption[] = configsAdmision
     .filter(c => {
       if (paso3.modalidad === '' || paso3.modalidad === 'Todas') return true
       return modalidadLabel(c.code) === paso3.modalidad
     })
     .map(c => ({ value: c.id, label: c.label }))
+
+  /**
+   * La carrera ya elegida se mantiene en la lista aunque el refresco la haya
+   * quitado, y aunque el filtro de modalidad tampoco la alcance.
+   *
+   * `SearchSelectField` dibuja el disparador buscando `value` dentro de `options`:
+   * si no está, cae al `placeholder` y el Aspirante ve "Selecciona una carrera" con
+   * una carrera ya escogida en el formulario. Perdería la elección sin haber tocado
+   * nada, y no por una razón que él entiende.
+   *
+   * Que la carrera haya salido de la lista significa que alguien más tomó el
+   * último lugar. El registro NO está limitado por cupo —eso se decidió a
+   * propósito— así que la elección sigue siendo válida: lo que se decide es en el
+   * pago, y ahí el backend vuelve a comprobarlo. Esconderla aquí no evitaría el
+   * rechazo, solo le quitaría la posibilidad de registrar sabiendo lo que pasa.
+   *
+   * El guard compara contra `programaOptions`, que es la lista filtrada por
+   * modalidad, así que cubre tanto "el filtro no la alcanza" como "el refresco la
+   * quitó": en el segundo caso el objeto viene de `lastKnownConfig`, y por eso el
+   * label sobrevive aunque ya no haya fila en el servidor.
+   */
+  const selectedProgramOption: SelectOption | null =
+    selectedConfig && !programaOptions.some(o => o.value === selectedConfig.id)
+      ? { value: selectedConfig.id, label: selectedConfig.label }
+      : null
 
   const isVerified = identityStatus === 'verified'
   /** Captura manual activa: los campos de identidad son editables sin pasar por LlaveMX. */
@@ -785,10 +873,21 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     } catch (err) {
       setSubmitting(false)
       const apiErr = err as Partial<ApiError>
-      if (apiErr.status === 400) setSubmitError(apiErr.message ?? 'Revisa los datos capturados.')
+      // Note there is no quota branch here, and there used to be one. The quota is
+      // no longer consulted at registration — a career takes as many registrations
+      // as it has applicants and only the ones who reach the checkout compete for
+      // a place — so `ADMISSION_QUOTA_REACHED` cannot come back from this POST.
+      // The recovery it drove (jumping back to the career step with a fresh list)
+      // was removed with it; the quota now surfaces on the payment screen, where
+      // `useFichaPayment` handles it.
+      if (apiErr.code === ADMISSION_ERROR_CODES.salesWindowClosed) {
+        setSubmitError(apiErr.message ?? 'La venta de fichas para esa carrera ya cerró.')
+      } else if (apiErr.code === ADMISSION_ERROR_CODES.candidateAlreadyExists) {
+        setSubmitError(apiErr.message ?? 'Ya existe un candidato registrado con ese CURP.')
+      } else if (apiErr.status === 400) setSubmitError(apiErr.message ?? 'Revisa los datos capturados.')
       else if (apiErr.status === 401) setSubmitError('Tu sesión expiró. Vuelve a iniciar sesión.')
       else if (apiErr.status === 403) setSubmitError('No tienes permiso para realizar el registro.')
-      else if (apiErr.status === 409) setSubmitError(apiErr.message ?? 'Ya existe un candidato con ese CURP.')
+      else if (apiErr.status === 409) setSubmitError(apiErr.message ?? 'No se pudo completar el registro por un conflicto con tus datos.')
       else setSubmitError('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
     }
   }
@@ -1194,10 +1293,17 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         <div className="col-span-12 md:col-span-8 space-y-2">
           <div>
             <FieldLabel required>Carrera</FieldLabel>
-            <SearchSelectField options={programaOptions} value={paso3.admissionConfigId} onChange={v => {
-              const config = configsAdmision.find(c => c.id === v)
-              setPaso3(prev => ({ ...prev, admissionConfigId: v, programa: config?.label ?? '' }))
-            }} placeholder={programaOptions.length === 0 ? 'No hay carreras para esa modalidad' : 'Selecciona una carrera'} searchPlaceholder="Buscar carrera…" />
+            <SearchSelectField
+              options={selectedProgramOption ? [...programaOptions, selectedProgramOption] : programaOptions}
+              value={paso3.admissionConfigId}
+              onChange={v => {
+                const config = resolveConfig(v)
+                setPaso3(prev => ({ ...prev, admissionConfigId: v, programa: config?.label ?? '' }))
+              }}
+              onOpen={refreshAdmissionConfigs}
+              placeholder={programaOptions.length === 0 && !selectedProgramOption ? 'No hay carreras para esa modalidad' : 'Selecciona una carrera'}
+              searchPlaceholder="Buscar carrera…"
+            />
           </div>
         </div>
 
