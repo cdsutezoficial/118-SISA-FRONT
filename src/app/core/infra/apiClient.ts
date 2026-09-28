@@ -42,21 +42,48 @@ export function getStoredAuthMode(): 'mock' | 'real' {
 export interface ApiError {
   status: number
   message: string
+  /**
+   * Stable machine-readable discriminator sent by the backend as `code` (e.g.
+   * `ADMISSION_QUOTA_REACHED`). Prefer branching on this over `message`: several
+   * distinct failures share one status, and the messages are applicant-facing
+   * copy that gets reworded. `undefined` for handlers that do not send one, in
+   * which case `message` is the only signal available.
+   */
+  code?: string
 }
+
+/** Error codes the admission flow branches on. Mirrors the backend's
+ *  `GlobalExceptionHandler` constants — a rename on either side is breaking. */
+export const ADMISSION_ERROR_CODES = {
+  /**
+   * The career sold all its places. Not a fault: the cap is the rule working, so
+   * this must never be answered with a "try again later" — there is no queue to
+   * wait in. Show the backend's message and leave it there.
+   */
+  quotaReached: 'ADMISSION_QUOTA_REACHED',
+  /** The sales window closed. → tell them when it reopens; retrying is pointless. */
+  salesWindowClosed: 'ADMISSION_SALES_WINDOW_CLOSED',
+  /** Their CURP is already registered. → send them to the existing ficha. */
+  candidateAlreadyExists: 'ADMISSION_CANDIDATE_ALREADY_EXISTS',
+  /** The tuition concept's payment window closed. Also not retryable. */
+  paymentWindowClosed: 'ADMISSION_PAYMENT_WINDOW_CLOSED',
+} as const
 
 async function parseApiError(res: Response): Promise<ApiError> {
   let message = `Error ${res.status}`
+  let code: string | undefined
   try {
     const body: unknown = await res.json()
     if (body && typeof body === 'object') {
-      const candidate = body as { message?: unknown; error?: unknown }
+      const candidate = body as { message?: unknown; error?: unknown; code?: unknown }
       if (typeof candidate.message === 'string') message = candidate.message
       else if (typeof candidate.error === 'string') message = candidate.error
+      if (typeof candidate.code === 'string' && candidate.code !== '') code = candidate.code
     }
   } catch {
     // Non-JSON or empty error body — fall back to the generic status message.
   }
-  return { status: res.status, message }
+  return { status: res.status, message, code }
 }
 
 // ─── 401 hook ───────────────────────────────────────────────────────────────
