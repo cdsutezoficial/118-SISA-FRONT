@@ -1,0 +1,19 @@
+# Secretos: VITE_API_URL llega como ARG de build (ver compose), nunca como
+# archivo. El .env local no se copia a la imagen.
+.env
+.env.*
+!.env.example
+
+node_modules
+dist
+.vite
+
+.git
+.gitignore
+docs/
+openspec/
+guidelines/
+*.md
+Dockerfile
+.dockerignore
+docker-compose.yml
