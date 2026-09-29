@@ -61,6 +61,19 @@ The production nav tree is:
 | Administración | `NavGroup` | `'admin'` |
 | Módulos | `NavGroup` | `'modules'` |
 
+The Dashboard leaf MUST only appear for `ADMIN_SERVICIOS_ROLES` (Administrador + Servicios Escolares) — its content is the config-académica Panel de Control. Roles without config-module access (Gestor Académico, Finanzas, Director de División) land on their own module home (`ROLE_DEFAULT_PATHS`) and MUST NOT see the Dashboard entry. The `/dashboard` route MUST carry the same guard (`RequireRole` allowed = Administrador + Servicios Escolares), using `redirectToRoleMain` so a denied role is sent to its own main view, never to a guarded cross-target (which would loop).
+
+#### Scenario: Dashboard hidden for roles without config access
+- GIVEN the active role is "Gestor Académico"
+- WHEN the sidebar renders
+- THEN the "Dashboard" entry MUST NOT appear
+- AND a direct URL to `/dashboard` redirects the role to `/inscripciones` (its main view)
+
+#### Scenario: Dashboard visible for Servicios Escolares
+- GIVEN the active role is "Servicios Escolares"
+- WHEN the sidebar renders
+- THEN the "Dashboard" entry MUST appear (and the route renders normally)
+
 #### Scenario: Group with no accessible children is hidden
 - GIVEN the active role is "Finanzas" (cannot access Usuarios)
 - WHEN the sidebar renders
@@ -136,4 +149,19 @@ The mobile drawer MUST contain, in order:
 #### Scenario: Changing role in drawer updates sidebar immediately
 - GIVEN the mobile drawer is open and `authMode === 'mock'`
 - WHEN the user selects a different role
-- THEN the active role updates immediately; nav groups re-filter; the drawer does NOT close automatically
+- THEN the active role updates immediately; nav groups re-filter; the app navigates to the new role's main view and the drawer closes
+
+### Requirement: Role Switch Lands On The New Role's Main View
+
+When the active role changes (Navbar dropdown, Sidebar desktop switcher, mobile drawer, or the post-login role-selection step), the app MUST navigate to the main view of the newly active role instead of leaving the user on the current route. The target per role is `ROLE_DEFAULT_PATHS` (`ADMINISTRADOR` → `/dashboard`, `GESTOR_ACADEMICO` → `/inscripciones`, `SERVICIOS_ESCOLARES`/`FINANZAS`/`DIRECTOR_DIVISION` → `/admision`; `CANDIDATO` never mounts in the shell). The redirect MUST NOT fire on the initial mount (a reload, refresh, or re-login keeps the route the user opened). The navigation MUST use `replace` so browser Back does not return into the previous role's stale view.
+(Previously: switching roles only changed the context — the route stayed put, so a role could be stranded on a view its sidebar no longer listed for the new role.)
+
+#### Scenario: Switching roles leaves the module screen
+- GIVEN a user with active role "Servicios Escolares" is on `/configuracion-admision`
+- WHEN they switch the active role to "Gestor Académico" via the Navbar dropdown
+- THEN the app navigates to `/inscripciones` (the Gestor's main view), not stays on `/configuracion-admision`
+
+#### Scenario: Initial load does not redirect
+- GIVEN a user whose active role is "Servicios Escolares" direct-opens `/periodos`
+- WHEN the shell first renders
+- THEN they stay on `/periodos` (no redirect to the role's default view)

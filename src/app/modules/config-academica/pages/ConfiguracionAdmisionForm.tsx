@@ -1,0 +1,399 @@
+import { useEffect, useState } from 'react'
+import { DateTimePicker, FieldError, FieldHelp, FieldLabel, Switch, SearchSelectField } from '@app/core/components/ui'
+import type { SelectOption } from '@app/core/components/ui'
+import { FormPage, FormHeader, FormCard, FormActions, TextField } from '@app/core/components/form'
+import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
+import { useNavigate } from 'react-router'
+import { useFormMode } from '@app/core/infra/hooks'
+import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
+import type { ApiError } from '@app/core/infra/apiClient'
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+// No "Ver Detalle" mode here — per Pantalla 25, this screen only ever handles
+// register/edit; any `mode` other than `register` is treated as edit. Unlike
+// `GruposForm.tsx`'s Programa→Generación cascade (where `programId` is a
+// UI-ONLY filter never sent to the backend, resolved server-side from
+// `generationId`), here `programId` IS a real field on
+// `CreateProgramAdmissionConfigRequest`/`UpdateProgramAdmissionConfigRequest`
+// — it travels in the submit payload alongside `targetGenerationId`, it is
+// not merely a client-side filter. `status` is never edited here — only from
+// the list (`ConfiguracionAdmisionList.tsx`'s Switch), same convention as
+// Generaciones/Grupos/Conceptos. `opensAt`/`closesAt` are `Instant` — the
+// first date+time fields wired in the frontend — so the shared
+// `DateTimePicker` (`ui.tsx`, the `DatePicker` design language plus a
+// time row) is used.
+
+interface ConfigResponse {
+  id: string
+  programId: string
+  periodId: string
+  targetGenerationId: string
+  isOffered: boolean
+  maxCandidates: number
+  opensAt: string
+  closesAt: string
+  status: 'OPEN' | 'CLOSED'
+  selectionStatus: string
+}
+
+interface ConfigFormPayload {
+  programId: string
+  periodId: string
+  targetGenerationId: string
+  isOffered: boolean
+  maxCandidates: number
+  opensAt: string
+  closesAt: string
+}
+
+interface ProgramSummary {
+  id: string
+  name: string
+  code: string
+}
+
+interface ProgramsPageResponse {
+  items: ProgramSummary[]
+}
+
+interface GenerationSummary {
+  id: string
+  code: string
+  programId: string
+}
+
+interface GenerationsPageResponse {
+  items: GenerationSummary[]
+}
+
+interface PeriodSummary {
+  id: string
+  name: string
+}
+
+interface PeriodsPageResponse {
+  items: PeriodSummary[]
+}
+
+// ─── dd/mm/yyyy HH:mm <-> Instant helpers ───────────────────────────────────
+// El `DateTimePicker` lee/escribe `dd/mm/yyyy HH:mm` en hora LOCAL; la API
+// guarda un `Instant` ISO en UTC. `new Date(iso)` / `date.toISOString()` ya
+// hacen la conversión local<->UTC — solo hay que leer/escribir los componentes
+// locales (toISOString siempre reporta UTC). Mismo patrón que los
+// `isoToDisplay`/`displayToIso` de PeriodosForm, pero con hora.
+function isoToDisplay(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function displayToIso(display: string): string {
+  if (!display) return ''
+  const [datePart, timePart = '0:0'] = display.split(' ')
+  const [dd, mm, yyyy] = datePart.split('/').map(Number)
+  const [hh = 0, mi = 0] = timePart.split(':').map(Number)
+  return new Date(yyyy, mm - 1, dd, hh, mi).toISOString()
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
+
+export default function ConfiguracionAdmisionForm() {
+  const navigate = useNavigate()
+  const { mode, id } = useFormMode()
+  const isRegister = mode === 'register'
+
+  const [programId, setProgramId] = useState('')
+  const [targetGenerationId, setTargetGenerationId] = useState('')
+  const [periodId, setPeriodId] = useState('')
+  const [isOffered, setIsOffered] = useState(false)
+  const [maxCandidates, setMaxCandidates] = useState('')
+  const [opensAt, setOpensAt] = useState('')
+  const [closesAt, setClosesAt] = useState('')
+  const [dateOrderError, setDateOrderError] = useState('')
+
+  const [programs, setPrograms] = useState<ProgramSummary[]>([])
+  const [generations, setGenerations] = useState<GenerationSummary[]>([])
+  const [periods, setPeriods] = useState<PeriodSummary[]>([])
+
+  // `loadStatus` covers the edit GET-by-id fetch; `submitStatus` covers the
+  // register/edit POST/PUT submit — separate so a slow initial fetch doesn't
+  // fight with the submit button's own loading state.
+  const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>(isRegister ? 'idle' : 'loading')
+  const [loadErrorMsg, setLoadErrorMsg] = useState('')
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [submitErrorMsg, setSubmitErrorMsg] = useState('')
+
+  useEffect(() => {
+    setSubmitStatus('idle')
+    setSubmitErrorMsg('')
+    setDateOrderError('')
+    if (isRegister) {
+      setProgramId('')
+      setTargetGenerationId('')
+      setPeriodId('')
+      setIsOffered(false)
+      setMaxCandidates('')
+      setOpensAt('')
+      setClosesAt('')
+      setLoadStatus('idle')
+      setLoadErrorMsg('')
+    }
+  }, [mode, id])
+
+  // Programa/Generación/Periodo catalogs — fetched once, used to populate the
+  // cascading selects (Programa → filters Generación) and, on edit, to
+  // preselect the Programa the loaded config's `programId` belongs to.
+  useEffect(() => {
+    apiGet<ProgramsPageResponse>('/programs', { size: 100 })
+      .then(data => setPrograms(data.items))
+      .catch(() => {/* non-critical — select just won't populate */})
+    apiGet<GenerationsPageResponse>('/generations', { size: 200 })
+      .then(data => setGenerations(data.items))
+      .catch(() => {/* non-critical — select just won't populate */})
+    apiGet<PeriodsPageResponse>('/periods', { size: 100 })
+      .then(data => setPeriods(data.items))
+      .catch(() => {/* non-critical — select just won't populate */})
+  }, [])
+
+  useEffect(() => {
+    if (isRegister || !id) return
+    let cancelled = false
+    setLoadStatus('loading')
+    setLoadErrorMsg('')
+    apiGet<ConfigResponse>(`/program-admission-configs/${id}`)
+      .then(data => {
+        if (cancelled) return
+        setProgramId(data.programId)
+        setTargetGenerationId(data.targetGenerationId)
+        setPeriodId(data.periodId)
+        setIsOffered(data.isOffered)
+        setMaxCandidates(String(data.maxCandidates))
+        setOpensAt(data.opensAt)
+        setClosesAt(data.closesAt)
+        setLoadStatus('idle')
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setLoadStatus('error')
+        const apiErr = err as Partial<ApiError>
+        if (apiErr.status === 404) {
+          setLoadErrorMsg('No se encontró la configuración solicitada.')
+        } else if (apiErr.status === 401) {
+          setLoadErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
+        } else if (apiErr.status === 403) {
+          setLoadErrorMsg('No tienes permiso para consultar esta configuración.')
+        } else {
+          setLoadErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+        }
+      })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, mode])
+
+  const disabled = loadStatus === 'loading'
+  const isSubmitting = submitStatus === 'submitting'
+
+  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  // Generación options are scoped to the selected Programa — cascading
+  // select, same interaction pattern as GruposForm.tsx's Programa → Generación
+  // cascade. Unlike Grupos, `programId` here also travels in the payload.
+  const generationOptions: SelectOption[] = generations
+    .filter(g => g.programId === programId)
+    .map(g => ({ value: g.id, label: g.code }))
+  const periodOptions: SelectOption[] = periods.map(p => ({ value: p.id, label: p.name }))
+
+  function handleProgramChange(v: string) {
+    setProgramId(v)
+    setTargetGenerationId('') // reset dependent select — mirrors GruposForm's Programa → Generación reset
+  }
+
+  function handleClosesAtChange(v: string) {
+    setClosesAt(v)
+    if (opensAt && v && new Date(v) <= new Date(opensAt)) {
+      setDateOrderError('El cierre de venta debe ser posterior a la apertura de venta.')
+    } else {
+      setDateOrderError('')
+    }
+  }
+
+  function handleOpensAtChange(v: string) {
+    setOpensAt(v)
+    if (closesAt && v && new Date(closesAt) <= new Date(v)) {
+      setDateOrderError('El cierre de venta debe ser posterior a la apertura de venta.')
+    } else {
+      setDateOrderError('')
+    }
+  }
+
+  async function handleSubmit() {
+    // Client-side date-order check — the backend also validates this
+    // (`InvalidProgramAdmissionConfigDataException`), but this gives
+    // immediate feedback before a round-trip.
+    if (opensAt && closesAt && new Date(closesAt) <= new Date(opensAt)) {
+      setDateOrderError('El cierre de venta debe ser posterior a la apertura de venta.')
+      return
+    }
+    setSubmitStatus('submitting')
+    setSubmitErrorMsg('')
+    const payload: ConfigFormPayload = {
+      programId,
+      periodId,
+      targetGenerationId,
+      isOffered,
+      maxCandidates: Number(maxCandidates),
+      opensAt,
+      closesAt,
+    }
+    try {
+      if (isRegister) {
+        await apiPost<ConfigResponse>('/program-admission-configs', payload)
+        navigate('/configuracion-admision', { state: { toast: 'Configuración registrada exitosamente.' } })
+      } else if (id) {
+        await apiPut<ConfigResponse>(`/program-admission-configs/${id}`, payload)
+        navigate('/configuracion-admision', { state: { toast: 'Configuración actualizada exitosamente.' } })
+      }
+    } catch (err) {
+      setSubmitStatus('error')
+      const apiErr = err as Partial<ApiError>
+      if (apiErr.status === 409) {
+        // Backend: DuplicateProgramAdmissionConfigException — a config
+        // already exists for this exact programId+periodId combination.
+        setSubmitErrorMsg(apiErr.message ?? 'Ya existe una configuración de admisión para esta carrera y periodo.')
+      } else if (apiErr.status === 400) {
+        // Backend: InvalidProgramAdmissionConfigDataException (maxCandidates
+        // <= 0, closesAt not after opensAt) or one of the FK-reference-not-
+        // found exceptions for programId/periodId/targetGenerationId.
+        setSubmitErrorMsg(apiErr.message ?? 'Revisa los datos capturados: hay un valor inválido o una referencia inexistente.')
+      } else if (apiErr.status === 401) {
+        setSubmitErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
+      } else if (apiErr.status === 403) {
+        setSubmitErrorMsg('No tienes permiso para realizar esta acción.')
+      } else {
+        setSubmitErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+      }
+    }
+  }
+
+  return (
+    <FormPage>
+      <Breadcrumb
+        items={[
+          { label: 'Inicio', to: '/dashboard' },
+          { label: 'Configuración Académica' },
+          { label: 'Configuración de Admisión', to: '/configuracion-admision' },
+          { label: isRegister ? 'Configurar Carrera' : 'Editar Configuración' },
+        ]}
+      />
+
+      <FormHeader
+        title={isRegister ? 'Configurar Carrera para Admisión' : 'Editar Configuración de Admisión'}
+        subtitle={isRegister
+          ? 'Define el cupo y la ventana de venta de fichas para una carrera.'
+          : 'Modifica el cupo y la ventana de venta de fichas.'}
+      />
+
+      {/* Load error banner (edit fetch failed) */}
+      {loadStatus === 'error' && loadErrorMsg && <ErrorBanner message={loadErrorMsg} />}
+
+      {/* Submit error banner */}
+      {submitStatus === 'error' && submitErrorMsg && <ErrorBanner message={submitErrorMsg} />}
+
+      {/* Form card */}
+      <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando configuración...">
+        <div className="grid grid-cols-12 gap-4">
+          {/* Fila 1 */}
+          <div className="col-span-12 sm:col-span-6">
+            <FieldLabel required>Carrera</FieldLabel>
+            <SearchSelectField
+              options={programOptions}
+              value={programId}
+              onChange={handleProgramChange}
+              placeholder="Selecciona la carrera"
+              disabled={disabled}
+              searchPlaceholder="Buscar carrera…"
+            />
+          </div>
+          <div className="col-span-12 sm:col-span-6">
+            <FieldLabel required>Periodo Destino</FieldLabel>
+            <SearchSelectField
+              options={periodOptions}
+              value={periodId}
+              onChange={setPeriodId}
+              placeholder="Selecciona el periodo al que ingresarán los aceptados"
+              disabled={disabled}
+              searchPlaceholder="Buscar periodo…"
+            />
+          </div>
+
+          {/* Fila 2 */}
+          <div className="col-span-12 sm:col-span-8">
+            <FieldLabel required>Generación Destino</FieldLabel>
+            <SearchSelectField
+              options={generationOptions}
+              value={targetGenerationId}
+              onChange={setTargetGenerationId}
+              placeholder="Selecciona la generación"
+              disabled={disabled || !programId}
+              searchPlaceholder="Buscar generación…"
+            />
+            <FieldHelp>Generación que recibirá a los aceptados de este proceso.</FieldHelp>
+          </div>
+          <div className="col-span-12 sm:col-span-4">
+            <FieldLabel>¿Está Ofertado?</FieldLabel>
+            <div className="flex items-center gap-2 py-2">
+              <Switch checked={isOffered} onChange={setIsOffered} disabled={disabled} />
+              <span className="text-[13px] text-[#333333]">{isOffered ? 'Sí' : 'No'}</span>
+            </div>
+            <FieldHelp>Equivalente a marcar la carrera como disponible en este proceso.</FieldHelp>
+          </div>
+
+          {/* Fila 3 */}
+          <TextField
+            label="Cupo Máximo"
+            required
+            type="number"
+            min={1}
+            value={maxCandidates}
+            onChange={setMaxCandidates}
+            disabled={disabled}
+            numeric
+            placeholder="Ej. 120"
+            help="Máximo de fichas que pueden llegar a pagarse en esta carrera. El registro nunca se limita por este número: pueden inscribirse cuantas personas quieran, y solo compiten por un lugar quienes llegan al paso de pago. Cuenta como ocupado tanto un pago confirmado como uno que está en proceso, así que este tope se alcanza antes de que entre el mismo dinero."
+            className="col-span-12 sm:col-span-4"
+          />
+          <div className="col-span-12 sm:col-span-4">
+            <FieldLabel required>Apertura de Venta</FieldLabel>
+            <DateTimePicker
+              value={isoToDisplay(opensAt)}
+              onChange={v => handleOpensAtChange(displayToIso(v))}
+              disabled={disabled}
+            />
+          </div>
+          <div className="col-span-12 sm:col-span-4">
+            <FieldLabel required>Cierre de Venta</FieldLabel>
+            <DateTimePicker
+              value={isoToDisplay(closesAt)}
+              onChange={v => handleClosesAtChange(displayToIso(v))}
+              disabled={disabled}
+            />
+            {dateOrderError ? <FieldError>{dateOrderError}</FieldError> : <FieldHelp>Debe ser posterior a la Apertura de Venta.</FieldHelp>}
+          </div>
+        </div>
+      </FormCard>
+
+      {/* Actions */}
+      {loadStatus !== 'loading' && (
+        <FormActions
+          isView={false}
+          onBack={() => navigate('/configuracion-admision')}
+          onPrimary={handleSubmit}
+          primaryLabel={isRegister ? 'Registrar Configuración' : 'Guardar Cambios'}
+          isSubmitting={isSubmitting}
+          primaryDisabled={!!dateOrderError}
+        />
+      )}
+    </FormPage>
+  )
+}

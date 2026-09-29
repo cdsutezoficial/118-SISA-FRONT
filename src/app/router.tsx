@@ -1,93 +1,106 @@
 import { createBrowserRouter, Navigate } from 'react-router'
-import AuthLayout from './layouts/AuthLayout'
-import AppLayout from './layouts/AppLayout'
-import { RequireRole } from './shared/RequireRole'
-import { RequireAuth } from './shared/RequireAuth'
+import AuthLayout from '@app/core/layout/AuthLayout'
+import AppLayout from '@app/core/layout/AppLayout'
+import { RequireRole } from '@app/core/infra/RequireRole'
+import { RequireAuth } from '@app/core/infra/RequireAuth'
+import { RequirePermission } from '@app/core/infra/RequirePermission'
 
 // Auth pages
-import Login from './pages/Login'
-import ResetPassword from './pages/ResetPassword'
-import ResetConfirm from './pages/ResetConfirm'
+import Login from '@app/core/pages/Login'
+import ResetPassword from '@app/core/pages/ResetPassword'
+import ResetConfirm from '@app/core/pages/ResetConfirm'
 
 // Authenticated pages
-import Dashboard from './pages/Dashboard'
+import Dashboard from '@app/core/pages/Dashboard'
 
 // Admisión
-import AdmisionDashboard from './pages/admision/AdmisionDashboard'
-import CanalesDifusion from './pages/admision/CanalesDifusion'
-import CandidatosList from './pages/admision/CandidatosList'
-import CandidatoDetalle from './pages/admision/CandidatoDetalle'
-import CandidatoRegistro from './pages/admision/CandidatoRegistro'
-import FichaConfirmacion from './pages/admision/FichaConfirmacion'
-import ConfirmarPagoFicha from './pages/admision/ConfirmarPagoFicha'
-import ConfirmarPagoInduccion from './pages/admision/ConfirmarPagoInduccion'
-import RegistroInduccion from './pages/admision/RegistroInduccion'
-import RegistroExamen from './pages/admision/RegistroExamen'
-import SeleccionCandidatos from './pages/admision/SeleccionCandidatos'
-import GenerarMatriculas from './pages/admision/GenerarMatriculas'
-import PublicarResultados from './pages/admision/PublicarResultados'
-import AplicarDescuento from './pages/admision/AplicarDescuento'
-import HabilitarInduccion from './pages/admision/HabilitarInduccion'
+import AdmisionDashboard from '@app/modules/admision/pages/AdmisionDashboard'
+import CanalesDifusion from '@app/modules/admision/pages/CanalesDifusion'
+import TiposBachillerato from '@app/modules/admision/pages/TiposBachillerato'
+import CandidatosList from '@app/modules/admision/pages/CandidatosList'
+import CandidatoDetalle from '@app/modules/admision/pages/CandidatoDetalle'
+import CandidatoRegistro from '@app/modules/admision/pages/CandidatoRegistro'
+import FichaConfirmacion from '@app/modules/admision/pages/FichaConfirmacion'
+import ConfirmarPagoFicha from '@app/modules/admision/pages/ConfirmarPagoFicha'
+import ConfirmarPagoInduccion from '@app/modules/admision/pages/ConfirmarPagoInduccion'
+import RegistroInduccion from '@app/modules/admision/pages/RegistroInduccion'
+import RegistroExamen from '@app/modules/admision/pages/RegistroExamen'
+import SeleccionCandidatos from '@app/modules/admision/pages/SeleccionCandidatos'
+import GenerarMatriculas from '@app/modules/admision/pages/GenerarMatriculas'
+import PublicarResultados from '@app/modules/admision/pages/PublicarResultados'
+import AplicarDescuento from '@app/modules/admision/pages/AplicarDescuento'
+import HabilitarInduccion from '@app/modules/admision/pages/HabilitarInduccion'
 
-// Portal (público — Screens 16/17)
-import PortalInduccion from './pages/portal/PortalInduccion'
-import PortalInduccionPago from './pages/portal/PortalInduccionPago'
+// Portal (público). Two DISTINCT public flows, deliberately not merged:
+// - ficha: pay an admission ticket that was registered but never paid (REAL backend)
+// - inducción: access/induction-course payment (still mock, per admision-screens spec)
+import PortalFicha from '@app/portal/PortalFicha'
+import PortalFichaPago from '@app/portal/PortalFichaPago'
+import PortalInduccion from '@app/portal/PortalInduccion'
+import PortalInduccionPago from '@app/portal/PortalInduccionPago'
 
 // Inscripciones — all 7 screens are real.
-import InscripcionesDashboard from './pages/inscripciones/InscripcionesDashboard'
-import EstudiantesList from './pages/inscripciones/EstudiantesList'
-import EstudianteDetalle from './pages/inscripciones/EstudianteDetalle'
-import NuevoIngresoWizard from './pages/inscripciones/NuevoIngresoWizard'
-import ReinscripcionWizard from './pages/inscripciones/ReinscripcionWizard'
-import DocumentosInstitucionales from './pages/inscripciones/DocumentosInstitucionales'
-import ExpedienteRecibidos from './pages/inscripciones/ExpedienteRecibidos'
+import InscripcionesDashboard from '@app/modules/inscripciones/pages/InscripcionesDashboard'
+import EstudiantesList from '@app/modules/inscripciones/pages/EstudiantesList'
+import EstudianteDetalle from '@app/modules/inscripciones/pages/EstudianteDetalle'
+import NuevoIngresoWizard from '@app/modules/inscripciones/pages/NuevoIngresoWizard'
+import ReinscripcionWizard from '@app/modules/inscripciones/pages/ReinscripcionWizard'
+import DocumentosInstitucionales from '@app/modules/inscripciones/pages/DocumentosInstitucionales'
+import ExpedienteRecibidos from '@app/modules/inscripciones/pages/ExpedienteRecibidos'
 
 // Divisiones
-import DivisionesList from './pages/DivisionesList'
-import DivisionesForm from './pages/DivisionesForm'
+import DivisionesList from '@app/modules/config-academica/pages/DivisionesList'
+import DivisionesForm from '@app/modules/config-academica/pages/DivisionesForm'
 
 // Clasificaciones de Materias
-import ClasificacionesList from './pages/ClasificacionesList'
-import ClasificacionesForm from './pages/ClasificacionesForm'
+import ClasificacionesList from '@app/modules/config-academica/pages/ClasificacionesList'
+import ClasificacionesForm from '@app/modules/config-academica/pages/ClasificacionesForm'
 
-// Programas
-import ProgramasList from './pages/ProgramasList'
-import ProgramasForm from './pages/ProgramasForm'
+// Carreras
+import CarrerasList from '@app/modules/config-academica/pages/CarrerasList'
+import CarrerasForm from '@app/modules/config-academica/pages/CarrerasForm'
 
 // Periodos
-import PeriodosList from './pages/PeriodosList'
-import PeriodosForm from './pages/PeriodosForm'
+import PeriodosList from '@app/modules/config-academica/pages/PeriodosList'
+import PeriodosForm from '@app/modules/config-academica/pages/PeriodosForm'
 
 // Generaciones
-import GeneracionesList from './pages/GeneracionesList'
-import GeneracionesForm from './pages/GeneracionesForm'
+import GeneracionesList from '@app/modules/config-academica/pages/GeneracionesList'
+import GeneracionesForm from '@app/modules/config-academica/pages/GeneracionesForm'
 
 // Grupos
-import GruposList from './pages/GruposList'
-import GruposForm from './pages/GruposForm'
+import GruposList from '@app/modules/config-academica/pages/GruposList'
+import GruposForm from '@app/modules/config-academica/pages/GruposForm'
 
 // Configuración de Admisión
-import ConfiguracionAdmisionList from './pages/ConfiguracionAdmisionList'
-import ConfiguracionAdmisionForm from './pages/ConfiguracionAdmisionForm'
+import ConfiguracionAdmisionList from '@app/modules/config-academica/pages/ConfiguracionAdmisionList'
+import ConfiguracionAdmisionForm from '@app/modules/config-academica/pages/ConfiguracionAdmisionForm'
 
 // Conceptos
-import ConceptosList from './pages/ConceptosList'
-import ConceptosForm from './pages/ConceptosForm'
-import ConceptosTarifaForm from './pages/ConceptosTarifaForm'
+import ConceptosList from '@app/modules/config-academica/pages/ConceptosList'
+import ConceptosForm from '@app/modules/config-academica/pages/ConceptosForm'
+
+// Áreas de conceptos de pago
+import AreasList from '@app/modules/config-academica/pages/AreasList'
+import AreasForm from '@app/modules/config-academica/pages/AreasForm'
 
 // Planes
-import PlanesList from './pages/PlanesList'
-import PlanForm from './pages/PlanForm'
-import PlanDetalle from './pages/PlanDetalle'
-import PlanMateriaForm from './pages/PlanMateriaForm'
-import PlanEscalaForm from './pages/PlanEscalaForm'
+import PlanesList from '@app/modules/config-academica/pages/PlanesList'
+import PlanForm from '@app/modules/config-academica/pages/PlanForm'
+import PlanDetalle from '@app/modules/config-academica/pages/PlanDetalle'
+import PlanMateriaForm from '@app/modules/config-academica/pages/PlanMateriaForm'
+import PlanEscalaForm from '@app/modules/config-academica/pages/PlanEscalaForm'
 
 // Usuarios
-import UsuariosList from './pages/UsuariosList'
-import UsuariosForm from './pages/UsuariosForm'
-import UsuarioDetalle from './pages/UsuarioDetalle'
-import AsignarRol from './pages/AsignarRol'
-import CambiarPassword from './pages/CambiarPassword'
+import UsuariosList from '@app/modules/identity/pages/UsuariosList'
+import UsuariosForm from '@app/modules/identity/pages/UsuariosForm'
+import UsuarioDetalle from '@app/modules/identity/pages/UsuarioDetalle'
+import AsignarRol from '@app/modules/identity/pages/AsignarRol'
+import CambiarPassword from '@app/modules/identity/pages/CambiarPassword'
+
+// Roles y permisos (solo front — mock)
+import RolesList from '@app/modules/identity/pages/RolesList'
+import RolPermisos from '@app/modules/identity/pages/RolPermisos'
 
 const router = createBrowserRouter([
   // Root redirect — goes to /login (no auth guard yet)
@@ -103,13 +116,18 @@ const router = createBrowserRouter([
       { path: 'reset-confirm', element: <ResetConfirm /> },
 
       // Portal — public candidate-facing routes (anonymous + CANDIDATO tiers).
-      // Screens 4 & 13 are dual-mounted here from `pages/admision/*`; screens
-      // 16/17 live in `pages/portal/*` (candidate-only, not dual-mounted).
+      // Screens 4 & 13 are dual-mounted here from `pages/admision/*`; the four
+      // portal screens live in `pages/portal/*` (candidate-only, not
+      // dual-mounted) and come in two unrelated pairs:
+      //   /portal/ficha*      → pagar una ficha ya registrada (backend real)
+      //   /portal/induccion*  → curso de inducción (mock, spec Screens 16/17)
       {
         path: 'portal',
         children: [
           { path: 'registro', element: <CandidatoRegistro origin="public" /> },
           { path: 'registro/ficha', element: <FichaConfirmacion origin="public" /> },
+          { path: 'ficha', element: <PortalFicha /> },
+          { path: 'ficha/pago', element: <PortalFichaPago /> },
           { path: 'induccion', element: <PortalInduccion /> },
           { path: 'induccion/pago', element: <PortalInduccionPago /> },
         ],
@@ -125,43 +143,67 @@ const router = createBrowserRouter([
   {
     element: <RequireAuth><AppLayout /></RequireAuth>,
     children: [
-      { path: 'dashboard', element: <Dashboard /> },
+      {
+        path: 'dashboard',
+        element: (
+          // Panel de Control — su contenido (KPIs + accesos rápidos de la
+          // configuración académica) sólo aplica a los roles que operan esos
+          // módulos, igual que el ítem del sidebar. Los roles sin acceso se
+          // redirigen a SU vista principal (ROLE_DEFAULT_PATHS), nunca a un
+          // destino cross-module que pueda ciclar. Ver `RequireRole.tsx`.
+          <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain>
+            <Dashboard />
+          </RequireRole>
+        ),
+      },
 
       // Admisión
       //
       // Role guard: every screen below is wrapped in `RequireRole` per the
       // "Rol activo en sidebar" annotations in `03-admision.md`. The index
-      // route (`/admision`, the Dashboard) is the ONE deliberate exception —
-      // it is NEVER wrapped. It's the guard's own redirect target, so
-      // guarding it too (e.g. to SERVICIOS_ESCOLARES only) would send any
-      // other role/tier (FINANZAS, DIRECTOR_DIVISION, ADMINISTRADOR,
-      // GESTOR_ACADEMICO, or an anonymous/CANDIDATO session hitting a
-      // mismatched URL) into an infinite redirect loop back onto itself.
-      // The Dashboard's content is role-agnostic aggregate KPIs with no
-      // sensitive per-role data, so leaving it unguarded is safe.
+      // route (`/admision`, the Dashboard) is now guarded TOO, mirroring the
+      // module's sidebar roles — sidebar and URL stay in sync, so a role that
+      // can't see "Admisión" in the sidebar can't reach it by URL either.
+      // Its own redirect target is `/dashboard` (the role-agnostic shell
+      // home), and because the index is guarded, denied sub-screens cascade
+      // `/admision/… → /admision → /dashboard` instead of ever looping.
       {
         path: 'admision',
         children: [
-          { index: true, element: <AdmisionDashboard /> },
+          {
+            index: true,
+            element: (
+              <RequireRole
+                allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}
+                redirectTo="/dashboard"
+              >
+                <AdmisionDashboard />
+              </RequireRole>
+            ),
+          },
           {
             path: 'canales',
             element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CanalesDifusion /></RequireRole>,
           },
           {
+            path: 'tipos-bachillerato',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><TiposBachillerato /></RequireRole>,
+          },
+          {
             path: 'candidatos',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatosList /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><CandidatosList /></RequireRole>,
           },
           {
             path: 'candidatos/detalle',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatoDetalle /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><CandidatoDetalle /></RequireRole>,
           },
           {
             path: 'candidatos/registrar',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CandidatoRegistro origin="staff" /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><CandidatoRegistro origin="staff" /></RequireRole>,
           },
           {
             path: 'candidatos/ficha',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><FichaConfirmacion origin="staff" /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><FichaConfirmacion origin="staff" /></RequireRole>,
           },
           {
             path: 'candidatos/pago-ficha',
@@ -173,31 +215,31 @@ const router = createBrowserRouter([
           },
           {
             path: 'candidatos/induccion',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RegistroInduccion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><RegistroInduccion /></RequireRole>,
           },
           {
             path: 'candidatos/examen',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RegistroExamen /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><RegistroExamen /></RequireRole>,
           },
           {
             path: 'seleccion',
-            element: <RequireRole allowedRoles={['DIRECTOR_DIVISION']}><SeleccionCandidatos /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><SeleccionCandidatos /></RequireRole>,
           },
           {
             path: 'matriculas',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><GenerarMatriculas /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><GenerarMatriculas /></RequireRole>,
           },
           {
             path: 'publicar',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><PublicarResultados /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><PublicarResultados /></RequireRole>,
           },
           {
             path: 'descuentos',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><AplicarDescuento /></RequireRole>,
+            element: <RequireRole allowedRoles={['FINANZAS']}><AplicarDescuento /></RequireRole>,
           },
           {
             path: 'habilitacion',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><HabilitarInduccion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><HabilitarInduccion /></RequireRole>,
           },
         ],
       },
@@ -208,38 +250,47 @@ const router = createBrowserRouter([
       // Inscripción Nuevo Ingreso, Reinscripción, Documentos Institucionales,
       // Expediente — Documentos Recibidos) are real as of Screen 7 landing.
       //
-      // Role guard: mirrors Admisión's rule — the index route (`/inscripciones`,
-      // the Dashboard) is the ONE deliberate exception, NEVER wrapped in
-      // `RequireRole`, because it's the guard's own redirect target (see
-      // `RequireRole.tsx`). Its content is role-agnostic aggregate KPIs with no
-      // sensitive per-role data, so leaving it unguarded is safe. Per-screen
-      // roles below come from `figma/prompts/04-inscripciones.md`'s "Rol activo
-      // en sidebar" annotations (Gestor Académico for Screens 2-5, Administrador
+      // Role guard: mirrors Admisión's rule — the index route
+      // (`/inscripciones`, the Dashboard) is now guarded too, mirroring the
+      // module's sidebar roles (sidebar and URL stay in sync; its own
+      // redirect target is `/dashboard`, never itself). Per-screen roles
+      // below come from `figma/prompts/04-inscripciones.md`'s "Rol activo en
+      // sidebar" annotations (Gestor Académico for Screens 2-5, Administrador
       // for Screen 6, Servicios Escolares for Screen 7) — NOT Servicios
       // Escolares for every screen.
       {
         path: 'inscripciones',
         children: [
-          { index: true, element: <InscripcionesDashboard /> },
+          {
+            index: true,
+            element: (
+              <RequireRole
+                allowedRoles={['SERVICIOS_ESCOLARES']}
+                redirectTo="/dashboard"
+              >
+                <InscripcionesDashboard />
+              </RequireRole>
+            ),
+          },
           {
             path: 'estudiantes',
-            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><EstudiantesList /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><EstudiantesList /></RequireRole>,
           },
           {
             path: 'estudiantes/detalle',
-            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><EstudianteDetalle /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><EstudianteDetalle /></RequireRole>,
           },
           {
             path: 'nuevo-ingreso',
-            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><NuevoIngresoWizard /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><NuevoIngresoWizard /></RequireRole>,
           },
           {
             path: 'reinscripcion',
-            element: <RequireRole allowedRoles={['GESTOR_ACADEMICO']} redirectTo="/inscripciones"><ReinscripcionWizard /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><ReinscripcionWizard /></RequireRole>,
           },
           {
             path: 'documentos',
-            element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectTo="/inscripciones"><DocumentosInstitucionales /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/inscripciones"><DocumentosInstitucionales /></RequireRole>,
           },
           {
             path: 'expediente',
@@ -258,7 +309,7 @@ const router = createBrowserRouter([
       // untouched — out of scope for this change.
       {
         path: 'divisiones',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><DivisionesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['DIVISIONS_READ']} redirectTo="/dashboard"><DivisionesList /></RequirePermission></RequireRole>,
       },
       { path: 'divisiones/new',  element: <DivisionesForm /> },
       { path: 'divisiones/form', element: <DivisionesForm /> },
@@ -273,15 +324,23 @@ const router = createBrowserRouter([
       // untouched — out of scope for this change.
       {
         path: 'clasificaciones',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><ClasificacionesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['SUBJECT_CLASSIFICATIONS_READ']} redirectTo="/dashboard"><ClasificacionesList /></RequirePermission></RequireRole>,
       },
       { path: 'clasificaciones/new',  element: <ClasificacionesForm /> },
       { path: 'clasificaciones/form', element: <ClasificacionesForm /> },
 
-      // Programas
-      { path: 'programas',      element: <ProgramasList /> },
-      { path: 'programas/new',  element: <ProgramasForm /> },
-      { path: 'programas/form', element: <ProgramasForm /> },
+      // Carreras
+      //
+      // Role guard: the list route is wrapped here, mirroring the
+      // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`grupos`
+      // precedent — every `/programs` verb is enforced server-side to
+      // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
+      // redirect to `/dashboard` instead of a raw 403/blank state for any
+      // other role. `carreras/new`/`carreras/form` are untouched — out of
+      // scope for this change.
+      { path: 'carreras', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['CARRERAS_READ']} redirectTo="/dashboard"><CarrerasList /></RequirePermission></RequireRole> },
+      { path: 'carreras/new',  element: <CarrerasForm /> },
+      { path: 'carreras/form', element: <CarrerasForm /> },
 
       // Periodos Académicos
       //
@@ -293,7 +352,7 @@ const router = createBrowserRouter([
       // scope for this change.
       {
         path: 'periodos',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><PeriodosList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PERIODS_READ']} redirectTo="/dashboard"><PeriodosList /></RequirePermission></RequireRole>,
       },
       { path: 'periodos/new',  element: <PeriodosForm /> },
       { path: 'periodos/form', element: <PeriodosForm /> },
@@ -308,13 +367,21 @@ const router = createBrowserRouter([
       // `generaciones/form` are untouched — out of scope for this change.
       {
         path: 'generaciones',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><GeneracionesList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GENERATIONS_READ']} redirectTo="/dashboard"><GeneracionesList /></RequirePermission></RequireRole>,
       },
       { path: 'generaciones/new',  element: <GeneracionesForm /> },
       { path: 'generaciones/form', element: <GeneracionesForm /> },
 
       // Grupos
-      { path: 'grupos',      element: <GruposList /> },
+      //
+      // Role guard: the list route is wrapped here, mirroring the
+      // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`planes`
+      // precedent — every `/groups` verb is enforced server-side to
+      // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
+      // redirect to `/dashboard` instead of a raw 403/blank state for any
+      // other role. `grupos/new`/`grupos/form` are untouched — out of scope
+      // for this change.
+      { path: 'grupos', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_READ']} redirectTo="/dashboard"><GruposList /></RequirePermission></RequireRole> },
       { path: 'grupos/new',  element: <GruposForm /> },
       { path: 'grupos/form', element: <GruposForm /> },
 
@@ -323,29 +390,44 @@ const router = createBrowserRouter([
       // Role guard: only the list route is wrapped here, mirroring the
       // `divisiones`/`clasificaciones`/`periodos`/`generaciones` precedent —
       // every `/program-admission-configs` verb is enforced server-side to
-      // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
-      // redirect instead of a raw 403/blank state for any other role.
+      // ADMIN/SERVICIOS_ESCOLARES (its GET also grants DIRECTOR_DIVISION
+      // read, part of the Admisión module's roles), so wrapping the list
+      // gives a clean redirect instead of a raw 403/blank state for any other
+      // role.
       // `configuracion-admision/new`/`configuracion-admision/form` are
       // untouched — out of scope for this change.
       {
         path: 'configuracion-admision',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><ConfiguracionAdmisionList /></RequireRole>,
+        element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PROGRAM_ADMISSION_CONFIGS_READ']} redirectTo="/dashboard"><ConfiguracionAdmisionList /></RequirePermission></RequireRole>,
       },
       { path: 'configuracion-admision/new',  element: <ConfiguracionAdmisionForm /> },
       { path: 'configuracion-admision/form', element: <ConfiguracionAdmisionForm /> },
 
-      // Conceptos (includes extra: tarifa/form)
+      // Conceptos
       //
-      // `conceptos/tarifa/form` follows the exact route pattern established by
-      // `planes/materia/form`/`planes/escala/form` — a SEPARATE screen (not a
-      // modal) to add a new child record, taking the parent id via
-      // `?conceptId=`. Unlike those two, there is no `?mode=` here: `PaymentRate`
-      // is an append-only history with no edit, so this route is ALWAYS
-      // registration (2026-07-28 wiring plan, Fase 4 of 4).
-      { path: 'conceptos',            element: <ConceptosList /> },
+      // Role guard: the list route is wrapped here, mirroring the
+      // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`grupos`
+      // precedent — every `/concepts` verb is enforced server-side to
+      // ADMIN/PERSONAL_FINANZAS, and the Finanzas module owns the screen.
+      //
+      // `conceptos/new` y `conceptos/form` son el MISMO componente
+      // (`ConceptosForm`), con el modo derivado de la URL: Registrar edita el
+      // precio inline en la sección Tarifas (el alcance se elige una vez y todas
+      // las tarifas lo comparten: general / por nivel / por carreras), y
+      // Ver/Editar muestran el historial append-only de `PaymentRate`. Ya no
+      // existe una pantalla separada para agregar una tarifa.
+      { path: 'conceptos',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_CONCEPTS_READ']} redirectTo="/dashboard"><ConceptosList /></RequirePermission></RequireRole> },
       { path: 'conceptos/new',        element: <ConceptosForm /> },
       { path: 'conceptos/form',       element: <ConceptosForm /> },
-      { path: 'conceptos/tarifa/form', element: <ConceptosTarifaForm /> },
+
+      // Áreas de conceptos de pago
+      //
+      // Catálogo compañero de `conceptos` — misma convención: la lista lleva
+      // RoleGuard (los verbos `/payment-areas` los exige ADMIN o
+      // PERSONAL_FINANZAS en el backend) y el form queda abierto.
+      { path: 'areas',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_AREAS_READ']} redirectTo="/dashboard"><AreasList /></RequirePermission></RequireRole> },
+      { path: 'areas/new',        element: <AreasForm /> },
+      { path: 'areas/form',       element: <AreasForm /> },
 
       // Planes (includes extras: detalle + materia + escala)
       //
@@ -356,11 +438,11 @@ const router = createBrowserRouter([
       // `planes/escala/form` (register + edit, same ?mode= convention) follows
       // the exact same route pattern for GradeScale — full-screen route via
       // useSearchParams, no standalone GET-by-id, edit mode locates the record
-      // inside the parent plan's response. No `RequireRole` here — none of the
-      // `/planes/**` routes are guarded yet (unlike
-      // `divisiones`/`clasificaciones`/`usuarios`), so this mirrors the
-      // existing pattern rather than introducing a new one.
-      { path: 'planes',              element: <PlanesList /> },
+      // inside the parent plan's response. Role guard: the list route is
+      // wrapped here, mirroring the `divisiones`/`clasificaciones`/`usuarios`
+      // precedent — every `/plans` verb is enforced server-side to
+      // ADMIN/SERVICIOS_ESCOLARES.
+      { path: 'planes', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_READ']} redirectTo="/dashboard"><PlanesList /></RequirePermission></RequireRole> },
       { path: 'planes/new',          element: <PlanForm /> },
       { path: 'planes/form',         element: <PlanForm /> },
       { path: 'planes/detalle',      element: <PlanDetalle /> },
@@ -376,7 +458,7 @@ const router = createBrowserRouter([
       // out of scope for this change.
       {
         path: 'usuarios',
-        element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']}><UsuariosList /></RequireRole>,
+        element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><RequirePermission permissionKeys={['USERS_READ']} redirectToRoleMain><UsuariosList /></RequirePermission></RequireRole>,
       },
       // `usuarios/form` (register+edit+view via ?mode=) is REMOVED — the
       // 2026-07-28 wiring plan drops "edit" entirely (no `PUT /users/{id}`
@@ -386,6 +468,16 @@ const router = createBrowserRouter([
       { path: 'usuarios/detalle',            element: <UsuarioDetalle /> },
       { path: 'usuarios/asignar-rol',        element: <AsignarRol /> },
       { path: 'usuarios/cambiar-password',   element: <CambiarPassword /> },
+
+      // Roles y permisos (solo front — catálogo mock, read-only)
+      {
+        path: 'roles',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><RequirePermission permissionKeys={['ROLES_READ']} redirectToRoleMain><RolesList /></RequirePermission></RequireRole>,
+      },
+      {
+        path: 'roles/permisos',
+        element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><RequirePermission permissionKeys={['ROLES_ASSIGN_PERMISSIONS']} redirectToRoleMain><RolPermisos /></RequirePermission></RequireRole>,
+      },
     ],
   },
 ])

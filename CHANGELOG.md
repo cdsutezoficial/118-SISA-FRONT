@@ -4,6 +4,128 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-09-28] El catálogo ofrece Admisión + el alcance de tarifas se elige una vez
+
+Dos commits: `a99a154` y `0dd9039`.
+
+### El catálogo no tenía un tipo "Admisión" que registrar
+
+El backend ya distingue la cuota de admisión de la cuota cuatrimestral de inscripción, pero
+`TYPE_LABELS` no ofrecía ninguna. Quien preparaba el precio de una ficha tenía que crear un
+concepto de inscripción y renombrarlo para que el Aspirante viera algo razonable en su recibo.
+
+`ADMISSION: 'Admisión'` entra al union de tipos y al mapa de etiquetas, en el formulario de
+registro (`ConceptosForm`) y en el listado (`ConceptosList`). En el listado el badge va en
+verde: es el tipo que el flujo de fichas busca para cotizar y cobrar, con `isTuition` encendido.
+Distinguirlo de un vistazo es la diferencia entre que la ficha salga con precio o con 409.
+
+> **Requiere el backend de `feat/tipo-concepto-admision` y su migración de datos.** Sin ella el
+> listado muestra el tipo nuevo pero la cotización devuelve 409.
+
+De paso, el badge pasa por `typeBadge()` en vez de acceder a `TYPE_BADGE_MAP` directo. El mapa es
+exhaustivo para TypeScript pero el valor que llega por runtime no lo es, y con versiones
+desalineadas durante un despliegue `TYPE_BADGE_MAP[row.type].className` es `undefined.className`,
+que tumba la lista entera. Mostrar la clave cruda degrada; una pantalla en blanco no.
+
+### El editor de tarifas repetía la misma pregunta en cada fila
+
+Cada fila de tarifas tenía su propio select de general / por nivel / por carreras. Con cinco
+tarifas eran cinco decisiones, y nada impedía mezclarlas: tres filas "general" con tres montos
+distintos, o la misma carrera en dos filas con dos precios. El backend acepta ambas cosas
+porque guarda una fila por `conceptId + programId + level`; el conflicto aparece al cobrar, y no
+es evidente de dónde.
+
+Ahora el alcance se elige una vez, arriba, con `ScopePicker`, y las filas heredan:
+
+| Alcance | Tarifas | `cost` enviado | Dónde vive el precio |
+|---|---|---|---|
+| General | Una sola | La tarifa | También en `PaymentConcept.cost` |
+| Por nivel | Una por nivel | `null` | `PaymentRate` de la ventana del concepto |
+| Por carreras | Una por carrera | `null` | `PaymentRate` de la ventana del concepto |
+
+El paso a dos etapas evita el error de siempre: elegir un alcance y perder lo capturado al
+cambiarlo. El monto viaja con la fila; solo se limpian los destinos, que sí dependen del alcance.
+Al volver a General queda el primer monto, que es el único que aplica.
+
+Los selectores de nivel y carrera se filtran contra lo que las demás filas ya tomaron, así que
+un destino ocupado no se puede volver a elegir. La validación de duplicados se queda como red de
+seguridad: si el filtro alguna vez deja pasar algo, el submit avisa en vez de mandar datos que el
+backend aceptaría.
+
+### De paso
+
+- **La vigencia sale del editor.** `PaymentRate` hereda la ventana de `PaymentConcept` y el
+  backend no la recibía, así que el `DatePicker` era decoración: se capturaba, se perdía y no lo
+  decía nadie. La columna Vigencia y el badge Vigente salen de la tabla de historial.
+- **Se borra `ConceptosTarifaForm.tsx` y su ruta `/conceptos/tarifa/form`.** Era la pantalla
+  vieja de una tarifa, sin autorización por programa y sin reintento parcial.
+- **El reintento parcial conserva el lote pendiente:** si un solo POST falla, los que sí entraron
+  no se vuelven a mandar.
+- **Editar un concepto preserva `data.cost`**, que antes se pisaba con el monto de la primera
+  tarifa.
+- El comentario de `router.tsx` que describía el alcance por fila quedó alineado.
+
+`tsc --noEmit` y `npm run build` en verde (1829 módulos).
+
+---
+
+## [2026-09-27] Panel de pago, aviso de cupo agotado y refresco del desplegable
+
+Dos commits: `9a5f9ee` y `412be4a`.
+
+### El Aspirante no ve por qué le rechazan
+
+El flujo ramificaba por `message`, que es copy y se reescribe sin avisar. Tres fallos
+distintos que llegan los tres como 409 mandaban a tres lugares distintos y no se
+podían expresar sin adivinar la palabra.
+
+- `ApiError` suma `code`, el discriminador estable que ya manda el backend.
+- `ADMISSION_ERROR_CODES` (`apiClient.ts`) con los cuatro que el flujo necesita
+  distinguir: `quotaReached`, `salesWindowClosed`, `candidateAlreadyExists`,
+  `paymentWindowClosed`. `message` sigue siendo el respaldo donde el handler todavía
+  no publica un código.
+- `PagoNoDisponibleNotice` cubre el caso en que ya no se puede pagar, leyendo su
+  código del backend. El cupo lleno **no** se contesta con un "intenta más tarde":
+  no hay cola a la que unirse, es un tope y no una fila.
+- `EvoPaymentPanel` (nuevo) junta en un solo lugar lo que el Aspirante necesita saber
+  de su pago.
+
+### Las carreras se piden al abrir el desplegable
+
+La lista de carreras es un snapshot de lo que todavía tiene lugar, y otra persona
+puede vender el último lugar después de que la página cargó: un Aspirante con el
+formulario abierto hace rato estaba eligiendo sobre una lista que ya no decía la
+verdad. Ahora `SearchSelectField` acepta `onOpen` y la lista se vuelve a pedir ahí.
+
+Al abrir se compra la garantía de que la lista que se lee es la que acaba de llegar;
+al montar el request no compra nada, porque si no elige carrera no se usa. Cambiar la
+modalidad **no** la vuelve a pedir: la modalidad es un filtro puramente local sobre el
+mismo arreglo, y pedirlo en cada toque solo agrega un spinner y una falla de red que
+dejaría al Aspirante sin carreras. El refresh no muestra spinner ni error porque no
+es indispensable, y ante un fallo se conservan las opciones previas.
+
+### Fix: la carrera elegida sobrevivía al refresco que la quita
+
+Era el bug de fondo. `selectedConfig` se derivaba de `configsAdmision` — la misma lista
+que el refresco acababa de reemplazar — así que perder a la carrera justo cuando había
+que conservarla, y el `&&` cortocircuitaba antes de poder re-agregarla. Cambiar de
+modalidad además revivía la carrera anterior dentro del filtro nuevo.
+
+- `lastKnownConfig` conserva el último config conocido.
+- El fallback al snapshot se condiciona a que siga habiendo `admissionConfigId`, que es
+  lo que se limpia al cambiar de modalidad.
+- `resolveConfig(id)` hace lo mismo en el `onChange`, sin el cual volver a elegir la
+  carrera retenida dejaba `programa` en vacío.
+- La opción seleccionada se conserva aunque el refresco la quite de la lista, y el
+  placeholder ya no dice "No hay carreras" cuando hay una selección retenida.
+
+### Verificación
+
+`npm run typecheck` y `npm run build` en verde. El warning de chunk >500 kB es
+preexistente.
+
+---
+
 ## [2026-07-15] Conexión con backend real — Detalle del Plan de Estudios (Fase 1b)
 
 `PlanDetalle.tsx` reescrito de mock a datos reales:

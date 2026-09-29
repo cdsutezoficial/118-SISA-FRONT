@@ -1,0 +1,1107 @@
+import { useState, useRef, useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router'
+import { ChevronDown, X, Check, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Pencil, Eye, RotateCcw, Search } from 'lucide-react'
+import { formatDate, MONTHS, DAYS } from '../infra/utils'
+import { useOpenDirection } from '@app/core/infra/hooks'
+
+// ─── Design tokens ────────────────────────────────────────────────────────────
+// Primary: #009574, hover: #007a5e
+// Text: #333333, secondary: #6B7280
+// Border: #E5E7EB, bg-secondary: #F8F9FA
+// Active tint: #e6f5f1
+
+// ─── inputCls ─────────────────────────────────────────────────────────────────
+export function inputCls(disabled: boolean, hasError: boolean): string {
+  if (disabled) return 'w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-[#F8F9FA] text-[#6B7280] cursor-not-allowed'
+  if (hasError) return 'w-full px-3 py-2 text-[13px] border border-red-400 rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-red-300'
+  return 'w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]'
+}
+
+// ─── FieldLabel ───────────────────────────────────────────────────────────────
+export function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label className="block text-[12px] font-semibold text-[#333333] mb-1">
+      {children}{required && <span className="text-red-500 ml-0.5">*</span>}
+    </label>
+  )
+}
+
+// ─── FieldHelp ────────────────────────────────────────────────────────────────
+export function FieldHelp({ children }: { children: React.ReactNode }) {
+  return <p className="mt-1 text-[11px] text-[#6B7280]">{children}</p>
+}
+
+// ─── FieldError ───────────────────────────────────────────────────────────────
+export function FieldError({ children }: { children: React.ReactNode }) {
+  return <p className="mt-1 text-[11px] text-red-500">{children}</p>
+}
+
+// ─── ReadField ───────────────────────────────────────────────────────────────
+// Campo de solo lectura para fichas/detalle: label + valor legible.
+export function ReadField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">{label}</p>
+      <p className={`text-[13px] text-[#333333] ${mono ? 'font-mono' : 'font-medium'}`}>{value || '—'}</p>
+    </div>
+  )
+}
+
+// ─── SearchSelect ─────────────────────────────────────────────────────────────
+interface SearchSelectProps {
+  options: string[]
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  disabled?: boolean
+}
+
+export function SearchSelect({ options, value, onChange, placeholder = 'Seleccionar…', disabled = false }: SearchSelectProps) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const { openUp, measureAndSet } = useOpenDirection(ref)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filtered = options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
+
+  if (disabled) {
+    return (
+      <div className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-[#F8F9FA] text-[#6B7280] cursor-not-allowed flex items-center justify-between">
+        <span>{value || placeholder}</span>
+        <ChevronDown size={14} className="text-[#6B7280]" />
+      </div>
+    )
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => { if (!open) measureAndSet(); setOpen(!open); setQuery('') }}
+        className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] flex items-center justify-between"
+      >
+        <span className={value ? 'text-[#333333]' : 'text-[#6B7280]'}>{value || placeholder}</span>
+        <div className="flex items-center gap-1">
+          {value && (
+            <span onMouseDown={e => { e.stopPropagation(); onChange('') }} className="hover:text-red-500 text-[#6B7280] cursor-pointer">
+              <X size={13} />
+            </span>
+          )}
+          <ChevronDown size={14} className="text-[#6B7280]" />
+        </div>
+      </button>
+      {open && (
+        <div className={`absolute z-50 ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} w-full bg-white border border-[#E5E7EB] rounded-md shadow-lg`}>
+          <div className="p-2 border-b border-[#E5E7EB]">
+            <input
+              autoFocus
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Buscar…"
+              className="w-full px-2 py-1.5 text-[12px] border border-[#E5E7EB] rounded focus:outline-none focus:ring-1 focus:ring-[#009574]"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-[12px] text-[#6B7280]">Sin resultados</p>
+            ) : filtered.map(o => (
+              <button
+                key={o}
+                type="button"
+                onMouseDown={() => { onChange(o); setOpen(false) }}
+                className={`w-full text-left px-3 py-2 text-[13px] hover:bg-[#e6f5f1] hover:text-[#009574] transition-colors flex items-center justify-between ${o === value ? 'bg-[#e6f5f1] text-[#009574] font-medium' : 'text-[#333333]'}`}
+              >
+                {o}
+                {o === value && <Check size={13} />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── SearchSelectField ────────────────────────────────────────────────────────
+// Generic searchable dropdown for { value, label } pairs. Designed for form
+// fields: fills its container (w-full), supports disabled and hasError states.
+// Companion to the string-only SearchSelect above — do not merge them.
+
+export interface SelectOption {
+  value: string
+  label: string
+}
+
+interface SearchSelectFieldProps {
+  options: SelectOption[]
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  disabled?: boolean
+  hasError?: boolean
+  searchPlaceholder?: string
+  /**
+   * Called every time the dropdown is ABOUT TO open, never on close.
+   *
+   * For fields whose options can go stale while the form is open: the career list
+   * is a snapshot of what is still payable, and somebody else can sell the last
+   * place after the page loaded. Refetching here rather than on mount means the
+   * request is paid for by an actual intent to choose something, and the list
+   * cannot have gone stale between opening and reading.
+   *
+   * The dropdown opens regardless of what this does and of whether it succeeds —
+   * it is a refresh, not a gate, so the caller must not use it to block opening
+   * or to surface an error. Keep the previously loaded options on failure.
+   */
+  onOpen?: () => void
+}
+
+export function SearchSelectField({
+  options,
+  value,
+  onChange,
+  placeholder = 'Seleccionar…',
+  disabled = false,
+  hasError = false,
+  searchPlaceholder = 'Buscar…',
+  onOpen,
+}: SearchSelectFieldProps) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const { openUp, measureAndSet } = useOpenDirection(ref)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filtered = options.filter(
+    o =>
+      o.label.toLowerCase().includes(query.toLowerCase()) ||
+      o.value.toLowerCase().includes(query.toLowerCase()),
+  )
+  const selected = options.find(o => o.value === value)
+
+  if (disabled) {
+    return (
+      <div className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md text-[#6B7280] cursor-not-allowed select-none">
+        <span className="truncate">{selected?.label ?? placeholder}</span>
+        <ChevronDown size={14} className="text-[#E5E7EB] flex-shrink-0" />
+      </div>
+    )
+  }
+
+  const triggerBorder = hasError
+    ? 'border-red-400'
+    : 'border-[#E5E7EB] hover:border-[#009574]/50 focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]'
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => {
+          if (!open) {
+            measureAndSet()
+            onOpen?.()
+          }
+          setOpen(o => !o)
+          setQuery('')
+        }}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border rounded-md text-left outline-none transition ${triggerBorder}`}
+      >
+        <span className={`truncate ${selected ? 'text-[#333333]' : 'text-[#6B7280]'}`}>
+          {selected?.label ?? placeholder}
+        </span>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {value && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={e => { e.stopPropagation(); onChange('') }}
+              onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), onChange(''))}
+              className="text-[#6B7280] hover:text-[#333333] p-0.5 rounded"
+            >
+              <X size={12} />
+            </span>
+          )}
+          <ChevronDown size={14} className={`text-[#6B7280] transition-transform ${open ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+      {open && (
+        <div className={`absolute ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-full bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 overflow-hidden`}>
+          <div className="p-2 border-b border-[#E5E7EB]">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:border-[#009574]"
+              />
+            </div>
+          </div>
+          <ul className="max-h-52 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-[12px] text-[#6B7280] text-center">Sin resultados</li>
+            ) : (
+              filtered.map(o => (
+                <li key={o.value}>
+                  <button
+                    type="button"
+                    onClick={() => { onChange(o.value); setOpen(false) }}
+                    className={`w-full text-left px-3 py-2 text-[13px] transition-colors flex items-center justify-between ${
+                      o.value === value
+                        ? 'bg-[#e6f5f1] text-[#009574] font-medium'
+                        : 'text-[#333333] hover:bg-[#F8F9FA]'
+                    }`}
+                  >
+                    {o.label}
+                    {o.value === value && <Check size={13} className="flex-shrink-0" />}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── SimpleSelect ─────────────────────────────────────────────────────────────
+interface SimpleSelectProps {
+  options: string[]
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  disabled?: boolean
+}
+
+export function SimpleSelect({ options, value, onChange, placeholder = 'Seleccionar…', disabled = false }: SimpleSelectProps) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        className={`appearance-none ${inputCls(disabled, false)} pr-8`}
+      >
+        <option value="">{placeholder}</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+      <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6B7280] pointer-events-none" />
+    </div>
+  )
+}
+
+// ─── CalendarPickerSelect ─────────────────────────────────────────────────────
+// Selector custom para el header del DatePicker (mes/año): la lista nativa de
+// options no se puede estilizar, así que este usa el mismo patrón dropdown del
+// resto de la app (botón + panel) con la lista desplegable maquetada.
+
+function CalendarPickerSelect({ value, options, onSelect, ariaLabel }: {
+  value: number
+  options: { value: number; label: string }[]
+  onSelect: (v: number) => void
+  ariaLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = options.find(o => o.value === value)?.label ?? String(value)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1 text-[12px] font-semibold text-[#333333] bg-[#F8F9FA] border border-[#E5E7EB] rounded-md px-2 py-1 cursor-pointer hover:border-[#009574]/40 hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition-colors ${open ? 'border-[#009574]/40 bg-white' : ''}`}
+      >
+        <span className="max-w-[64px] truncate">{current}</span>
+        <ChevronDown size={12} className="text-[#6B7280]" />
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl max-h-52 overflow-y-auto py-1 min-w-[96px]">
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => { onSelect(o.value); setOpen(false) }}
+              className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors
+                ${o.value === value ? 'bg-[#e6f5f1] text-[#009574] font-semibold' : 'text-[#333333] hover:bg-[#F8F9FA]'}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Calendar helpers ─────────────────────────────────────────────────────────
+function buildCalendar(year: number, month: number): (Date | null)[][] {
+  const first = new Date(year, month, 1)
+  const last = new Date(year, month + 1, 0)
+  // Monday-based: 0=Mon ... 6=Sun
+  let startDow = first.getDay() - 1
+  if (startDow < 0) startDow = 6
+  const cells: (Date | null)[] = Array(startDow).fill(null)
+  for (let d = 1; d <= last.getDate(); d++) cells.push(new Date(year, month, d))
+  while (cells.length % 7 !== 0) cells.push(null)
+  const weeks: (Date | null)[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+  return weeks
+}
+
+function parseDate(str: string): Date | null {
+  if (!str) return null
+  const [dd, mm, yyyy] = str.split('/').map(Number)
+  if (!dd || !mm || !yyyy) return null
+  return new Date(yyyy, mm - 1, dd)
+}
+
+/** `true` solo para strings `dd/mm/yyyy` que representan una fecha real (sin overflow: 32/13/2020 → false). */
+function isValidDateString(str: string): boolean {
+  if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) return false
+  const [dd, mm, yyyy] = str.split('/').map(Number)
+  if (!dd || !mm || yyyy < 1900) return false
+  const d = new Date(yyyy, mm - 1, dd)
+  return d.getFullYear() === yyyy && d.getMonth() === mm - 1 && d.getDate() === dd
+}
+
+/** Máscara dd/mm/yyyy: deja solo dígitos e inserta `/` cada 2 y 4 dígitos (máx 10 chars). */
+function maskDraft(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 8)
+  let out = ''
+  for (let i = 0; i < digits.length; i++) {
+    if (i === 2 || i === 4) out += '/'
+    out += digits[i]
+  }
+  return out
+}
+
+// ─── DatePicker ───────────────────────────────────────────────────────────────
+interface DatePickerProps {
+  value: string
+  onChange: (v: string) => void
+  disabled?: boolean
+  minDate?: Date
+  placeholder?: string
+}
+
+export function DatePicker({ value, onChange, disabled = false, minDate, placeholder = 'dd/mm/yyyy' }: DatePickerProps) {
+  const [open, setOpen] = useState(false)
+  const today = new Date()
+  const parsed = parseDate(value)
+  const [viewYear, setViewYear] = useState(parsed ? parsed.getFullYear() : today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(parsed ? parsed.getMonth() : today.getMonth())
+  // `draft` es el texto editable en el input; se sincroniza con el valor externo.
+  const [draft, setDraft] = useState(value)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+  function prevYear() { setViewYear(y => y - 1) }
+  function nextYear() { setViewYear(y => y + 1) }
+
+  function selectDay(d: Date) {
+    onChange(formatDate(d))
+    setDraft(formatDate(d))
+    setOpen(false)
+  }
+
+  function isDisabledDay(d: Date) {
+    if (!minDate) return false
+    return d < new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
+  }
+
+  /** Aplica el texto escrito del input cuando es una fecha válida. */
+  function commitDraft() {
+    if (isValidDateString(draft)) {
+      onChange(draft)
+      const d = parseDate(draft)
+      if (d) { setViewYear(d.getFullYear()); setViewMonth(d.getMonth()) }
+      setOpen(false)
+      return true
+    }
+    setDraft(value) // inválido → vuelve al valor previo
+    return false
+  }
+
+  // Rango de años navegables (1900..año actual) — para moverte rápido al año.
+  const yearOptions: number[] = []
+  for (let y = 1900; y <= today.getFullYear(); y++) yearOptions.push(y)
+
+  const weeks = buildCalendar(viewYear, viewMonth)
+
+  if (disabled) {
+    return (
+      <div className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-[#F8F9FA] text-[#6B7280] cursor-not-allowed">
+        {value || placeholder}
+      </div>
+    )
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          onChange={e => setDraft(maskDraft(e.target.value))}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commitDraft()
+            if (e.key === 'Escape') setOpen(false)
+          }}
+          onBlur={() => {
+            if (isValidDateString(draft)) onChange(draft)
+            else setDraft(value)
+          }}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-l-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-label="Abrir calendario"
+          className="px-3 border border-l-0 border-[#E5E7EB] rounded-r-md bg-[#F8F9FA] text-[#6B7280] hover:text-[#009574] hover:border-[#009574]/40 focus:outline-none focus:ring-2 focus:ring-[#009574]/30 flex items-center"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </button>
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-72">
+          <div className="flex items-center justify-between mb-2 gap-1">
+            <button type="button" onClick={prevYear} aria-label="Año anterior" className="p-1 rounded hover:bg-[#F8F9FA]" title="Año anterior"><ChevronLeft size={14} /></button>
+            <button type="button" onClick={prevMonth} aria-label="Mes anterior" className="p-1 rounded hover:bg-[#F8F9FA]" title="Mes anterior"><ChevronLeft size={14} className="-ml-1" /></button>
+            <div className="flex items-center gap-1">
+              <CalendarPickerSelect
+                ariaLabel="Mes"
+                value={viewMonth}
+                options={MONTHS.map((m, i) => ({ value: i, label: m }))}
+                onSelect={setViewMonth}
+              />
+              <CalendarPickerSelect
+                ariaLabel="Año"
+                value={viewYear}
+                options={yearOptions.map(y => ({ value: y, label: String(y) }))}
+                onSelect={setViewYear}
+              />
+            </div>
+            <button type="button" onClick={nextMonth} aria-label="Mes siguiente" className="p-1 rounded hover:bg-[#F8F9FA]" title="Mes siguiente"><ChevronRight size={14} className="-mr-1" /></button>
+            <button type="button" onClick={nextYear} aria-label="Año siguiente" className="p-1 rounded hover:bg-[#F8F9FA]" title="Año siguiente"><ChevronRight size={14} /></button>
+          </div>
+          <div className="grid grid-cols-7 mb-1">
+            {DAYS.map(d => <div key={d} className="text-[10px] font-semibold text-[#6B7280] text-center py-0.5">{d}</div>)}
+          </div>
+          {weeks.map((week, wi) => (
+            <div key={wi} className="grid grid-cols-7">
+              {week.map((day, di) => {
+                if (!day) return <div key={di} />
+                const isSelected = parsed && day.toDateString() === parsed.toDateString()
+                const isToday = day.toDateString() === today.toDateString()
+                const isDis = isDisabledDay(day)
+                return (
+                  <button
+                    key={di}
+                    type="button"
+                    disabled={isDis}
+                    onClick={() => selectDay(day)}
+                    className={`text-[12px] h-7 w-7 mx-auto rounded-full flex items-center justify-center transition-colors
+                      ${isSelected ? 'bg-[#009574] text-white font-semibold' :
+                        isToday ? 'border border-[#009574] text-[#009574]' :
+                        isDis ? 'text-[#E5E7EB] cursor-not-allowed' :
+                        'hover:bg-[#e6f5f1] text-[#333333]'}`}
+                  >
+                    {day.getDate()}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── DateTimePicker ─────────────────────────────────────────────────────────
+// Mismo diseño que DatePicker (placeholder dd/mm/yyyy, foco/hover verdes,
+// panel calendario) + fila hora/minuto, para campos `Instant` que requieren
+// fecha Y hora. La hora se preserva al cambiar el día.
+function parseDateTime(str: string): Date | null {
+  if (!str) return null
+  const [datePart, timePart = '0:0'] = str.split(' ')
+  const [dd, mm, yyyy] = datePart.split('/').map(Number)
+  const [hh, mi] = timePart.split(':').map(Number)
+  if (!dd || !mm || !yyyy) return null
+  return new Date(yyyy, mm - 1, dd, hh || 0, mi || 0)
+}
+
+function formatDateTime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${formatDate(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+interface DateTimePickerProps {
+  value: string
+  onChange: (v: string) => void
+  disabled?: boolean
+  placeholder?: string
+}
+
+export function DateTimePicker({ value, onChange, disabled = false, placeholder = 'dd/mm/yyyy HH:mm' }: DateTimePickerProps) {
+  const [open, setOpen] = useState(false)
+  const today = new Date()
+  const parsed = parseDateTime(value)
+  const [viewYear, setViewYear] = useState(parsed ? parsed.getFullYear() : today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(parsed ? parsed.getMonth() : today.getMonth())
+  const [hh, setHh] = useState(parsed ? parsed.getHours() : 12)
+  const [mm, setMm] = useState(parsed ? parsed.getMinutes() : 0)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // Sincroniza calendario y hora con cambios externos (edición / carga).
+  useEffect(() => {
+    if (parsed) {
+      setViewYear(parsed.getFullYear())
+      setViewMonth(parsed.getMonth())
+      setHh(parsed.getHours())
+      setMm(parsed.getMinutes())
+    }
+  }, [value])
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  function applyTime(h: number, m: number) {
+    const base = parsed ?? today
+    onChange(formatDateTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m)))
+  }
+
+  function setHour(raw: string) {
+    if (raw === '') return
+    const h = Math.min(23, Math.max(0, Number(raw)))
+    if (Number.isNaN(h)) return
+    setHh(h)
+    applyTime(h, mm)
+  }
+
+  function setMinute(raw: string) {
+    if (raw === '') return
+    const m = Math.min(59, Math.max(0, Number(raw)))
+    if (Number.isNaN(m)) return
+    setMm(m)
+    applyTime(hh, m)
+  }
+
+  function selectDay(d: Date) {
+    onChange(formatDateTime(new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm)))
+    setOpen(false)
+  }
+
+  const weeks = buildCalendar(viewYear, viewMonth)
+
+  if (disabled) {
+    return (
+      <div className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-[#F8F9FA] text-[#6B7280] cursor-not-allowed">
+        {value || placeholder}
+      </div>
+    )
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] flex items-center justify-between"
+      >
+        <span className={value ? 'text-[#333333]' : 'text-[#6B7280]'}>{value || placeholder}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#6B7280]"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-64">
+          <div className="flex items-center justify-between mb-2">
+            <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-[#F8F9FA]"><ChevronLeft size={14} /></button>
+            <span className="text-[13px] font-semibold text-[#333333]">{MONTHS[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={nextMonth} className="p-1 rounded hover:bg-[#F8F9FA]"><ChevronRight size={14} /></button>
+          </div>
+          <div className="grid grid-cols-7 mb-1">
+            {DAYS.map(d => <div key={d} className="text-[10px] font-semibold text-[#6B7280] text-center py-0.5">{d}</div>)}
+          </div>
+          {weeks.map((week, wi) => (
+            <div key={wi} className="grid grid-cols-7">
+              {week.map((day, di) => {
+                if (!day) return <div key={di} />
+                const isSelected = parsed && day.toDateString() === parsed.toDateString()
+                const isToday = day.toDateString() === today.toDateString()
+                return (
+                  <button
+                    key={di}
+                    type="button"
+                    onClick={() => selectDay(day)}
+                    className={`text-[12px] h-7 w-7 mx-auto rounded-full flex items-center justify-center transition-colors
+                      ${isSelected ? 'bg-[#009574] text-white font-semibold' :
+                        isToday ? 'border border-[#009574] text-[#009574]' :
+                        'hover:bg-[#e6f5f1] text-[#333333]'}`}
+                  >
+                    {day.getDate()}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+          <div className="mt-2 pt-2 border-t border-[#E5E7EB] flex items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-[#333333] mr-1">Hora</span>
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={hh}
+              onChange={e => setHour(e.target.value)}
+              className="w-14 px-2 py-1 text-[12px] text-center border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+            />
+            <span className="text-[#6B7280]">:</span>
+            <input
+              type="number"
+              min={0}
+              max={59}
+              value={mm}
+              onChange={e => setMinute(e.target.value)}
+              className="w-14 px-2 py-1 text-[12px] text-center border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── MiniDatePicker ───────────────────────────────────────────────────────────
+export function MiniDatePicker({ value, onChange, disabled = false }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const today = new Date()
+  const parsed = parseDate(value)
+  const [viewYear, setViewYear] = useState(parsed ? parsed.getFullYear() : today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(parsed ? parsed.getMonth() : today.getMonth())
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  const weeks = buildCalendar(viewYear, viewMonth)
+
+  if (disabled) {
+    return <div className="px-2 py-1 text-[12px] border border-[#E5E7EB] rounded bg-[#F8F9FA] text-[#6B7280] w-28">{value || '—'}</div>
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="px-2 py-1 text-[12px] border border-[#E5E7EB] rounded bg-white text-[#333333] hover:border-[#009574] focus:outline-none w-28 text-left"
+      >
+        {value || 'dd/mm/yyyy'}
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-60">
+          <div className="flex items-center justify-between mb-2">
+            <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-[#F8F9FA]"><ChevronLeft size={13} /></button>
+            <span className="text-[12px] font-semibold text-[#333333]">{MONTHS[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={nextMonth} className="p-1 rounded hover:bg-[#F8F9FA]"><ChevronRight size={13} /></button>
+          </div>
+          <div className="grid grid-cols-7 mb-1">
+            {DAYS.map(d => <div key={d} className="text-[9px] font-semibold text-[#6B7280] text-center">{d}</div>)}
+          </div>
+          {weeks.map((week, wi) => (
+            <div key={wi} className="grid grid-cols-7">
+              {week.map((day, di) => {
+                if (!day) return <div key={di} />
+                const isSelected = parsed && day.toDateString() === parsed.toDateString()
+                return (
+                  <button
+                    key={di}
+                    type="button"
+                    onClick={() => { onChange(formatDate(day)); setOpen(false) }}
+                    className={`text-[11px] h-6 w-6 mx-auto rounded-full flex items-center justify-center transition-colors
+                      ${isSelected ? 'bg-[#009574] text-white font-semibold' : 'hover:bg-[#e6f5f1] text-[#333333]'}`}
+                  >
+                    {day.getDate()}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Switch ───────────────────────────────────────────────────────────────────
+export function Switch({ checked, onChange, disabled = false }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#009574]/30
+        ${checked ? 'bg-[#009574]' : 'bg-[#E5E7EB]'}
+        ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+    >
+      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+    </button>
+  )
+}
+
+// ─── RadioCard ────────────────────────────────────────────────────────────────
+// Tarjeta de selección visual (radio) — compartida por `CandidatoRegistro`
+// (Nacionalidad, isFirstChoice, método de pago), `AplicarDescuento` (tipo de
+// descuento) y `NuevoIngresoWizard`. `description` es opcional.
+export function RadioCard({ selected, title, description, onSelect }: {
+  selected: boolean
+  title: string
+  description?: string
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full text-left flex items-start gap-3 px-4 py-3 border rounded-lg transition-colors ${
+        selected ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
+      }`}
+    >
+      <span
+        className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+          selected ? 'border-[#009574]' : 'border-[#E5E7EB]'
+        }`}
+      >
+        {selected && <span className="w-2 h-2 rounded-full bg-[#009574]" />}
+      </span>
+      <span>
+        <span className="block text-[13px] font-semibold text-[#333333]">{title}</span>
+        {description && <span className="block text-[12px] text-[#6B7280] mt-0.5">{description}</span>}
+      </span>
+    </button>
+  )
+}
+
+// ─── Tabs ──────────────────────────────────────────────────────────────────────
+// Barra de pestañas sin scroll: el contenido define su propia altura (solo se
+// alterna la pestaña activa). Útil para detalle/fichas con sub-vistas.
+export function Tabs({ tabs, active, onSelect }: {
+  tabs: { key: string; label: ReactNode; icon?: ReactNode }[]
+  active: string
+  onSelect: (key: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1 border-b border-[#E5E7EB] mb-6">
+      {tabs.map(tab => {
+        const isActive = tab.key === active
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            aria-selected={isActive}
+            onClick={() => onSelect(tab.key)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
+              isActive
+                ? 'border-[#009574] text-[#009574]'
+                : 'border-transparent text-[#6B7280] hover:text-[#333333] hover:border-[#E5E7EB]'
+            }`}
+          >
+            {tab.icon}{tab.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── ActionBtn ────────────────────────────────────────────────────────────────
+// Botón de acción de fila (ver/editar/…). El tooltip se renderiza por PORTAL a
+// <body> (posicionado fixed) y NO en el flujo de la tabla: un tooltip absoluto
+// con `whitespace-nowrap` dentro de la celda (especialmente el último botón de
+// una fila) sobresale del borde derecho de la tabla e infla el `scrollWidth`
+// del contenedor `.overflow-x-auto` → barra de scroll horizontal fantasma en
+// las listas con muchas acciones (Candidatos, Estudiantes, Usuarios). Mismo
+// patrón que el tooltip del Sidebar colapsado (`createPortal` a body).
+export function ActionBtn({ icon, tooltip, onClick, danger = false, disabled = false }: {
+  icon: React.ReactNode
+  tooltip: string
+  onClick?: () => void
+  danger?: boolean
+  disabled?: boolean
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [tip, setTip] = useState<{ left: number; top: number } | null>(null)
+
+  function showTip() {
+    const el = btnRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setTip({ left: r.left + r.width / 2, top: r.top - 6 })
+  }
+
+  return (
+    <div className="relative inline-block" onMouseEnter={showTip} onMouseLeave={() => setTip(null)}>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={`p-1 rounded-md transition-colors
+          ${danger ? 'text-red-400 hover:text-red-600 hover:bg-red-50' : 'text-[#6B7280] hover:text-[#009574] hover:bg-[#e6f5f1]'}
+          ${disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
+      >
+        {icon}
+      </button>
+      {tip && createPortal(
+        <div
+          className="fixed z-[120] px-2 py-1 bg-[#333333] text-white text-[11px] rounded whitespace-nowrap pointer-events-none shadow-lg"
+          style={{ left: tip.left, top: tip.top, transform: 'translate(-50%, -100%)' }}
+        >
+          {tooltip}
+        </div>,
+        document.body,
+      )}
+    </div>
+  )
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+const TOAST_AUTO_CLOSE_MS = 3500
+
+export function Toast({ message, onClose }: { message: string; onClose: () => void }) {
+  // `onClose` is an inline arrow at essentially every call site, so depending on
+  // it re-armed the timer on EVERY parent render: any view that re-rendered more
+  // often than the timeout never dismissed its toast. Hold the callback in a ref
+  // and re-arm only when the text actually changes, so a new message restarts
+  // the countdown (desirable) but an unrelated re-render does not (not).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  useEffect(() => {
+    const t = setTimeout(() => onCloseRef.current(), TOAST_AUTO_CLOSE_MS)
+    return () => clearTimeout(t)
+  }, [message])
+
+  // An empty message renders the card with its icon and close button but no text:
+  // an alert the user cannot read, which also cannot be dismissed — the state was
+  // already empty, so the auto-close was a no-op and the card stayed forever. Call
+  // sites are expected to guard with `{toast && ...}`; this makes the whole class
+  // of mistake impossible rather than relying on 30+ call sites to stay careful.
+  if (!message) return null
+
+  return (
+    <div className="fixed top-4 right-4 z-[200] flex items-center gap-3 bg-white border border-emerald-200 shadow-lg rounded-lg px-4 py-3 animate-in slide-in-from-top-2">
+      <CheckCircle size={16} className="text-emerald-500 flex-shrink-0" />
+      <span className="text-[13px] font-medium text-[#333333]">{message}</span>
+      <button onClick={onClose} className="ml-1 text-[#6B7280] hover:text-[#333333]"><X size={14} /></button>
+    </div>
+  )
+}
+
+// ─── ConfirmModal ─────────────────────────────────────────────────────────────
+export function ConfirmModal({ title, message, confirmLabel = 'Confirmar', onConfirm, onCancel }: {
+  title: string
+  message: string
+  confirmLabel?: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
+      <div className="relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full max-w-sm mx-4 p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
+            <AlertTriangle size={20} className="text-amber-500" />
+          </div>
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#333333] mb-1">{title}</h3>
+            <p className="text-[13px] text-[#6B7280]">{message}</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <button onClick={onCancel} className="px-4 py-2 text-[13px] font-medium border border-[#E5E7EB] bg-white text-[#333333] rounded-md hover:bg-[#F8F9FA] transition-colors">
+            Cancelar
+          </button>
+          <button onClick={onConfirm} className="px-4 py-2 text-[13px] font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-md transition-colors">
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Modal ───────────────────────────────────────────────────────────────────
+// Modal genérico: overlay + panel scrollable con título, contenido y footer.
+export function Modal({ title, subtitle, onClose, children, footer, maxWidth = 'max-w-lg' }: {
+  title: string
+  subtitle?: string
+  onClose: () => void
+  children: ReactNode
+  footer?: ReactNode
+  maxWidth?: string
+}) {
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className={`relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full ${maxWidth} mx-4 max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-[#E5E7EB]">
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#333333]" style={{ whiteSpace: 'pre-wrap' }}>{title}</h3>
+            {subtitle && <p className="text-[13px] text-[#6B7280] mt-1">{subtitle}</p>}
+          </div>
+          <button onClick={onClose} className="text-[#6B7280] hover:text-[#333333] transition-colors" aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+        {footer && (
+          <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] bg-[#F8F9FA] rounded-b-xl">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── SuccessModal ─────────────────────────────────────────────────────────────
+// Confirmación de éxito (check verde) con un único botón de acción.
+export function SuccessModal({ title, message, buttonLabel = 'Continuar', onClose }: {
+  title: string
+  message: string
+  buttonLabel?: string
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full max-w-sm mx-4 p-6 text-center">
+        <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+          <CheckCircle size={28} className="text-emerald-500" />
+        </div>
+        <h3 className="text-[16px] font-semibold text-[#333333] mb-2">{title}</h3>
+        <p className="text-[13px] text-[#6B7280] mb-6">{message}</p>
+        <button onClick={onClose} className="w-full px-4 py-2 text-[13px] font-semibold bg-[#009574] hover:bg-[#007a5e] text-white rounded-md transition-colors">
+          {buttonLabel}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── ModeSwitcher ─────────────────────────────────────────────────────────────
+export function ModeSwitcher({ mode, registerUrl, formUrl, id, canEdit = true }: {
+  mode: 'register' | 'view' | 'edit'
+  registerUrl: string
+  formUrl: (mode: 'view' | 'edit') => string
+  id?: string | null
+  /** false → deshabilita la pestaña Editar (registro inmodificable, p.ej. periodo CLOSED). */
+  canEdit?: boolean
+}) {
+  const navigate = useNavigate()
+  const tabs = [
+    { key: 'register' as const, label: 'Registrar', icon: <RotateCcw size={12} /> },
+    { key: 'view' as const, label: 'Ver', icon: <Eye size={12} />, requiresId: true },
+    { key: 'edit' as const, label: 'Editar', icon: <Pencil size={12} />, requiresId: true },
+  ]
+  return (
+    <div className="inline-flex items-center border border-[#E5E7EB] rounded-lg overflow-hidden text-[12px]">
+      {tabs.map(t => {
+        const disabled = !!(t.requiresId && !id) || (t.key === 'edit' && !canEdit)
+        return (
+          <button
+            key={t.key}
+            type="button"
+            disabled={disabled}
+            onClick={() => navigate(t.key === 'register' ? registerUrl : formUrl(t.key))}
+            className={`flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors
+              ${mode === t.key ? 'bg-[#009574] text-white' : disabled ? 'bg-[#F8F9FA] text-[#d1d5db] cursor-not-allowed' : 'bg-white text-[#6B7280] hover:bg-[#F8F9FA]'}`}
+          >
+            {t.icon}{t.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}

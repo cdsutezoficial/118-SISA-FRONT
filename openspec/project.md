@@ -11,7 +11,7 @@ Frontend functional prototype for SISAv2 (Sistema Integral de Servicios Académi
 - **Build tool**: Vite 6.3.5 (`@vitejs/plugin-react`)
 - **Styling**: Tailwind CSS 4.1.12 (`@tailwindcss/vite`) + shadcn/ui-style components under `src/app/components/ui/`
 - **UI primitives**: Radix UI (extensive set), `lucide-react`, `sonner` (toasts), `recharts`, `react-hook-form`
-- **Package manager**: pnpm (`pnpm-workspace.yaml`, `pnpm.overrides`)
+- **Package manager**: npm (`package-lock.json` es la unica fuente de verdad; el `pnpm-lock.yaml` se elimino porque se quedo atras y hacia fallar el build de la imagen)
 - **Scripts**: `dev` (vite), `build` (vite build), `typecheck` (`tsc --noEmit`)
 - **No test runner configured** — no vitest/jest/playwright/cypress in `package.json`, no `*.test.ts(x)`/`*.spec.ts(x)` files found in `src/`.
 

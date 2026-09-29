@@ -1,0 +1,205 @@
+/**
+ * Centralized HTTP client for real backend integration. Owns the URL,
+ * auth-header, and error-parsing plumbing that every `fetch()` call to
+ * `118-SISA-BACK` needs — extracted so screens stop hand-rolling their own
+ * copy of this logic (see `sdd/real-login-integration/api-client-refactor`).
+ *
+ * This module is intentionally the LOWER-LEVEL layer: `auth.ts` imports from
+ * here, never the other way around, to avoid a circular import (auth.ts
+ * needs `apiPost`; the request helpers here need the token/session-mode
+ * readers that used to live in auth.ts).
+ */
+
+export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080'
+
+// ─── Session read accessors ─────────────────────────────────────────────────
+// Read-only accessors needed to build requests (auth header, mock-vs-real
+// gating). The WRITE side (`persistSession`, `clearSession`,
+// `persistMustChangePasswordCleared`, `getStoredMustChangePassword`) stays in
+// `auth.ts` — those are session-domain concerns, not HTTP concerns.
+
+const ACCESS_TOKEN_KEY = 'sisa.accessToken'
+const AUTH_MODE_KEY = 'sisa.authMode'
+
+export function getAccessToken(): string | null {
+  try {
+    return sessionStorage.getItem(ACCESS_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function getStoredAuthMode(): 'mock' | 'real' {
+  try {
+    return sessionStorage.getItem(AUTH_MODE_KEY) === 'real' ? 'real' : 'mock'
+  } catch {
+    return 'mock'
+  }
+}
+
+// ─── Errors ─────────────────────────────────────────────────────────────────
+
+export interface ApiError {
+  status: number
+  message: string
+  /**
+   * Stable machine-readable discriminator sent by the backend as `code` (e.g.
+   * `ADMISSION_QUOTA_REACHED`). Prefer branching on this over `message`: several
+   * distinct failures share one status, and the messages are applicant-facing
+   * copy that gets reworded. `undefined` for handlers that do not send one, in
+   * which case `message` is the only signal available.
+   */
+  code?: string
+}
+
+/** Error codes the admission flow branches on. Mirrors the backend's
+ *  `GlobalExceptionHandler` constants — a rename on either side is breaking. */
+export const ADMISSION_ERROR_CODES = {
+  /**
+   * The career sold all its places. Not a fault: the cap is the rule working, so
+   * this must never be answered with a "try again later" — there is no queue to
+   * wait in. Show the backend's message and leave it there.
+   */
+  quotaReached: 'ADMISSION_QUOTA_REACHED',
+  /** The sales window closed. → tell them when it reopens; retrying is pointless. */
+  salesWindowClosed: 'ADMISSION_SALES_WINDOW_CLOSED',
+  /** Their CURP is already registered. → send them to the existing ficha. */
+  candidateAlreadyExists: 'ADMISSION_CANDIDATE_ALREADY_EXISTS',
+  /** The tuition concept's payment window closed. Also not retryable. */
+  paymentWindowClosed: 'ADMISSION_PAYMENT_WINDOW_CLOSED',
+} as const
+
+async function parseApiError(res: Response): Promise<ApiError> {
+  let message = `Error ${res.status}`
+  let code: string | undefined
+  try {
+    const body: unknown = await res.json()
+    if (body && typeof body === 'object') {
+      const candidate = body as { message?: unknown; error?: unknown; code?: unknown }
+      if (typeof candidate.message === 'string') message = candidate.message
+      else if (typeof candidate.error === 'string') message = candidate.error
+      if (typeof candidate.code === 'string' && candidate.code !== '') code = candidate.code
+    }
+  } catch {
+    // Non-JSON or empty error body — fall back to the generic status message.
+  }
+  return { status: res.status, message, code }
+}
+
+// ─── 401 hook ───────────────────────────────────────────────────────────────
+// A simple module-level mutable callback instead of importing RoleContext.tsx
+// directly — RoleContext already depends on auth.ts, so importing it here
+// would create its own cycle. The app registers a handler once (RoleContext's
+// RoleProvider, on mount) so a 401 from ANY apiGet/apiPost call can react
+// (force logout) without this module knowing anything about React or routing.
+
+let unauthorizedHandler: (() => void) | null = null
+
+export function setUnauthorizedHandler(fn: () => void): void {
+  unauthorizedHandler = fn
+}
+
+// ─── Request helpers ────────────────────────────────────────────────────────
+
+function buildUrl(path: string, params?: Record<string, string | number | undefined>): string {
+  const url = `${API_URL}${path}`
+  if (!params) return url
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) query.set(key, String(value))
+  }
+  const qs = query.toString()
+  return qs ? `${url}?${qs}` : url
+}
+
+function buildHeaders(extra?: Record<string, string>): HeadersInit {
+  const token = getAccessToken()
+  return {
+    ...(extra ?? {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+}
+
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    if (res.status === 401) unauthorizedHandler?.()
+    throw await parseApiError(res)
+  }
+  // No-content responses (e.g. 204 from change-password) have no JSON body.
+  if (res.status === 204) return undefined as T
+  return (await res.json()) as T
+}
+
+export async function apiGet<T>(
+  path: string,
+  params?: Record<string, string | number | undefined>
+): Promise<T> {
+  const res = await fetch(buildUrl(path, params), {
+    headers: buildHeaders(),
+  })
+  return handleResponse<T>(res)
+}
+
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method: 'POST',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  return handleResponse<T>(res)
+}
+
+export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method: 'PUT',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  return handleResponse<T>(res)
+}
+
+export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method: 'PATCH',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  return handleResponse<T>(res)
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetch(buildUrl(path), {
+    method: 'DELETE',
+    headers: buildHeaders(),
+  })
+  return handleResponse<T>(res)
+}
+
+/**
+ * Binary download (e.g. the ficha PDF at {@code GET /candidates/{id}/ficha.pdf}).
+ * Reads the body as a {@link Blob} instead of JSON — {@code handleResponse}'s
+ * JSON parse throws on {@code application/pdf} payloads, so this is a separate
+ * helper that shares the same URL/auth/401 plumbing.
+ */
+export async function apiDownload(path: string): Promise<Blob> {
+  const res = await fetch(buildUrl(path), {
+    headers: buildHeaders(),
+  })
+  if (!res.ok) {
+    if (res.status === 401) unauthorizedHandler?.()
+    throw await parseApiError(res)
+  }
+  return res.blob()
+}
+
+/** Triggers a browser download for the given blob (helper for {@code apiDownload}). */
+export function saveBlobDownload(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}

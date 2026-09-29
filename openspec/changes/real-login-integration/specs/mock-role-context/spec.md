@@ -4,8 +4,8 @@
 
 ### Requirement: `useRole` Hook and Provider
 
-The system MUST provide a `RoleProvider` (React Context) exposing: the current active role, a setter/switcher function, and the static list of selectable roles. `useRole()` MUST be the only way pages/routes read the active role — no component MAY read role state by other means. When a real authenticated session exists, the active role MUST be derived from the session's decoded JWT `roles` claim via a fixed backend-to-frontend lookup table (`ADMIN`→`ADMINISTRADOR`, `PERSONAL_FINANZAS`→`FINANZAS`, other names 1:1; first mapped role wins) and MUST NOT be changeable via the switcher. When no real session exists, the active role MUST continue to come from the manual switcher exactly as before.
-(Previously: the active role always came from the manual switcher/seed — there was no concept of a session or a JWT-derived role.)
+The system MUST provide a `RoleProvider` (React Context) exposing: the current active role, a setter/switcher function, and the list of selectable roles. `useRole()` MUST be the only way pages/routes read the active role — no component MAY read role state by other means. When a real authenticated session exists, the selectable roles MUST come from the session's decoded JWT `roles` claim via a fixed backend-to-frontend lookup table (`ADMIN`→`ADMINISTRADOR`, `PERSONAL_FINANZAS`→`FINANZAS`, other names 1:1), the ACTIVE role MUST be one of those (chosen at login for multi-role accounts and switchable thereafter, persisted across reloads), and the switcher MUST NOT be able to escalate to a role the account does not have. When no real session exists, the active role MUST continue to come from the manual switcher exactly as before.
+(Previously: the active role always came from the manual switcher/seed — there was no concept of a session or a JWT-derived role. Before this delta: real mode picked the FIRST mapped JWT role and disabled the switcher.)
 
 #### Scenario: Hook returns current role (no session)
 - GIVEN `RoleProvider` wraps the app with no real session and default role "Servicios Escolares"
@@ -17,10 +17,16 @@ The system MUST provide a `RoleProvider` (React Context) exposing: the current a
 - WHEN any mounted component reads `useRole()`
 - THEN it reflects "Director de División" without a page reload
 
-#### Scenario: Authenticated role is derived from the JWT, not the switcher
+#### Scenario: Authenticated role comes from the JWT-role set, switchable within it
 - GIVEN a user authenticates and the JWT `roles` claim includes `ADMIN`
 - WHEN the session is established
 - THEN `useRole()` returns `ADMINISTRADOR`, AND the user can access exactly the routes an `ADMINISTRADOR` mock role could access, with no changes to `RequireRole` logic
+
+#### Scenario: Multi-role account activates each of its own roles only
+- GIVEN a user authenticates with JWT `roles` = `[ADMIN, SERVICIOS_ESCOLARES]`
+- WHEN they pick "Servicios Escolares" at the post-login role-selection step and later switch to "Administrador" via the shell switcher
+- THEN the active role reflects each selection in turn, both selections keep working across reloads, AND attempting to switch to a role NOT on the JWT (e.g. `FINANZAS`) is ignored
+- AND the FIRST mapped role is NOT forced — the account may act under any of its mapped roles
 
 ## ADDED Requirements
 
@@ -32,6 +38,11 @@ The system MUST authenticate against `POST /auth/login` and establish session st
 - GIVEN a user on `/login` with valid username/password
 - WHEN they submit the form
 - THEN the system stores the returned tokens, derives role from the JWT, and redirects to `/dashboard`
+
+#### Scenario: Multi-role account is asked which role to enter with
+- GIVEN a user on `/login` with valid credentials whose JWT maps to 2+ frontend roles
+- WHEN they submit the form and authentication succeeds
+- THEN a role-selection step is shown listing those roles, AND on choosing one the session starts under it and navigates to the (password-change or dashboard) target — AND later, mid-session, the shell role switcher lists the SAME roles and can move the active role between them
 
 #### Scenario: Invalid credentials are rejected
 - GIVEN a user submits incorrect credentials

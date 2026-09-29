@@ -1,0 +1,61 @@
+# ──────────────────────────────────────────────
+# SISA — Frontend
+#
+# Un solo archivo para los tres ambientes. Este compose NO tiene ningun valor
+# por omision: todo sale del .env, y si falta algo el comando falla diciendo
+# que variable falta, en vez de inventarse un valor.
+#
+#   docker compose --env-file .env.cds     up -d --build   # local/cds
+#   docker compose --env-file .env.testdti up -d --build   # test
+#   docker compose --env-file .env.prod    up -d --build   # produccion
+#
+# El front NO necesita al contenedor del API para funcionar: VITE_API_URL se
+# compila dentro del bundle apuntando a la URL publica del API, asi que este
+# compose no depende del otro (cada uno es independiente). Lo que si comparte
+# con el es la red del reverse proxy, via DOCKER_NETWORK.
+#
+# El puerto de la derecha es literal a proposito: es el puerto DENTRO del
+# contenedor, fijo en la imagen NGINX. Lo que cambia por ambiente es el de la
+# izquierda.
+# ──────────────────────────────────────────────
+services:
+
+  # ────────────────────────────────────────────
+  # Frontend: React (Vite) compilado y servido con NGINX — HTTP
+  # Solo visible en la red Docker; el reverse proxy externo termina SSL.
+  # ────────────────────────────────────────────
+  ui-sisa:
+    image: sisa-ui:latest
+    build:
+      context: .
+      args:
+        # Vite lo incrusta en el bundle al compilar. Sin valor por omision a
+        # proposito: un default equivocado en produccion mandaria al
+        # navegador a localhost y el fallo se veria en el navegador, no aqui.
+        VITE_API_URL: ${VITE_API_URL:?falta VITE_API_URL en el .env}
+    container_name: ui-sisa
+    hostname: ui-sisa
+    ports:
+      - "${FRONT_BIND:?falta FRONT_BIND en el .env}:${FRONT_PORT:?falta FRONT_PORT en el .env}:80"
+    networks:
+      - sisa-net
+    deploy:
+      resources:
+        limits:
+          cpus: "${FRONTEND_CPUS_LIMIT:?falta FRONTEND_CPUS_LIMIT en el .env}"
+          memory: ${FRONTEND_MEMORY_LIMIT:?falta FRONTEND_MEMORY_LIMIT en el .env}
+        reservations:
+          memory: 32M
+    restart: unless-stopped
+
+# La red se declara en el .env del ambiente:
+#   local    → DOCKER_NETWORK=sisa-ui-net     DOCKER_NETWORK_EXTERNAL=false
+#   testdti  → DOCKER_NETWORK=net-cds-test    DOCKER_NETWORK_EXTERNAL=true
+#   prod     → DOCKER_NETWORK=sisava-network  DOCKER_NETWORK_EXTERNAL=true
+#
+# Los dos composes (este y el del back) deben apuntar a la MISMA red en
+# testdti y prod, para que el reverse proxy alcance a ui-sisa y a api-sisa.
+networks:
+  sisa-net:
+    name: ${DOCKER_NETWORK:?falta DOCKER_NETWORK en el .env}
+    external: ${DOCKER_NETWORK_EXTERNAL:?falta DOCKER_NETWORK_EXTERNAL en el .env}

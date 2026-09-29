@@ -1,0 +1,304 @@
+import type { Role, RoleUser } from './RoleContext'
+import { apiGet, apiPost } from './apiClient'
+
+/**
+ * Real backend integration for login/session only (see
+ * `openspec/changes/real-login-integration/design.md`). No `jwt-decode` — a
+ * minimal manual base64url decoder is enough because this change only ever
+ * reads `sub`/`roles`/`exp` off the access token, never verifies its
+ * signature (verification is the backend's job).
+ *
+ * HTTP plumbing (`API_URL`, request/error handling, token/session-mode read
+ * accessors) lives in `apiClient.ts` — this module is a CONSUMER of it, not
+ * the other way around (see `sdd/real-login-integration/api-client-refactor`
+ * for why the boundary is drawn there). This module keeps the WRITE-side
+ * session functions below, which are session-domain concerns, not HTTP ones.
+ */
+
+/**
+ * Backend `RoleType` → frontend `Role` lookup. Only roles with an existing
+ * frontend concept are mapped; anything else (estadías roles, `DOCENTE`,
+ * `ESTUDIANTE`, `EGRESADO`) has no frontend `Role` yet and is intentionally
+ * left out — `mapRole` skips over unmapped entries.
+ */
+export const ROLE_MAP: Record<string, Role> = {
+  ADMIN: 'ADMINISTRADOR',
+  PERSONAL_FINANZAS: 'FINANZAS',
+  SERVICIOS_ESCOLARES: 'SERVICIOS_ESCOLARES',
+  GESTOR_ACADEMICO: 'GESTOR_ACADEMICO',
+  DIRECTOR_DIVISION: 'DIRECTOR_DIVISION',
+}
+
+export const FRONTEND_ROLE_KEY_MAP: Partial<Record<Role, string>> = {
+  ADMINISTRADOR: 'ADMIN',
+  FINANZAS: 'PERSONAL_FINANZAS',
+  SERVICIOS_ESCOLARES: 'SERVICIOS_ESCOLARES',
+  GESTOR_ACADEMICO: 'GESTOR_ACADEMICO',
+  DIRECTOR_DIVISION: 'DIRECTOR_DIVISION',
+}
+
+/** First entry in `roles` that has a frontend `Role` mapping wins; `null` if none do. */
+export function mapRole(roles: string[]): Role | null {
+  for (const backendRole of roles) {
+    const mapped = ROLE_MAP[backendRole]
+    if (mapped) return mapped
+  }
+  return null
+}
+
+/**
+ * Maps EVERY backend role that has a frontend equivalent, preserving JWT
+ * order and de-duplicating. The result is the set of roles a real user can
+ * actually activate — a multi-role account yields 2+ entries, which drives the
+ * post-login role-selection step and the shell's role switcher.
+ */
+export function mapRoles(roles: string[]): Role[] {
+  const out: Role[] = []
+  const seen = new Set<Role>()
+  for (const backendRole of roles) {
+    const mapped = ROLE_MAP[backendRole]
+    if (mapped && !seen.has(mapped)) {
+      seen.add(mapped)
+      out.push(mapped)
+    }
+  }
+  return out
+}
+
+export function mapFrontendRoleKey(role: Role | null): string | null {
+  if (role === null) return null
+  return FRONTEND_ROLE_KEY_MAP[role] ?? null
+}
+
+export interface JwtClaims {
+  sub: string
+  roles: string[]
+  exp: number
+}
+
+/** Decodes a single base64url segment to its UTF-8 text (claims payloads, capability envelopes). */
+function decodeBase64UrlSegment(value: string): string {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
+  const binary = atob(padded)
+  return decodeURIComponent(
+    Array.prototype.map.call(binary, (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+  )
+}
+
+/**
+ * Decodes the payload segment of a JWT — base64url, NOT signature-verified
+ * (verification already happened server-side; the frontend only needs the
+ * claims to derive role/expiry for UI purposes). Returns `null` for any
+ * malformed token so callers can treat it the same as "no session".
+ */
+export function decodeJwtPayload(token: string): JwtClaims | null {
+  try {
+    const segments = token.split('.')
+    if (segments.length !== 3) return null
+    const claims = JSON.parse(decodeBase64UrlSegment(segments[1])) as Partial<JwtClaims>
+    if (typeof claims.sub !== 'string' || !Array.isArray(claims.roles) || typeof claims.exp !== 'number') {
+      return null
+    }
+    return { sub: claims.sub, roles: claims.roles, exp: claims.exp }
+  } catch {
+    return null
+  }
+}
+
+export interface CapabilityResponse {
+  capabilities: string
+}
+
+/**
+ * Body of `GET /auth/me` — the CALLER's own profile (fullName from its linked
+ * `Person`, username, best email). The backend never returns anyone else's:
+ * the `sub` claim picks the row, no id is ever sent by the client.
+ */
+export interface MeProfile {
+  fullName: string
+  username: string
+  email: string
+}
+
+/**
+ * Decodes the base64url capability envelope from {@code GET /auth/me/capabilities}
+ * into the caller's own permission keys. The payload is obfuscated on the wire
+ * (not plaintext JSON), but the backend remains the real authority — decoding
+ * here only drives what the UI shows. Returns `[]` for any malformed envelope.
+ */
+export function decodeCapabilities(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(decodeBase64UrlSegment(raw)) as unknown
+    if (!Array.isArray(parsed) || parsed.some(key => typeof key !== 'string')) return []
+    return parsed
+  } catch {
+    return []
+  }
+}
+
+export interface LoginResponse {
+  accessToken: string
+  refreshToken: string
+  tokenType: string
+  expiresIn: number
+  mustChangePassword: boolean
+}
+
+// ─── Storage ────────────────────────────────────────────────────────────────
+// `sisa.` prefix mirrors the existing `sisa.mockRole` key (untouched by this
+// change). sessionStorage: tab-scoped, survives reload, cleared on tab close.
+// Read accessors for the access/auth-mode keys live in `apiClient.ts` (needed
+// there to build requests); this module keeps the WRITE side only.
+
+const ACCESS_TOKEN_KEY = 'sisa.accessToken'
+const REFRESH_TOKEN_KEY = 'sisa.refreshToken'
+const AUTH_MODE_KEY = 'sisa.authMode'
+const MUST_CHANGE_PASSWORD_KEY = 'sisa.mustChangePassword'
+const SIGNED_OUT_KEY = 'sisa.signedOut'
+const USER_PROFILE_KEY = 'sisa.userProfile'
+
+export function getStoredMustChangePassword(): boolean {
+  try {
+    return sessionStorage.getItem(MUST_CHANGE_PASSWORD_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+/** Persists a successful login response and switches storage into real mode. */
+export function persistSession(res: LoginResponse): void {
+  try {
+    sessionStorage.setItem(ACCESS_TOKEN_KEY, res.accessToken)
+    sessionStorage.setItem(REFRESH_TOKEN_KEY, res.refreshToken)
+    sessionStorage.setItem(AUTH_MODE_KEY, 'real')
+    sessionStorage.setItem(MUST_CHANGE_PASSWORD_KEY, String(res.mustChangePassword))
+    // A fresh login must not inherit a stale "signed out"/expired marker.
+    sessionStorage.removeItem(SIGNED_OUT_KEY)
+  } catch {
+    // sessionStorage unavailable (e.g. private browsing) — session just won't survive a reload.
+  }
+}
+
+/**
+ * Removes every `sisa.*` key from the given storage — tokens, mock role,
+ * active role, pending-password flag, sign-out marker — so a logout/expiry
+ * leaves nothing behind. Both storages get cleaned because a session must not
+ * survive in one if a future flow writes it to the other.
+ */
+function removeSisaKeys(storage: Storage): void {
+  for (let i = storage.length - 1; i >= 0; i--) {
+    const key = storage.key(i)
+    if (key && key.startsWith('sisa.')) storage.removeItem(key)
+  }
+}
+
+/**
+ * Clears the whole session (tokens, mock/active role, pending-password) from
+ * BOTH browser storages on logout/expiry, but keeps `authMode` at `'real'` — a
+ * subsequent visit (or back-navigation) must still be routed to `/login`, not
+ * silently fall back to mock mode.
+ */
+export function clearSession(): void {
+  try { removeSisaKeys(sessionStorage) } catch { /* storage unavailable — nothing to clear. */ }
+  try { removeSisaKeys(localStorage) } catch { /* storage unavailable — nothing to clear. */ }
+  try {
+    sessionStorage.setItem(AUTH_MODE_KEY, 'real')
+    sessionStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'false')
+  } catch {
+    // sessionStorage unavailable — nothing to re-mark.
+  }
+}
+
+/**
+ * Marks the tab as intentionally signed out. `RequireAuth` reads this to
+ * redirect instantly instead of showing the 3-second "sesión expirada" gate —
+ * that gate is reserved for involuntary endings (401/token expiry).
+ */
+export function markSignedOut(): void {
+  try {
+    sessionStorage.setItem(SIGNED_OUT_KEY, 'true')
+  } catch {
+    // sessionStorage unavailable — marker just won't survive a reload.
+  }
+}
+
+export function getStoredSignedOut(): boolean {
+  try {
+    return sessionStorage.getItem(SIGNED_OUT_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export function persistMustChangePasswordCleared(): void {
+  try {
+    sessionStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'false')
+  } catch {
+    // sessionStorage unavailable — flag just won't survive a reload.
+  }
+}
+
+/**
+ * Reads the cached shell user (from `GET /auth/me`) for real-session reloads.
+ * Anything that isn't a well-formed `{ name, email }` object — or a storage
+ * failure — is treated as "no profile yet" so the shell's placeholder
+ * `'Usuario'` avatar shows instead of a corrupted string. `clearSession()`
+ * removes the key on logout like every other `sisa.*` entry.
+ */
+export function getStoredUserProfile(): RoleUser | null {
+  try {
+    const raw = sessionStorage.getItem(USER_PROFILE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<RoleUser>
+    return typeof parsed.name === 'string' && typeof parsed.email === 'string'
+      ? { name: parsed.name, email: parsed.email }
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** Caches the shell user so a real session survives a reload without re-fetching on mount. */
+export function persistUserProfile(profile: RoleUser): void {
+  try {
+    sessionStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile))
+  } catch {
+    // sessionStorage unavailable — profile just won't survive a reload.
+  }
+}
+
+// ─── API calls ──────────────────────────────────────────────────────────────
+// Both go through `apiPost` (apiClient.ts) — it auto-attaches
+// `Authorization: Bearer <token>` when one exists in storage and parses
+// errors uniformly.
+//
+// `apiLogin` doesn't need an auth header (unauthenticated `/auth/login`
+// call), but letting `apiPost` attach one unconditionally is harmless: there
+// is normally no token yet at login time, and even a stale one from a prior
+// session wouldn't be checked by this endpoint. No opt-out is added.
+
+export async function apiLogin(username: string, password: string): Promise<LoginResponse> {
+  return apiPost<LoginResponse>('/auth/login', { username, password })
+}
+
+/**
+ * Self-service profile lookup: the CALLER's own fullName/email from its
+ * linked `Person`. Auth header attaches automatically via `apiGet`, so no
+ * token parameter is needed — callers invoke it only after a real `login()`
+ * has stored the access token.
+ */
+export async function apiMeProfile(): Promise<MeProfile> {
+  return apiGet<MeProfile>('/auth/me')
+}
+
+/**
+ * Reads the access token implicitly via `apiPost`'s automatic Bearer
+ * attachment rather than taking it as a parameter — at every call site
+ * (`CambiarPassword.tsx`), `authMode` is already `'real'`, meaning `login()`
+ * already ran and `persistSession()` already stored the token, so it's
+ * always present in storage by the time this is called.
+ */
+export async function apiChangePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiPost<void>('/auth/change-password', { currentPassword, newPassword })
+}

@@ -2,6 +2,10 @@ node_modules
 dist
 .DS_Store
 *.local
+# .env.* cubre los .env.testdti y .env.prod que se colocan a mano en los
+# servidores: no llevan secretos el front, pero son configuracion de cada
+# ambiente y viven en Notion, no en el repositorio. La negacion deja pasar el
+# .env.example, que si se versiona como referencia.
 .env
 .env.*
 !.env.example
