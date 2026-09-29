@@ -31,10 +31,11 @@ import {
 // same pattern as Generaciones/Divisiones/Grupos — there is NO physical
 // delete for this aggregate (`ChangePaymentConceptStatusUseCase`).
 
-type PaymentConceptType = 'ENROLLMENT' | 'REINSCRIPTION' | 'EXTRAORDINARY' | 'DOCUMENT' | 'OTHER'
+type PaymentConceptType = 'ADMISSION' | 'ENROLLMENT' | 'REINSCRIPTION' | 'EXTRAORDINARY' | 'DOCUMENT' | 'OTHER'
 type PaymentConceptStatus = 'ACTIVE' | 'INACTIVE'
 
 const TYPE_LABELS: Record<PaymentConceptType, string> = {
+  ADMISSION: 'Admisión',
   ENROLLMENT: 'Inscripción',
   REINSCRIPTION: 'Reinscripción',
   EXTRAORDINARY: 'Extraordinario',
@@ -42,12 +43,31 @@ const TYPE_LABELS: Record<PaymentConceptType, string> = {
   OTHER: 'Otro',
 }
 
+// El verde es a propósito: `ADMISSION` es el tipo que el flujo de fichas
+// busca para cotizar y cobrar la admisión (con `isTuition` encendido), y
+// entenderlo de un vistazo en el listado evita registrar la cuota de
+// admisión como "Inscripción" y que la ficha salga sin precio.
 const TYPE_BADGE_MAP: Record<PaymentConceptType, BadgeStyle> = {
+  ADMISSION: { label: TYPE_LABELS.ADMISSION, className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
   ENROLLMENT: { label: TYPE_LABELS.ENROLLMENT, className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   REINSCRIPTION: { label: TYPE_LABELS.REINSCRIPTION, className: 'bg-purple-50 text-purple-700 border border-purple-200' },
   EXTRAORDINARY: { label: TYPE_LABELS.EXTRAORDINARY, className: 'bg-amber-50 text-amber-700 border border-amber-200' },
   DOCUMENT: { label: TYPE_LABELS.DOCUMENT, className: 'bg-slate-50 text-slate-700 border border-slate-200' },
   OTHER: { label: TYPE_LABELS.OTHER, className: 'bg-gray-100 text-gray-600 border border-gray-200' },
+}
+
+/**
+ * Badge de un tipo que viene de la API.
+ *
+ * <p>`TYPE_BADGE_MAP` es exhaustivo para TypeScript, pero el valor esruntime no
+ * lo es: si el backend tiene un tipo que este bundle no conoce (versiones
+ * desalineadas durante un despliegue) el acceso directo
+ * `TYPE_BADGE_MAP[row.type].className` es `undefined.className` y tumba la
+ * lista entera. Mostrar la clave cruda es una degradación aceptable; una
+ * pantalla en blanco no lo es.
+ */
+function typeBadge(type: string): BadgeStyle {
+  return TYPE_BADGE_MAP[type as PaymentConceptType] ?? { label: type, className: 'bg-gray-100 text-gray-600 border border-gray-200' }
 }
 
 interface PaymentConceptListItem {
@@ -238,8 +258,8 @@ export default function ConceptosList() {
           <>
             {/* Top row: tipo + estado */}
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TYPE_BADGE_MAP[row.type].className}`}>
-                {TYPE_BADGE_MAP[row.type].label}
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${typeBadge(row.type).className}`}>
+                {typeBadge(row.type).label}
               </span>
               <div className="flex items-center gap-2">
                 <Switch
