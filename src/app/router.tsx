@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router'
+import { BASE_PATH } from '@app/core/infra/basePath'
 import AuthLayout from '@app/core/layout/AuthLayout'
 import AppLayout from '@app/core/layout/AppLayout'
 import { RequireRole } from '@app/core/infra/RequireRole'
@@ -480,6 +481,6 @@ const router = createBrowserRouter([
       },
     ],
   },
-])
+], { basename: BASE_PATH || '/' })
 
 export default router

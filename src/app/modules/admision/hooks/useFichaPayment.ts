@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { ADMISSION_ERROR_CODES, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
+import { toBrowserPath } from '@app/core/infra/basePath'
 import type { CheckoutInitiationBackend, PaymentConfirmationBackend } from '../data/types'
 
 /**
@@ -490,8 +491,10 @@ export function useFichaPayment({
     }
     setProcessing(true)
     try {
+      // El backend pone esta ruta tal cual en la URL de retorno del banco, asi
+      // que va con la ruta base (/SGA/portal/...) y no con la del router.
       const res = await apiPost<CheckoutInitiationBackend>(`/candidates/${candidateId}/payments/checkout`, {
-        returnPath,
+        returnPath: returnPath ? toBrowserPath(returnPath) : undefined,
       })
       try {
         sessionStorage.setItem(storageKey, res.orderId)

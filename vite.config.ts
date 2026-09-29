@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
@@ -16,7 +16,15 @@ function figmaAssetResolver() {
   }
 }
 
-export default defineConfig({
+// Ruta publica bajo la que se sirve la app (ej. /SGA/ detras del reverse
+// proxy). Vite la exige con "/" al inicio y al final.
+function normalizeBasePath(value: string | undefined): string {
+  const trimmed = (value ?? '').trim().replace(/^\/+|\/+$/g, '')
+  return trimmed ? `/${trimmed}/` : '/'
+}
+
+export default defineConfig(({ mode }) => ({
+  base: normalizeBasePath(loadEnv(mode, process.cwd(), '').VITE_BASE_PATH),
   plugins: [
     figmaAssetResolver(),
     // The React and Tailwind plugins are both required for Make, even if
@@ -34,4 +42,4 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
-})
+}))

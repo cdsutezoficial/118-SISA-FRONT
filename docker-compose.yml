@@ -33,6 +33,9 @@ services:
         # proposito: un default equivocado en produccion mandaria al
         # navegador a localhost y el fallo se veria en el navegador, no aqui.
         VITE_API_URL: ${VITE_API_URL:?falta VITE_API_URL en el .env}
+        # Ruta publica bajo la que el reverse proxy sirve la app (ej. /SGA/).
+        # En la raiz del dominio, "/".
+        VITE_BASE_PATH: ${VITE_BASE_PATH:?falta VITE_BASE_PATH en el .env}
     container_name: ui-sisa
     hostname: ui-sisa
     ports:

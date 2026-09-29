@@ -18,8 +18,12 @@ FROM node:22-bookworm-slim AS build
 # eso es un ARG de build y no una variable de entorno del contenedor. Cambia
 # de valor => hay que reconstruir la imagen (up -d --build).
 ARG VITE_API_URL
+# Ruta publica de la app (ej. /SGA/). Vite la usa como `base` y el router
+# como basename; tambien se compila en el bundle.
+ARG VITE_BASE_PATH
 
 ENV VITE_API_URL=${VITE_API_URL} \
+    VITE_BASE_PATH=${VITE_BASE_PATH} \
     CI=true
 
 WORKDIR /app

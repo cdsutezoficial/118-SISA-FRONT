@@ -7,6 +7,7 @@ import { Sidebar } from './Sidebar'
 import { ROLE_LABELS, ROLE_DEFAULT_PATHS } from './layoutRoles'
 import { decodeJwtPayload } from '../infra/auth'
 import { getAccessToken, getStoredAuthMode } from '../infra/apiClient'
+import { toBrowserPath } from '../infra/basePath'
 
 function isRealSessionActive(): boolean {
   if (getStoredAuthMode() !== 'real') return false
@@ -128,7 +129,7 @@ export default function AppLayout() {
   useEffect(() => {
     const onPageshow = (e: PageTransitionEvent) => {
       if (e.persisted && !isRealSessionActive()) {
-        window.location.replace('/login')
+        window.location.replace(toBrowserPath('/login'))
       }
     }
     window.addEventListener('pageshow', onPageshow)
