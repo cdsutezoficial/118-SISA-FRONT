@@ -12,7 +12,7 @@
 # El front NO necesita al contenedor del API para funcionar: VITE_API_URL se
 # compila dentro del bundle apuntando a la URL publica del API, asi que este
 # compose no depende del otro (cada uno es independiente). Lo que si comparte
-# con el es la red del reverse proxy, via DOCKER_NETWORK.
+# con el es la red sisava-network.
 #
 # El puerto de la derecha es literal a proposito: es el puerto DENTRO del
 # contenedor, fijo en la imagen NGINX. Lo que cambia por ambiente es el de la
@@ -41,7 +41,7 @@ services:
     ports:
       - "${FRONT_BIND:?falta FRONT_BIND en el .env}:${FRONT_PORT:?falta FRONT_PORT en el .env}:80"
     networks:
-      - sisa-net
+      - sisava-network
     deploy:
       resources:
         limits:
@@ -51,14 +51,8 @@ services:
           memory: 32M
     restart: unless-stopped
 
-# La red se declara en el .env del ambiente:
-#   local    → DOCKER_NETWORK=sisa-ui-net     DOCKER_NETWORK_EXTERNAL=false
-#   testdti  → DOCKER_NETWORK=net-cds-test    DOCKER_NETWORK_EXTERNAL=true
-#   prod     → DOCKER_NETWORK=sisava-network  DOCKER_NETWORK_EXTERNAL=true
-#
-# Los dos composes (este y el del back) deben apuntar a la MISMA red en
-# testdti y prod, para que el reverse proxy alcance a ui-sisa y a api-sisa.
+# Misma red externa que AccessUtez y el compose del back. El compose no la
+# crea: debe existir antes (en local: docker network create sisava-network).
 networks:
-  sisa-net:
-    name: ${DOCKER_NETWORK:?falta DOCKER_NETWORK en el .env}
-    external: ${DOCKER_NETWORK_EXTERNAL:?falta DOCKER_NETWORK_EXTERNAL en el .env}
+  sisava-network:
+    external: true
