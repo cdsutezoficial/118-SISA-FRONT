@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Loader2, Plus, Search, Trash2, X, Check, ChevronDown } from 'lucide-react'
+import { Loader2, Plus, Search, Trash2, X, Check, ChevronDown, Pencil, Info } from 'lucide-react'
 import { FieldLabel, FieldHelp, FieldError, Switch, ModeSwitcher, DatePicker } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, Button, TextField, SelectField, MiniTable } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
@@ -86,8 +86,45 @@ interface TarifaDraft {
   amount: string
 }
 
+/**
+ * Identidad de una combinación destino de `payment_rate`: (programa, nivel).
+ * El backend no lleva un id de combo, pero `SetPaymentRateUseCaseImpl` cierra
+ * la tarifa vigente que comparta esta tupla, así que es la clave con la que el
+ * front tiene que razonar para saber si una fila agrega precio o lo cambia.
+ */
+function comboKey(programId: string | null | undefined, level: string | null | undefined): string {
+  return `${programId ?? ''}|${level ?? ''}`
+}
+
 /** Campos editables de una tarifa — para ubicar el error en su control. */
 type TarifaField = 'amount' | 'level' | 'programIds'
+
+/**
+ * Alcance ya decidido por las tarifas guardadas de un concepto, deducido de su
+ * forma en lugar de haberlo guardado aparte: `payment_rate` no tiene columna de
+ * alcance, solo la tupla destino (`program_id`, `level`).
+ *
+ * Devuelve `null` cuando no se puede deducir — sin tarifas, o con tarifas de
+ * destinos mezclados. En ese caso el editor tiene que preguntar el alcance, que
+ * es exactamente lo que hace el registro. El destino decide y no el periodo:
+ * una tarifa por periodo sigue siendo general, por nivel o por carrera según
+ * su `program_id`/`level`.
+ */
+function inferScopeFromRates(items: PaymentRateItem[]): TarifaScope | null {
+  if (items.length === 0) return null
+  // Por truthiness y no por `!== null`: el destino ausente llega como `null`
+  // pero una clave omitida llegaría como `undefined`, y comparar contra `null`
+  // la tomaría por una tarifa de carrera.
+  const counts = {
+    PROGRAMS: items.filter(r => !!r.programId).length,
+    LEVEL: items.filter(r => !r.programId && !!r.level).length,
+    GENERAL: items.filter(r => !r.programId && !r.level).length,
+  }
+  const match = (['GENERAL', 'LEVEL', 'PROGRAMS'] as TarifaScope[]).filter(
+    scope => counts[scope] === items.length
+  )
+  return match.length === 1 ? match[0] : null
+}
 
 // Fila de `payment_rate` tal y como la acepta
 // `POST /payment-concepts/{conceptId}/rates` (ver `CreatePaymentRateRequest`).
@@ -591,13 +628,20 @@ export default function ConceptosForm() {
   const [conceptCost, setConceptCost] = useState<number | null>(null)
 
   // ─── Tarifas ──────────────────────────────────────────────────────────────
-  // Solo se editan en Registrar: en Ver/Editar el bloque es el historial
-  // append-only de `GET /payment-concepts/{id}/rates`.
+  // En Registrar el editor es la única forma de capturar el precio. En Editar
+  // el bloque es el historial de `GET /payment-concepts/{id}/rates` (append-only,
+  // no se borra ni se sobrescribe) MÁS el mismo editor, que se abre a demanda
+  // para repricing: capturar una tarifa nueva para una combinación que ya
+  // tiene precio hace que `SetPaymentRateUseCase` cierre la anterior en vez de
+  // dejarla vigente. En Ver no hay editor — el historial es de solo lectura.
   //
   // `tarifaScope` es el paso 1 y es de la sección: todas las filas lo
   // comparten. `tarifas` (el paso 2) arranca vacío hasta que hay alcance.
   const [tarifaScope, setTarifaScope] = useState<TarifaScope | ''>('')
   const [tarifas, setTarifas] = useState<TarifaDraft[]>([])
+  // En Editar el editor arranca colapsado detrás de un botón, para no insinuar
+  // que las tarifas guardadas se van a reescribir al guardar el concepto.
+  const [rateEditorOpen, setRateEditorOpen] = useState(false)
   // Concepto ya creado durante un submit fallido a medias: permite reintentar
   // SOLO las tarifas faltantes sin duplicar el concepto. `pendingRates` guarda
   // el lote exacto que quedó en el aire, para que el reintento no vuelva a
@@ -728,6 +772,91 @@ export default function ConceptosForm() {
   /** Carreras ya tomadas por otra fila. Misma razón que `takenLevelsBy()`. */
   function takenProgramsBy(key: string): Set<string> {
     return new Set(tarifas.filter(t => t.key !== key).flatMap(t => t.programIds))
+  }
+
+  /**
+   * Combos (programa, nivel) que ya tienen una tarifa VIGENTE en el historial.
+   *
+   * Solo cuentan las que no tienen `validTo`: una tarifa ya cerrada es
+   * historial, no un destino que una fila nueva vaya a pisar. En Registrar el
+   * historial está vacío y el set sale vacío, así que el mismo aviso sirve para
+   * los tres modos.
+   */
+  function activeCombos(): Set<string> {
+    return new Set(rates.filter(r => !r.validTo).map(r => comboKey(r.programId, r.level)))
+  }
+
+  /**
+   * Abre el editor en modo repricing sobre una tarifa del historial.
+   *
+   * `PaymentRate` es append-only: no hay PUT ni DELETE, así que "editar el
+   * monto" no es una operación de guardado, es capturar una tarifa nueva para
+   * el mismo combo. El POST resultante hace que `SetPaymentRateUseCase` cierre
+   * la anterior con `validTo = validFrom - 1` y abra la nueva. Si el usuario
+   * abandona el editor, el historial queda igual que estaba.
+   */
+  function startRepricing(rate: PaymentRateItem) {
+    const draft = newTarifaDraft()
+    draft.amount = String(rate.amount)
+    if (rate.programId) {
+      draft.programIds = [rate.programId]
+      setTarifaScope('PROGRAMS')
+    } else if (rate.level) {
+      draft.level = rate.level
+      setTarifaScope('LEVEL')
+    } else {
+      setTarifaScope('GENERAL')
+    }
+    setTarifas([draft])
+    setErrors(prev => ({ ...prev, alcance: undefined, tarifas: undefined, tarifasByKey: undefined }))
+    setRateEditorOpen(true)
+  }
+
+  /**
+   * Abre el editor para capturar una tarifa que no existía.
+   *
+   * Si el concepto ya tiene tarifas, su alcance NO se vuelve a preguntar: se
+   * deduce de las guardadas y el `ScopePicker` queda bloqueado (ver
+   * `lockedScope`). Preguntarlo de nuevo era lo que en la pantalla anterior
+   * hacía dudar de un alcance que en realidad ya estaba decidido, y cambiarlo
+   * habría borrado los destinos de las filas.
+   */
+  function openRateEditor() {
+    setRateEditorOpen(true)
+    const deduced = inferScopeFromRates(rates)
+    if (deduced) {
+      setTarifaScope(deduced)
+      setTarifas([newTarifaDraft()])
+    } else if (tarifaScope === '' && tarifas.length === 0) {
+      setTarifas([newTarifaDraft()])
+    }
+  }
+
+  /** Cierra el editor y tira los drafts: el historial no se toca. */
+  function closeRateEditor() {
+    setRateEditorOpen(false)
+    setTarifas([])
+    setTarifaScope('')
+    setPendingRates([])
+    setErrors(prev => ({ ...prev, alcance: undefined, tarifas: undefined, tarifasByKey: undefined }))
+  }
+
+  /**
+   * Si guardar esta fila cambiaría el precio de algo que ya está en el
+   * historial, en vez de agregar una tarifa nueva.
+   *
+   * Se calcula desde el destino ACTUAL de la fila y no desde el combo con el
+   * que se abrió, porque el usuario puede mover el nivel o las carreras
+   * después de venir del historial. En alcance PROGRAMS una fila se expande a
+   * una tarifa por carrera, así que basta con que una sola coincida.
+   */
+  function wouldReprice(t: TarifaDraft): boolean {
+    const active = activeCombos()
+    if (tarifaScope === 'LEVEL') return Boolean(t.level) && active.has(comboKey(null, t.level))
+    if (tarifaScope === 'PROGRAMS') {
+      return t.programIds.some(pid => active.has(comboKey(pid, null)))
+    }
+    return active.has(comboKey(null, null))
   }
 
   /**
@@ -936,11 +1065,19 @@ export default function ConceptosForm() {
     // general" y de destinos duplicados ya no viven aquí — el alcance único
     // hace imposible la primera, y el destino es ahora el mismo tipo en todas
     // las filas, lo que hace la segunda verificable fila a fila.
-    if (isRegister) {
+    //
+    // En Registrar las tarifas son obligatorias: un concepto sin precio no
+    // sirve para cotizar nada. En Editar son OPCIONALES — editar el nombre de
+    // un concepto no debe exigir meterse a tocar precios — así que la sección
+    // solo se valida si el usuario la abrió. `tarifaScope !== ''` es
+    // precisamente eso: el editor está colapsado hasta que se elige alcance.
+    if (isRegister || tarifaScope !== '') {
       if (!tarifaScope) {
         e.alcance = 'Selecciona el alcance de las tarifas.'
       } else if (tarifas.length === 0) {
-        e.tarifas = 'Agrega al menos una tarifa para poder registrar el concepto.'
+        e.tarifas = isRegister
+          ? 'Agrega al menos una tarifa para poder registrar el concepto.'
+          : 'Agrega al menos una tarifa para poder guardar los cambios.'
       }
 
       const byKey: Record<string, { field: TarifaField; message: string }> = {}
@@ -1015,10 +1152,21 @@ export default function ConceptosForm() {
     // un costo único que defender y queda null: el precio vive solo en
     // `payment_rate`.
     //
-    // En Ver/Editar no hay drafts de tarifa (el historial es append-only), así
-    // que el costo se reenvía tal como vino de la API en vez de degradar a
-    // null — un PUT con `cost: null` borraría el precio del concepto.
+    // En Ver no hay drafts de tarifa (el historial es de solo lectura) y en
+    // Editar solo los hay si el usuario abrió el editor, así que el costo se
+    // reenvía tal como vino de la API en vez de degradar a null — un PUT con
+    // `cost: null` borraría el precio de todo lo que aún lee
+    // `PaymentConcept.cost`.
+    //
+    // La excepción en Editar es el alcance GENERAL: si el usuario capturó una
+    // tarifa general nueva, ese monto ES el costo del concepto, y dejarlo con
+    // el valor viejo dejaría el concepto y su historial de precios
+    // discrepantes. Solo se sustituye si la fila trae monto: abrir el editor y
+    // dejarlo a medias no debe borrar el precio.
     const generalCost = generalAmount()
+    const cost = isRegister
+      ? generalCost
+      : generalCost !== null ? generalCost : conceptCost
     const payload: PaymentConceptFormPayload = {
       name: nombre.trim(),
       description: descripcion.trim() ? sanitizeHtml(descripcion) : null,
@@ -1032,7 +1180,7 @@ export default function ConceptosForm() {
       availableFrom: tieneVigencia && availableFrom ? availableFrom : null,
       availableUntil: tieneVigencia && availableUntil ? availableUntil : null,
       areaId: areaId || null,
-      cost: isRegister ? generalCost : conceptCost,
+      cost,
       isExternal: esExterno,
       costExternal: esExterno && costoExterno.trim() !== '' ? Number(costoExterno) : null,
       isAccumulable: esAcumulable,
@@ -1079,6 +1227,27 @@ export default function ConceptosForm() {
         navigate(`/conceptos/form?mode=view&id=${conceptId}`, { state: { toast: 'Concepto de pago registrado exitosamente.' } })
       } else if (id) {
         await apiPut<PaymentConceptResponse>(`/payment-concepts/${id}`, payload)
+
+        // En Editar las tarifas son un bloque opcional encima de un concepto que
+        // ya existe: el PUT va primero y las filas que el usuario capturó se
+        // mandan después, con el mismo bucle secuencial y el mismo reintento
+        // parcial que en Registrar. El lote se fija ANTES del PUT para que, si
+        // una tarifa falla, el reintento reenvíe exactamente las que faltan en
+        // vez de volver a expandir los drafts — que para entonces el usuario
+        // pudo corregir, y mandar el monto viejo cerraría la fila previa con un
+        // rango vacío.
+        if (batch.length === 0) batch = expandTarifas()
+        if (batch.length > 0) {
+          setPendingRates(batch)
+          conceptId = id
+          setRatesProgress({ done: 0, total: batch.length })
+          for (let i = 0; i < batch.length; i++) {
+            await apiPost(`/payment-concepts/${id}/rates`, batch[i])
+            setPendingRates(batch.slice(i + 1))
+            setRatesProgress({ done: i + 1, total: batch.length })
+          }
+        }
+
         navigate(`/conceptos/form?mode=view&id=${id}`, { state: { toast: 'Concepto de pago actualizado exitosamente.' } })
       }
     } catch (err) {
@@ -1094,6 +1263,8 @@ export default function ConceptosForm() {
             : 'No se pudo conectar con el servidor. Intenta de nuevo más tarde.'
       if (isRegister && conceptId) {
         setSubmitErrorMsg(`El concepto se registró, pero falló el guardado de sus tarifas. ${baseMessage} Vuelve a guardar para reintentar solo las tarifas que faltan.`)
+      } else if (!isRegister && conceptId && pendingRates.length > 0) {
+        setSubmitErrorMsg(`El concepto se actualizó, pero falló el guardado de sus tarifas. ${baseMessage} Vuelve a guardar para reintentar solo las tarifas que faltan.`)
       } else {
         setSubmitErrorMsg(baseMessage)
       }
@@ -1105,6 +1276,24 @@ export default function ConceptosForm() {
   const areaOptions = areas.map(a => ({ value: a.id, label: `${a.code} — ${a.name}` }))
   const conceptOptions = concepts.filter(c => c.id !== id).map(c => ({ id: c.id, label: c.name }))
   const carreraOptions = programs.map(p => ({ id: p.id, label: `${p.code} — ${p.name}` }))
+
+  // En Registrar el editor de tarifas es el cuerpo de la sección. En Editar
+  // conviven las dos cosas: el historial siempre visible y el editor debajo,
+  // colapsado hasta que se pide — así no se insinúa que guardar el concepto
+  // reescribe las tarifas que ya están. En Ver no hay editor: el historial es
+  // de solo lectura y no hay nada que capturar.
+  const rateEditorVisible = isRegister || rateEditorOpen
+
+  /**
+   * Alcance ya fijado por el historial, que se muestra en vez del `ScopePicker`
+   * cuando existe. Solo en Editar: en Registrar no hay historial y el alcance se
+   * elige ahí; en Ver no hay editor.
+   *
+   * `null` cuando las tarifas guardadas son de destinos mezclados o no hay
+   * ninguna: en ese caso no se puede deducir y el `ScopePicker` se muestra para
+   * que la sección siga teniendo un alcance con el que trabajar.
+   */
+  const lockedScope = !isRegister ? inferScopeFromRates(rates) : null
 
   return (
     <FormPage>
@@ -1199,84 +1388,144 @@ export default function ConceptosForm() {
           </FormCard>
 
           {/* ── Tarifas ────────────────────────────────────────────────────────
-              Un solo bloque para los tres modos: en Registrar es el editor del
-              precio (alcance de la sección + una fila por monto), y en
-              Ver/Editar es el historial append-only de `payment_rate`, que no
-              se edita ni se borra. */}
+              En Registrar es el editor del precio (alcance de la sección + una
+              fila por monto). En Ver es el historial append-only de
+              `payment_rate`. En Editar son las dos: el historial arriba —nunca
+              se borra ni se sobrescribe— y el mismo editor debajo, para
+              capturar una tarifa nueva o cambiar el precio de una existente. */}
           <FormCard>
             <SectionTitle>Tarifas</SectionTitle>
 
-            {!isRegister ? (
-              // ── Historial (Ver/Editar) — append-only, sin edición ─────────
-              ratesLoadStatus === 'loading' ? (
-                <div className="flex flex-col items-center gap-2 text-[#6B7280] py-8">
-                  <Loader2 size={20} className="animate-spin text-[#009574]" />
-                  <p className="text-[12px] font-medium">Cargando tarifas...</p>
-                </div>
-              ) : ratesLoadStatus === 'error' ? (
-                <p className="text-[12px] text-red-600 text-center py-6">No se pudieron cargar las tarifas. Intenta de nuevo más tarde.</p>
-              ) : rates.length === 0 ? (
-                <p className="text-[12px] text-[#6B7280] text-center py-6">Sin tarifas registradas todavía.</p>
-              ) : (
-                <>
-                  {/* La ventana se muestra UNA vez, arriba: las tarifas no tienen
-                      vigencia propia, así que repetirla por fila mostraría la
-                      misma fecha en todas. */}
-                  <p className="mb-3 text-[11px] text-[#6B7280]">
-                    <span className="font-medium text-[#333333]">Disponible para pagos:</span>{' '}
-                    {tieneVigencia && (availableFrom || availableUntil)
-                      ? [
-                          availableFrom ? formatDate(availableFrom) : 'sin fecha inicial',
-                          availableUntil ? formatDate(availableUntil) : 'sin fecha final',
-                        ].join(' – ')
-                      : 'sin vigencia — disponible siempre'}
-                    . Aplica a todas las tarifas del concepto.
-                  </p>
-
-                  <div className="hidden md:block border border-[#E5E7EB] rounded-lg overflow-hidden">
-                    <MiniTable
-                      columns={[
-                        { key: 'programa', header: 'Carrera', render: r => <span className="text-[#333333]">{programLabel(r.programId)}</span> },
-                        { key: 'nivel', header: 'Nivel', render: r => <span className="text-[#333333]">{levelLabel(r.level)}</span> },
-                        { key: 'periodo', header: 'Periodo', render: r => <span className="text-[#333333]">{periodLabel(r.periodId)}</span> },
-                        { key: 'monto', header: 'Monto', className: 'text-right tabular-nums', render: r => <span className="font-medium text-[#333333]">{formatCurrency(r.amount)}</span> },
-                      ]}
-                      items={rates}
-                      keyFor={r => r.id}
-                    />
+            {!isRegister && (
+              // ── Historial (Ver/Editar) — append-only ───────────────────────
+              <div className={rateEditorVisible ? 'mb-6 border-b border-[#E5E7EB] pb-6' : ''}>
+                {ratesLoadStatus === 'loading' ? (
+                  <div className="flex flex-col items-center gap-2 text-[#6B7280] py-8">
+                    <Loader2 size={20} className="animate-spin text-[#009574]" />
+                    <p className="text-[12px] font-medium">Cargando tarifas...</p>
                   </div>
+                ) : ratesLoadStatus === 'error' ? (
+                  <p className="text-[12px] text-red-600 text-center py-6">No se pudieron cargar las tarifas. Intenta de nuevo más tarde.</p>
+                ) : rates.length === 0 ? (
+                  <p className="text-[12px] text-[#6B7280] text-center py-6">Sin tarifas registradas todavía.</p>
+                ) : (
+                  <>
+                    {/* La ventana se muestra UNA vez, arriba: las tarifas no tienen
+                        vigencia propia, así que repetirla por fila mostraría la
+                        misma fecha en todas. */}
+                    <p className="mb-3 text-[11px] text-[#6B7280]">
+                      <span className="font-medium text-[#333333]">Disponible para pagos:</span>{' '}
+                      {tieneVigencia && (availableFrom || availableUntil)
+                        ? [
+                            availableFrom ? formatDate(availableFrom) : 'sin fecha inicial',
+                            availableUntil ? formatDate(availableUntil) : 'sin fecha final',
+                          ].join(' – ')
+                        : 'sin vigencia — disponible siempre'}
+                      . Aplica a todas las tarifas del concepto.
+                    </p>
 
-                  <div className="md:hidden space-y-3">
-                    {rates.map(r => (
-                      <div key={r.id} className="border border-[#E5E7EB] rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-[13px] font-semibold text-[#333333]">{formatCurrency(r.amount)}</p>
-                          <span className="text-[11px] text-[#6B7280]">{programLabel(r.programId)}</span>
+                    <div className="hidden md:block border border-[#E5E7EB] rounded-lg overflow-hidden">
+                      <MiniTable
+                        columns={[
+                          { key: 'programa', header: 'Carrera', render: r => <span className="text-[#333333]">{programLabel(r.programId)}</span> },
+                          { key: 'nivel', header: 'Nivel', render: r => <span className="text-[#333333]">{levelLabel(r.level)}</span> },
+                          { key: 'periodo', header: 'Periodo', render: r => <span className="text-[#333333]">{periodLabel(r.periodId)}</span> },
+                          { key: 'monto', header: 'Monto', className: 'text-right tabular-nums', render: r => <span className="font-medium text-[#333333]">{formatCurrency(r.amount)}</span> },
+                          ...(isView ? [] : [{
+                            key: 'accion',
+                            header: '',
+                            className: 'w-10',
+                            render: (r: PaymentRateItem) => (
+                              <button
+                                type="button"
+                                onClick={() => startRepricing(r)}
+                                disabled={isSubmitting || Boolean(r.validTo)}
+                                title={r.validTo
+                                  ? 'Esta tarifa ya fue reemplazada por otra más reciente.'
+                                  : 'Cambiar el monto de esta tarifa'}
+                                className="text-[#009574] hover:text-[#007a60] disabled:text-[#D1D5DB] disabled:cursor-not-allowed"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                            ),
+                          }]),
+                        ]}
+                        items={rates}
+                        keyFor={r => r.id}
+                      />
+                    </div>
+
+                    <div className="md:hidden space-y-3">
+                      {rates.map(r => (
+                        <div key={r.id} className="border border-[#E5E7EB] rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="text-[13px] font-semibold text-[#333333]">{formatCurrency(r.amount)}</p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-[#6B7280]">{programLabel(r.programId)}</span>
+                              {!isView && (
+                                <button
+                                  type="button"
+                                  onClick={() => startRepricing(r)}
+                                  disabled={isSubmitting || Boolean(r.validTo)}
+                                  className="text-[#009574] disabled:text-[#D1D5DB]"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-[12px] text-[#6B7280]">{levelLabel(r.level)}</p>
+                          <p className="text-[12px] text-[#6B7280]">{periodLabel(r.periodId)}</p>
                         </div>
-                        <p className="text-[12px] text-[#6B7280]">{levelLabel(r.level)}</p>
-                        <p className="text-[12px] text-[#6B7280]">{periodLabel(r.periodId)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )
-            ) : (
-              // ── Editor (Registrar) ─────────────────────────────────────────
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {rateEditorVisible ? (
+              // ── Editor (Registrar, y Editar cuando se abre) ────────────────
               <>
+                {!isRegister && (
+                  <p className="mb-4 text-[11px] leading-snug text-[#6B7280]">
+                    Las tarifas ya registradas no se sobrescriben. Al guardar, cada
+                    monto de este bloque se registra como una tarifa nueva y la
+                    anterior queda cerrada con su fecha, así que el historial de
+                    precios se conserva.
+                  </p>
+                )}
+
                 <p className="mb-4 text-[11px] leading-snug text-[#6B7280]">
-                  El alcance es el mismo para todas las tarifas del concepto: primero
-                  elige a quién aplican y después define el monto de cada una. En
-                  alcance general basta con un monto, que además es el costo del
-                  concepto. Las tarifas no tienen vigencia propia: se rigen por la
-                  vigencia del concepto.
+                  {lockedScope
+                    ? 'El alcance es el mismo para todas las tarifas del concepto, y las que ya tiene registradas ya lo fijaron. Solo define los montos nuevos.'
+                    : 'El alcance es el mismo para todas las tarifas del concepto: primero elige a quién aplican y después define el monto de cada una. En alcance general basta con un monto, que además es el costo del concepto. Las tarifas no tienen vigencia propia: se rigen por la vigencia del concepto.'}
                 </p>
 
-                <ScopePicker
-                  value={tarifaScope}
-                  onChange={selectScope}
-                  disabled={isSubmitting}
-                  error={errors.alcance}
-                />
+                {lockedScope ? (
+                  // El alcance ya está en el historial, así que se informa en vez
+                  // de preguntarse. `selectScope()` vacía los destinos de las
+                  // filas, así que dejarlo elegible en editar había producido
+                  // pantallas donde cambiar de tarjeta vaciaba lo capturado.
+                  <div className="rounded-lg border border-[#E5E7EB] bg-[#F8F9FA] px-3 py-2.5">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                      Alcance de las tarifas
+                    </span>
+                    <span className="mt-0.5 block text-[13px] font-semibold text-[#333333]">
+                      {SCOPE_LABELS[lockedScope]}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-snug text-[#6B7280]">
+                      {SCOPE_DESCRIPTIONS[lockedScope]}
+                    </span>
+                  </div>
+                ) : (
+                  <ScopePicker
+                    value={tarifaScope}
+                    onChange={selectScope}
+                    disabled={isSubmitting}
+                    error={errors.alcance}
+                  />
+                )}
 
                 {tarifaScope === '' ? (
                   <div className="mt-4 rounded-lg border border-dashed border-[#D1D5DB] py-8 text-center">
@@ -1296,22 +1545,36 @@ export default function ConceptosForm() {
                         const takenLevels = takenLevelsBy(t.key)
                         const takenPrograms = takenProgramsBy(t.key)
                         return (
-                          <TarifaRow
-                            key={t.key}
-                            index={i}
-                            scope={tarifaScope}
-                            canRemove={tarifaScope !== 'GENERAL' && tarifas.length > 1}
-                            draft={t}
-                            nivelOptions={(Object.keys(LEVEL_LABELS) as AcademicLevel[]).filter(
-                              l => l === t.level || !takenLevels.has(l)
+                          <div key={t.key}>
+                            <TarifaRow
+                              index={i}
+                              scope={tarifaScope}
+                              canRemove={tarifaScope !== 'GENERAL' && tarifas.length > 1}
+                              draft={t}
+                              nivelOptions={(Object.keys(LEVEL_LABELS) as AcademicLevel[]).filter(
+                                l => l === t.level || !takenLevels.has(l)
+                              )}
+                              carreraOptions={carreraOptions.filter(
+                                o => t.programIds.includes(o.id) || !takenPrograms.has(o.id)
+                              )}
+                              error={errors.tarifasByKey?.[t.key]}
+                              onChange={patch => { updateTarifa(t.key, patch); clearTarifaErr(t.key) }}
+                              onRemove={() => removeTarifa(t.key)}
+                            />
+                            {/* Aviso de repricing. El POST es idéntico al de una
+                                fila nueva — el que cierra la tarifa anterior es
+                                `SetPaymentRateUseCase` — pero el usuario tiene
+                                que saber que no está agregando una tarifa, la
+                                está cambiando. */}
+                            {!isRegister && wouldReprice(t) && (
+                              <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-[#B45309]">
+                                <Info size={12} className="mt-0.5 shrink-0" />
+                                Esta combinación ya tiene tarifa. Al guardar se
+                                registra un monto nuevo y el anterior queda
+                                cerrado con su fecha.
+                              </p>
                             )}
-                            carreraOptions={carreraOptions.filter(
-                              o => t.programIds.includes(o.id) || !takenPrograms.has(o.id)
-                            )}
-                            error={errors.tarifasByKey?.[t.key]}
-                            onChange={patch => { updateTarifa(t.key, patch); clearTarifaErr(t.key) }}
-                            onRemove={() => removeTarifa(t.key)}
-                          />
+                          </div>
                         )
                       })}
                     </div>
@@ -1327,6 +1590,14 @@ export default function ConceptosForm() {
                         </Button>
                       </div>
                     )}
+
+                    {!isRegister && (
+                      <div className="mt-4">
+                        <Button variant="secondary" size="sm" onClick={closeRateEditor} disabled={isSubmitting}>
+                          Descartar tarifas
+                        </Button>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -1337,6 +1608,26 @@ export default function ConceptosForm() {
                   </p>
                 )}
               </>
+            ) : (
+              // ── Editar, editor colapsado ───────────────────────────────────
+              <div className="mt-1">
+                {/* El alcance se deduce del historial, así que abrir el editor
+                    antes de que las tarifas carguen lo dejaría sin deduce
+                    (parecería un concepto sin tarifas) y al terminar la carga
+                    la vista cambiaría sola bajo el usuario. Con historial en
+                    error tampoco se puede deducir. */}
+                <Button
+                  size="sm"
+                  onClick={openRateEditor}
+                  disabled={isSubmitting || ratesLoadStatus === 'loading' || ratesLoadStatus === 'error'}
+                >
+                  <Plus size={13} />Agregar tarifa
+                </Button>
+                <p className="mt-2 text-[11px] text-[#6B7280]">
+                  Opcional: si solo cambias datos del concepto, puedes guardar
+                  sin tocar las tarifas.
+                </p>
+              </div>
             )}
           </FormCard>
 
