@@ -12,7 +12,7 @@
 # El front NO necesita al contenedor del API para funcionar: VITE_API_URL se
 # compila dentro del bundle apuntando a la URL publica del API, asi que este
 # compose no depende del otro (cada uno es independiente). Lo que si comparte
-# con el es la red sisava-network.
+# con el es la red net-cds-test.
 #
 # El puerto de la derecha es literal a proposito: es el puerto DENTRO del
 # contenedor, fijo en la imagen NGINX. Lo que cambia por ambiente es el de la
@@ -41,7 +41,7 @@ services:
     ports:
       - "${FRONT_BIND:?falta FRONT_BIND en el .env}:${FRONT_PORT:?falta FRONT_PORT en el .env}:80"
     networks:
-      - sisava-network
+      - net-cds-test
     deploy:
       resources:
         limits:
@@ -52,7 +52,7 @@ services:
     restart: unless-stopped
 
 # Misma red externa que AccessUtez y el compose del back. El compose no la
-# crea: debe existir antes (en local: docker network create sisava-network).
+# crea: debe existir antes (en local: docker network create net-cds-test).
 networks:
-  sisava-network:
+  net-cds-test:
     external: true
