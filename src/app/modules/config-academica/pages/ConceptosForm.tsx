@@ -268,7 +268,6 @@ interface PaymentConceptResponse {
   isMulticoncept: boolean
   quotaLimit: number | null
   linkedConceptIds: string[]
-  programIds: string[]
 }
 
 interface PaymentConceptFormPayload {
@@ -291,7 +290,6 @@ interface PaymentConceptFormPayload {
   isMulticoncept: boolean
   quotaLimit: number | null
   linkedConceptIds: string[]
-  programIds: string[]
 }
 
 interface FormErrors {
@@ -659,8 +657,6 @@ export default function ConceptosForm() {
   const [esVinculados, setEsVinculados] = useState(false)
   const [vinculados, setVinculados] = useState<string[]>([])
   const [esCuotaCuatrimestral, setEsCuotaCuatrimestral] = useState(false)
-  const [aplicaCarrera, setAplicaCarrera] = useState(false)
-  const [carreras, setCarreras] = useState<string[]>([])
   const [limiteCuotasOn, setLimiteCuotasOn] = useState(false)
   const [limiteCuotas, setLimiteCuotas] = useState('')
   const [maxPerStudent, setMaxPerStudent] = useState('')
@@ -927,8 +923,6 @@ export default function ConceptosForm() {
     setEsVinculados(false)
     setVinculados([])
     setEsCuotaCuatrimestral(false)
-    setAplicaCarrera(false)
-    setCarreras([])
     setLimiteCuotasOn(false)
     setLimiteCuotas('')
     setMaxPerStudent('')
@@ -1028,11 +1022,8 @@ export default function ConceptosForm() {
         setLimiteCuotasOn(data.quotaLimit != null)
         setLimiteCuotas(data.quotaLimit != null ? String(data.quotaLimit) : '')
         const linked = data.linkedConceptIds ?? []
-        const carrerasSeleccionadas = data.programIds ?? []
         setEsVinculados(linked.length > 0)
         setVinculados(linked)
-        setAplicaCarrera(carrerasSeleccionadas.length > 0)
-        setCarreras(carrerasSeleccionadas)
         setLoadStatus('idle')
       })
       .catch((err: unknown) => {
@@ -1142,9 +1133,8 @@ export default function ConceptosForm() {
     setRatesProgress(null)
 
     // Mapeo completo al backend (extensión 2026-09-19): los switches que
-    // agrupan un valor secundario (externo, límite de cuotas, vinculados,
-    // carreras) lo mandan solo cuando están encendidos; apagados van a
-    // null / [].
+    // agrupan un valor secundario (externo, límite de cuotas, vinculados) lo
+    // mandan solo cuando están encendidos; apagados van a null / [].
     //
     // `cost` ya no se captura: se deriva de la tarifa de alcance GENERAL
     // (la única que aplica a todos los niveles y carreras). Con alcance
@@ -1187,7 +1177,6 @@ export default function ConceptosForm() {
       isMulticoncept: esMulticoncepto,
       quotaLimit: limiteCuotasOn && limiteCuotas.trim() !== '' ? Number(limiteCuotas) : null,
       linkedConceptIds: esVinculados ? vinculados : [],
-      programIds: aplicaCarrera ? carreras : [],
     }
 
     // `conceptId` se declara fuera del try a propósito: el `catch` lo necesita
@@ -1706,23 +1695,6 @@ export default function ConceptosForm() {
                 onChange={setEsCuotaCuatrimestral}
                 disabled={disabled}
               />
-
-              <SwitchRow
-                label="¿Aplica para alguna carrera en específico?"
-                description="Si el concepto aplica para ciertas carreras en específico, debes indicar las carreras a las que aplica."
-                checked={aplicaCarrera}
-                onChange={setAplicaCarrera}
-                disabled={disabled}
-              >
-                <MultiSelectField
-                  label="Carreras"
-                  options={carreraOptions}
-                  selected={carreras}
-                  onChange={setCarreras}
-                  disabled={disabled}
-                  placeholder="Seleccionar carreras…"
-                />
-              </SwitchRow>
 
               <SwitchRow
                 label="¿Tiene límite de cuotas cuatrimestrales?"

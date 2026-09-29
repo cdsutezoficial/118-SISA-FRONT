@@ -4,6 +4,48 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-09-29] El precio de la ficha se cotiza desde la tarifa
+
+Commits de esta rama: `f86e106` y `9d75b90`. Requiere el backend de
+`feat/ficha-precio-desde-tarifas` en `118-SISA-BACK` (`97ce2b4`, `5c80810`, `c38fd6c`).
+
+### Editar ya no vuelve a preguntar el alcance
+
+Abrir un concepto en **Editar** traía el formulario de registro con el alcance de las tarifas
+en blanco, y recapturar los montos a mano. Ahora la sección **Tarifas** carga el historial
+existente y se edita ahí: cada fila sube con `POST` (el backend cierra la tarifa vigente y
+abre la nueva, así que el historial nunca se reescribe), muestra avance de cuántas ya
+entraron, y un fallo reintenta solo las que faltan, con los montos con los que se submieron.
+
+El alcance se infiere de las tarifas que ya existen, con `inferScopeFromRates()`. Si todas
+las filas apuntan a lo mismo, el `ScopePicker` queda bloqueado en ese valor: no hay nada
+que decidir. Con historial mixto, o sin historial, el selector se mantiene editable, porque
+no se puede inferir un alcance y presentarlo como si fuera el único.
+
+### El concepto ya no declara a qué carreras aplica
+
+El switch **¿Aplica para alguna carrera en específico?** y su multiselect salen del
+formulario, junto con `programIds` del payload y de las dos interfaces de tipos. Lo mismo
+que el backend en `c38fd6c`.
+
+El switch era una segunda declaración de alcance, y de la clase que produce los errores
+difíciles de encontrar: el concepto decía una cosa, las tarifas otra, y nada obligaba a que
+coincidieran. El conflicto no aparecía al guardar, sino al cobrar, cuando el backend ya no
+encontraba la tarifa que correspondía. Ahora hay un solo lugar donde vive el alcance y es el
+mismo que el backend lee para cotizar.
+
+Los `programIds` que quedan en el archivo no son este: son el destino de cada fila de tarifa
+(alcance *Por carreras*), que es un uso distinto y sigue vivo.
+
+### De paso
+
+- El comentario del submit que listaba los switches con valor secundario ya no menciona
+  carreras.
+
+`tsc --noEmit` y `npm run build` en verde (1830 módulos).
+
+---
+
 ## [2026-09-28] El catálogo ofrece Admisión + el alcance de tarifas se elige una vez
 
 Dos commits: `a99a154` y `0dd9039`.
