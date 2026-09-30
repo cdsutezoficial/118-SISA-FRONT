@@ -67,6 +67,17 @@ export const ADMISSION_ERROR_CODES = {
   candidateAlreadyExists: 'ADMISSION_CANDIDATE_ALREADY_EXISTS',
   /** The tuition concept's payment window closed. Also not retryable. */
   paymentWindowClosed: 'ADMISSION_PAYMENT_WINDOW_CLOSED',
+  /**
+   * A concurrent registration got there first — almost always two applicants
+   * claiming the same folio number, which is derived from `count + 1` and so has
+   * no lock. Nothing about her data is wrong and nothing was stored.
+   *
+   * Unlike `candidateAlreadyExists` this one IS retryable, and always resolves:
+   * the winner is committed by the time the collision surfaces, so pressing
+   * "Finalizar registro" again reads an advanced count and succeeds. The wizard
+   * never navigated away (no folio was assigned), so her four steps are intact.
+   */
+  registrationConflict: 'ADMISSION_REGISTRATION_CONFLICT',
 } as const
 
 async function parseApiError(res: Response): Promise<ApiError> {
