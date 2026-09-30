@@ -884,6 +884,12 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         setSubmitError(apiErr.message ?? 'La venta de fichas para esa carrera ya cerró.')
       } else if (apiErr.code === ADMISSION_ERROR_CODES.candidateAlreadyExists) {
         setSubmitError(apiErr.message ?? 'Ya existe un candidato registrado con ese CURP.')
+      } else if (apiErr.code === ADMISSION_ERROR_CODES.registrationConflict) {
+        // Concurrent registration took this folio number. Transient and always
+        // resolves by resubmitting, so we stay on the step (nothing navigated —
+        // no folio was assigned) and the button re-enables via setSubmitting(false)
+        // above. Only the message matters here.
+        setSubmitError(apiErr.message ?? 'No pudimos completar tu registro en este momento. Inténtalo de nuevo en un momento.')
       } else if (apiErr.status === 400) setSubmitError(apiErr.message ?? 'Revisa los datos capturados.')
       else if (apiErr.status === 401) setSubmitError('Tu sesión expiró. Vuelve a iniciar sesión.')
       else if (apiErr.status === 403) setSubmitError('No tienes permiso para realizar el registro.')
