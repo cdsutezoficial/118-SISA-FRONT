@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { Clock, CreditCard, Download, GraduationCap, Loader2 } from 'lucide-react'
+import { Clock, CreditCard, Download, GraduationCap, Info, Loader2 } from 'lucide-react'
 import { Button } from '@app/core/components/form'
 import { Toast } from '@app/core/components/ui'
 import { useRole } from '@app/core/infra/RoleContext'
@@ -275,16 +275,41 @@ export default function PortalFichaPago() {
                       rechazaron el pago vuelve a caer aquí, y el motivo tiene que
                       estar en su línea de lectura antes de volver a pulsar. */}
                   {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
-                  <Button onClick={startCheckout} loading={processing} disabled={pagoEnCurso}>
+                  {/* El aviso y el botón no pueden contradecirse. Con
+                      `pagoNoDisponible` puesto, el backend ya dijo que esta ficha
+                      no entra al cobro y que insistir devuelve el mismo 409: un
+                      botón "Pagar en línea" habilitado al lado de "no se puede
+                      pagar" es una pantalla que se contradice sola, y empujaba a
+                      repetir el intento sin ninguna posibilidad de que cambiara el
+                      resultado. Se deshabilita y se relabela con el mismo hecho que
+                      el aviso; el motivo sigue siendo el del backend, no uno
+                      escrito aquí. */}
+                  <Button
+                    onClick={startCheckout}
+                    loading={processing}
+                    disabled={pagoEnCurso || pagoNoDisponible !== null}
+                    variant={pagoNoDisponible ? 'secondary' : 'primary'}
+                  >
                     <span className="inline-flex items-center gap-2">
-                      <CreditCard size={14} />
-                      Pagar en línea — ${monto.toFixed(2)}
+                      {pagoNoDisponible ? (
+                        <>
+                          <Info size={14} />
+                          Pago en línea no disponible
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard size={14} />
+                          Pagar en línea — ${monto.toFixed(2)}
+                        </>
+                      )}
                     </span>
                   </Button>
-                  <p className="text-center text-[12px] leading-relaxed text-[#6B7280]">
-                    El pago se realiza en esta misma página. Al confirmarse la operación con tu banco te
-                    enviaremos el comprobante al correo con el que te registraste.
-                  </p>
+                  {!pagoNoDisponible && (
+                    <p className="text-center text-[12px] leading-relaxed text-[#6B7280]">
+                      El pago se realiza en esta misma página. Al confirmarse la operación con tu banco te
+                      enviaremos el comprobante al correo con el que te registraste.
+                    </p>
+                  )}
 
                   {/* Descarga del PDF como acción SECUNDARIA, debajo de pagar. Disponible
                       también antes de pagar: la copia sirve para tener la ficha a la

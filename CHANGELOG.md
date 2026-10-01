@@ -4,9 +4,64 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
-## [2026-09-30] El navegador avisa cuando el Aspirante abandona el pago
+## [2026-10-01] El aviso de "no se puede pagar" ya no convive con un botón de pagar
 
 Commit: pendiente.
+
+### Qué cambió
+
+- `PortalFichaPago.tsx`: con `pagoNoDisponible` puesto, el botón se **deshabilita**,
+  se **relabela** a "Pago en línea no disponible" y pasa a `secondary`. El párrafo
+  que explica que el pago se hace en esta misma página se oculta, porque con el pago
+  bloqueado también es falso.
+- `FichaConfirmacion.tsx`: lo mismo. El aviso y el botón habilitable estaban en las
+  dos pantallas de pago, no solo en el portal, y arreglar una sola dejaba la otra
+  contradiciéndose.
+- `FichaPagoPendiente.tsx`: el bloque "¿Por qué esta fecha?" deja de ser texto fijo y
+  describe lo que el backend mandó. Tres variantes según lo que llegó: si ambas fechas
+  coinciden, si el pago cierra antes que la inscripción, o si no vino la de inscripción.
+
+### Por qué el botón se apaga en vez de solo avisar
+
+`pagoNoDisponible` no es un toast que se va: es un hecho permanente sobre la ficha, y el
+backend lo devolvió ya con su propio motivo (`ADMISSION_QUOTA_REACHED`,
+`ADMISSION_PAYMENT_WINDOW_CLOSED`). Con el aviso arriba y un botón "Pagar en línea —
+$0.00" habilitado abajo, la pantalla se contradecía y empujaba a repetir un intento que
+iba a devolver el mismo 409. Insistir no cambia nada, así que el botón deja de ofrecer
+esa opción. El motivo sigue siendo el del backend: el front solo apaga y rotula, no
+inventa la razón.
+
+La variante visual acompaña: `secondary` en vez de `primary` verde, que en este flujo ya
+significa "pago confirmado" (`FichaPagoConfirmado`). Un botón verde deshabilitado al 60%
+de opacidad todavía se lee como la acción principal de la pantalla.
+
+### Por qué la explicación de la fecha ya no afirma nada que no se pueda comprobar
+
+Decía, sin mirar ningún dato:
+
+> "...es la fecha más corta entre el cierre del registro y los días de plazo que corren
+> desde que tu ficha se generó, y el sistema la revisa al iniciar el pago. No es la
+> fecha en que se cerró el registro: esa ya pasó, y por eso tu ficha existe."
+
+Las tres afirmaciones eran un problema a la vez:
+
+1. **"La fecha viene del concepto de pago"** y **"la revisa al iniciar el pago"**:
+   describir la regla del backend desde el front es una afirmación que la pantalla no
+   puede verificar, y que cambia si el backend cambia. `paymentDeadline` es lo que
+   llegó; eso es lo que se puede decir.
+2. **"El registro ya pasó"**: es **falsa** para quien se acaba de registrar. Si el
+   registro sigue abierto, esa fecha no es un cierre que ya ocurrió sino una que todavía
+   va a ocurrir, y el texto afirmaba un hecho pasado que nadie comprobó. Era el caso
+   mayoritario: la mayoría de las fichas se emiten el día 1 y se pagan después.
+
+Ahora el texto se limita a las dos fechas del payload y explica por qué pueden verse
+iguales, que es el caso que más confunde cuando las dos muestran el mismo número.
+
+---
+
+## [2026-09-30] El navegador avisa cuando el Aspirante abandona el pago
+
+Commit: `eb0fbaf`.
 
 ### Qué cambió
 
