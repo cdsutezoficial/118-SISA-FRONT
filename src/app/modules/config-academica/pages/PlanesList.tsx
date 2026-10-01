@@ -6,8 +6,7 @@ import {
 import { Toast, Switch } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { apiGet, apiPatch } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiGet, apiPatch, getApiErrorMessage } from '@app/core/infra/apiClient'
 import {
   PageContainer,
   Breadcrumb,
@@ -120,14 +119,7 @@ export default function PlanesList() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 401) {
-          setErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setErrorMsg('No tienes permiso para consultar planes de estudio.')
-        } else {
-          setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
   }, [programFilter, statusFilter, debouncedSearch, page])
@@ -158,10 +150,7 @@ export default function PlanesList() {
       setTotalPages(data.totalPages)
       setToast(nextStatus === 'ACTIVE' ? 'Plan de estudio activado.' : 'Plan de estudio desactivado.')
     } catch (err) {
-      const apiErr = err as Partial<ApiError>
-      setToast(apiErr.status === 403
-        ? 'No tienes permiso para cambiar el estado de este plan de estudio.'
-        : 'No se pudo actualizar el estado. Intenta de nuevo.')
+      setToast(getApiErrorMessage(err, 'No se pudo actualizar el estado. Intenta de nuevo.'))
     } finally {
       setTogglingId(null)
     }

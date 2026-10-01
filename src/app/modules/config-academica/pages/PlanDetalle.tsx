@@ -8,8 +8,7 @@ import { usePendingToast } from '@app/core/infra/hooks'
 import { ActionBtn, ModeSwitcher, Tabs, Toast } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, Button, MiniTable } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
-import { apiDelete, apiGet } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiDelete, apiGet, getApiErrorMessage } from '@app/core/infra/apiClient'
 
 // `gradeScales` mirrors AcademicPlanResponse.gradeScales[] (GradeScaleResponse) —
 // it travels embedded in GET /plans/{id}, no separate fetch needed.
@@ -142,8 +141,8 @@ function NivelRow({ nivel, index, defaultOpen, planId, onChanged }: {
     try {
       await apiDelete(`/plans/${planId}/levels/${nivel.id}/subjects/${subject.id}`)
       onChanged()
-    } catch {
-      window.alert('No se pudo eliminar la materia. Intenta de nuevo más tarde.')
+    } catch (err) {
+      window.alert(getApiErrorMessage(err, 'No se pudo eliminar la materia. Intenta de nuevo más tarde.'))
     } finally {
       setDeletingId(null)
     }
@@ -312,16 +311,7 @@ export default function PlanDetalle() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 404) {
-          setLoadErrorMsg('No se encontró el plan de estudios solicitado.')
-        } else if (apiErr.status === 401) {
-          setLoadErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setLoadErrorMsg('No tienes permiso para consultar este plan de estudios.')
-        } else {
-          setLoadErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setLoadErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -348,8 +338,8 @@ export default function PlanDetalle() {
     try {
       await apiDelete(`/plans/${plan.id}/grade-scales/${scale.id}`)
       loadPlan({ silent: true })
-    } catch {
-      window.alert('No se pudo eliminar la escala de calificación. Intenta de nuevo más tarde.')
+    } catch (err) {
+      window.alert(getApiErrorMessage(err, 'No se pudo eliminar la escala de calificación. Intenta de nuevo más tarde.'))
     } finally {
       setDeletingScaleId(null)
     }
