@@ -39,14 +39,17 @@ export interface PaymentRecord {
 // language (`referenceNumber`/`amount`/`registrationDeadline`/`PENDING|PAID`).
 
 /**
- * The two window dates, and why they are two fields.
+ * The dates the ficha carries, and why they are separate fields.
  *
  * `registrationDeadline` is the sales window's closing day, snapshotted onto the
  * ticket at registration — the same boundary that stops new fichas from being
  * issued. `paymentClosesOn` is the tuition concept's `available_until`, read
- * live on every request, and it is the only one that still constrains anything:
- * extending a period means editing Conceptos de Pago, which must move the date
- * on fichas that were issued weeks earlier.
+ * live on every request; it is an engine-side boundary the catalog moves by
+ * editing Conceptos de Pago, and it is NOT the date shown to the applicant.
+ *
+ * The date the screen promises as "Fecha límite de pago" is `paymentDeadline`:
+ * the earlier of `registrationDeadline` and the ficha's own `registeredAt` +
+ * N-day plazo. It is the only one the applicant can act on.
  *
  * Never merge these into one field again. The single `deadline` they replaced was
  * the registration snapshot labelled "Fecha límite de pago", so the number under
@@ -57,11 +60,16 @@ export interface VentanaFechas {
   /** `yyyy-MM-dd` — snapshot of `program_admission_config.closes_at`. */
   registrationDeadline: string | null
   /**
-   * `yyyy-MM-dd` — live `payment_concept.available_until`, the date that really
-   * gates the payment. `null` when the concept has no closing date configured;
-   * callers omit the row rather than printing a placeholder.
+   * `yyyy-MM-dd` — live `payment_concept.available_until`, the engine boundary.
+   * `null` when the concept has no closing date configured.
    */
   paymentClosesOn: string | null
+  /**
+   * `yyyy-MM-dd` — the date shown as "Fecha límite de pago": the earlier of the
+   * sales window and the ficha's own plazo. `null` only when neither is known;
+   * callers omit the row rather than printing a placeholder.
+   */
+  paymentDeadline: string | null
 }
 
 /** `RegisterCandidateUseCase.FichaPayment` — the ticket the POST generates. */

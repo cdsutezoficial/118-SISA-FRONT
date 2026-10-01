@@ -207,14 +207,16 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           email: f.email,
           referencia: f.referenceNumber,
           monto: Number(f.amount),
-          // Cada fecha conserva su propia ventana al refrescar: la del GET es
-          // más fresca que la del route state (el concepto pudo extenderse entre
-          // el registro y ahora), así que solo se cae si el backend no la manda.
+          // Cada fecha se reapunta a la del GET, que es la más fresca (la ventana
+          // de venta y el plazo de la ficha pueden haberse movido desde el
+          // registro), así que solo se cae a la del route state si no viene.
           fechaLimiteInscripcion: f.registrationDeadline
             ? formatDate(new Date(`${f.registrationDeadline}T00:00:00`))
             : prev.fechaLimiteInscripcion,
-          fechaLimitePago: f.paymentClosesOn
-            ? formatDate(new Date(`${f.paymentClosesOn}T00:00:00`))
+          // La fecha que se promete es el plazo visible de la ficha
+          // (`paymentDeadline`), no `available_until` del concepto.
+          fechaLimitePago: f.paymentDeadline
+            ? formatDate(new Date(`${f.paymentDeadline}T00:00:00`))
             : prev.fechaLimitePago,
           estado: f.paymentStatus,
           // La fila pagada trae el comprobante; sin esto, recargar la pantalla

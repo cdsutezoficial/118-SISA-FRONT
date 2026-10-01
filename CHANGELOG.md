@@ -4,6 +4,35 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-09-30] La ficha muestra su plazo real de pago, no la ventana del concepto
+
+Commit: pendiente. Requiere el backend de `feat/cupo-proceso-admision`.
+
+### Por qué
+
+La pantalla de pago pendiente mostraba como "Fecha límite de pago" el
+`paymentClosesOn` (el `available_until` del Concepto de Pago), que es una frontera
+del motor y no la fecha sobre la que el Aspirante puede actuar. El backend ahora
+manda `paymentDeadline`: el más corto entre el cierre de la venta y los N días de
+la ficha.
+
+### Qué cambió
+
+- `VentanaFechas` (data/types.ts) gana `paymentDeadline`, y el comentario explica
+  las tres fechas. `FichaPaymentBackend`, `FichaPaymentAccessBackend` y
+  `CandidateFichaBackend` lo heredan.
+- `PortalFichaPago.tsx`, `FichaConfirmacion.tsx` y `CandidatoRegistro.tsx` usan
+  `paymentDeadline` para "Fecha límite de pago" en vez de `paymentClosesOn`.
+- `FichaPagoPendiente.tsx`: el aviso "¿Por qué esta fecha?" ya no afirma que la
+  fecha sea la del Concepto de Pago; dice que es el plazo más corto entre el cierre
+  del registro y los días de la ficha.
+
+### Verificación
+
+`npx tsc --noEmit` sin errores.
+
+---
+
 ## [2026-09-29] El precio de la ficha se cotiza desde la tarifa
 
 Commits de esta rama: `f86e106` y `9d75b90`. Requiere el backend de
