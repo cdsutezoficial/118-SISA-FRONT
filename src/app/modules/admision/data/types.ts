@@ -16,6 +16,7 @@
  */
 export type CandidateStatus =
   | 'REGISTERED'
+  | 'PAYMENT_EXPIRED'
   | 'PAID'
   | 'EXAM_TAKEN'
   | 'ACCEPTED'
@@ -127,6 +128,24 @@ export interface FichaPaymentAccessBackend extends VentanaFechas {
   /** ISO instant, present only when `alreadyPaid`. */
   paidAt: string | null
   alreadyPaid: boolean
+  /** The candidate's lifecycle state, so the screen can label it. */
+  candidateStatus: CandidateStatus
+  /**
+   * Whether the ficha can still be paid **right now**.
+   *
+   * Not the same question as `candidateStatus`. The status is what the nightly
+   * VENCEN_FICHAS sweep wrote down; this flag is what the backend computes live
+   * from the window (the earlier of the ficha's own plazo and the closing day of
+   * its admission process). Between a deadline passing and the sweep running they
+   * disagree, and this is the one to obey when deciding whether to show "Pagar":
+   * the checkout refuses an expired ficha with a 409, so a button offered during
+   * that window is a button that cannot work.
+   *
+   * Do not re-derive it here from `paymentDeadline`. The screen has no access to
+   * `registeredAt` on this endpoint, and a second copy of the window rule in
+   * TypeScript is exactly how the portal and the engine start disagreeing.
+   */
+  paymentExpired: boolean
 }
 
 /** `GET /candidates/{id}` — ficha projection for route-refresh fallback. */
@@ -384,6 +403,10 @@ export interface StatusMeta {
  */
 export const STATUS_META: Record<CandidateStatus, StatusMeta> = {
   REGISTERED: { label: 'Registrado', badgeClass: 'bg-gray-100 text-gray-600 border border-gray-200' },
+  // Not a rejection: the ficha lapsed unpaid and the CURP is free again, which is
+  // a different thing to say to the office than "Rechazado" (that one belongs to
+  // the academic evaluation and would corrupt the admission reports).
+  PAYMENT_EXPIRED: { label: 'Pago Vencido', badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200' },
   PAID: { label: 'Ficha Pagada', badgeClass: 'bg-blue-50 text-blue-700 border border-blue-200' },
   EXAM_TAKEN: { label: 'Examen Aplicado', badgeClass: 'bg-violet-50 text-violet-700 border border-violet-200' },
   ACCEPTED: { label: 'Admitido', badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
@@ -408,9 +431,15 @@ export type AdmisionAction =
  *   payment confirmed at the candidate-instance level; use `canRegistrarInduccion`
  *   below rather than this map alone for that action.
  * - Cambiar Programa only if status is not ACCEPTED/REJECTED/ENROLLED
+ *
+ * `PAYMENT_EXPIRED` gets nothing: the window closed unpaid, so there is no
+ * payment left to confirm and the CURP is free again. It is also not terminal the
+ * way ACCEPTED/REJECTED are — the person may register a new ficha, which is a
+ * different folio rather than a new row action here.
  */
 export const STATUS_ACTIONS: Record<CandidateStatus, AdmisionAction[]> = {
   REGISTERED: ['CONFIRMAR_PAGO_FICHA', 'CAMBIAR_PROGRAMA'],
+  PAYMENT_EXPIRED: [],
   PAID: ['CONFIRMAR_PAGO_INDUCCION', 'REGISTRAR_EXAMEN', 'REGISTRAR_INDUCCION', 'CAMBIAR_PROGRAMA'],
   EXAM_TAKEN: ['CONFIRMAR_PAGO_INDUCCION', 'REGISTRAR_INDUCCION', 'CAMBIAR_PROGRAMA'],
   ACCEPTED: [],

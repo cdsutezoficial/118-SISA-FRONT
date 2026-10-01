@@ -4,6 +4,37 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-09-30] El botón "Pagar" desaparece cuando la ficha ya venció
+
+Commit: pendiente.
+
+### Qué cambió
+
+- `CandidateStatus` incluye `PAYMENT_EXPIRED`, con su badge en `STATUS_META`
+  ("Pago Vencido", ámbar) y sin acciones en `STATUS_ACTIONS`: no hay pago que confirmar
+  y la persona puede volver a registrarse, lo cual es otro folio, no una acción de fila.
+  Usa ámbar y no el rojo de "Rechazado" a propósito: ese estado es de la evaluación
+  académica, no de un pago que no llegó.
+- `STATUS_ORDER` en `CandidatosList.tsx` lo coloca justo después de `REGISTERED`, que es
+  donde está en el tiempo: es la misma ficha, vencida sin pagar. Antes una ficha
+  vencida se veía idéntica a una viva y se filtraba dentro del mismo "Registrado".
+- `FichaPaymentAccessBackend` suma `candidateStatus` y `paymentExpired`.
+- `PortalFichaPago.tsx`: cuando `paymentExpired` es true se muestra el aviso de
+  vencimiento **sin botón de pagar**.
+
+### Por qué se usa `paymentExpired` y no `candidateStatus`
+
+Porque responden a preguntas distintas. El estado es lo que el barrido de las 00:10 dejó
+escrito; el flag es lo que el backend calcula hoy. Entre que un plazo vence y el barrido
+corre se diferencian, y ofrecer un botón que el checkout va a rechazar con 409 es
+exactamente el defecto que el flag evita.
+
+El flag **no** se vuelve a derivar aquí desde `paymentDeadline`. En este endpoint la
+pantalla no tiene `registeredAt`, y una segunda copia de la regla de ventana en
+TypeScript es justo cómo el portal y el motor empiezan a discrepar.
+
+---
+
 ## [2026-09-30] "Pagar" no se puede pulsar dos veces, y el intento anterior no se filtra al reintento
 
 Commit: pendiente.

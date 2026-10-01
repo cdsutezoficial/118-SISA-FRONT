@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { CreditCard, Download, GraduationCap, Loader2 } from 'lucide-react'
+import { Clock, CreditCard, Download, GraduationCap, Loader2 } from 'lucide-react'
 import { Button } from '@app/core/components/form'
 import { Toast } from '@app/core/components/ui'
 import { useRole } from '@app/core/infra/RoleContext'
@@ -246,6 +246,27 @@ export default function PortalFichaPago() {
                   </p>
                   <Button variant="secondary" onClick={() => navigate('/portal/ficha')} className="mt-4">
                     Volver a buscar mi ficha
+                  </Button>
+                </div>
+              ) : acceso.paymentExpired ? (
+                // Ventana cerrada. Sin botón: el checkout responde 409 y una
+                // pantalla que ofrece un pago imposible es peor que una que
+                // explica que ya no hay plazo. Se decide con `paymentExpired`
+                // —lo que el backend calcula hoy— y no con `candidateStatus`,
+                // que el barrido de las 00:10 todavía no ha escrito.
+                <div className="text-center">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-3">
+                    <Clock size={20} className="text-amber-600" />
+                  </div>
+                  <p className="text-[13px] font-semibold text-[#333333] mb-1">Tu plazo de pago venció</p>
+                  <p className="text-[12px] leading-relaxed text-[#6B7280]">
+                    {acceso.candidateStatus === 'PAYMENT_EXPIRED'
+                      ? 'Tu ficha venció sin pago y el cupo quedó libre.'
+                      : 'El proceso de admisión de tu carrera ya cerró, así que tu ficha ya no admite pago.'}{' '}
+                    Si aún te interesa participar, puedes registrar una nueva ficha.
+                  </p>
+                  <Button variant="secondary" onClick={() => navigate('/portal/ficha')} className="mt-4">
+                    Buscar mi ficha
                   </Button>
                 </div>
               ) : (

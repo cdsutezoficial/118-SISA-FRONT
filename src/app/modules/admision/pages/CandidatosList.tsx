@@ -27,7 +27,19 @@ import { STATUS_META, isAdmisionActionEnabled, type Candidate, type CandidateSta
 // Uses the same 6 domain statuses + "Todos"; option labels/badges are sourced
 // from STATUS_META so the filter and the row badges never drift out of sync.
 
-const STATUS_ORDER: CandidateStatus[] = ['REGISTERED', 'PAID', 'EXAM_TAKEN', 'ACCEPTED', 'REJECTED', 'ENROLLED']
+// `PAYMENT_EXPIRED` sits right after `REGISTERED`, which is where it belongs in
+// time: it is the same ficha, lapsed unpaid. Before it, an expired ficha looked
+// identical to a live one and could be filtered into the same "Registrado"
+// bucket; after it, it would be misfiled with the academic rejections.
+const STATUS_ORDER: CandidateStatus[] = [
+  'REGISTERED',
+  'PAYMENT_EXPIRED',
+  'PAID',
+  'EXAM_TAKEN',
+  'ACCEPTED',
+  'REJECTED',
+  'ENROLLED',
+]
 const estadoOptions = STATUS_ORDER.map(s => ({ value: s, label: STATUS_META[s].label }))
 const statusBadgeMap: Record<string, BadgeStyle> = Object.fromEntries(
   STATUS_ORDER.map(s => [s, { label: STATUS_META[s].label, className: STATUS_META[s].badgeClass }]),
