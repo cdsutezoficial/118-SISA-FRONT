@@ -83,6 +83,7 @@ export default function PortalFichaPago() {
     evoCheckout,
     evoLoading,
     processing,
+    pagoEnCurso,
     confirmData,
     alreadyPaid,
     pagoNoDisponible,
@@ -253,7 +254,7 @@ export default function PortalFichaPago() {
                       rechazaron el pago vuelve a caer aquí, y el motivo tiene que
                       estar en su línea de lectura antes de volver a pulsar. */}
                   {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
-                  <Button onClick={startCheckout} loading={processing} disabled={processing}>
+                  <Button onClick={startCheckout} loading={processing} disabled={pagoEnCurso}>
                     <span className="inline-flex items-center gap-2">
                       <CreditCard size={14} />
                       Pagar en línea — ${monto.toFixed(2)}

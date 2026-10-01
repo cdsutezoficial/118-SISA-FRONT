@@ -4,6 +4,42 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-09-30] "Pagar" no se puede pulsar dos veces, y el intento anterior no se filtra al reintento
+
+Commit: pendiente.
+
+### Por qué
+
+Fase 0 del plan de cupo, los dos puntos que se notan de inmediato:
+
+- El botón "Pagar en línea" solo se deshabilitaba mientras el backend contestaba el
+  `POST /payments/checkout`. En cuanto la sesión abría, volvía a habilitarse, así que
+  un segundo clic creaba **otro** `orderId` y el backend apartaba **otro** lugar de la
+  carrera para el mismo pago. `PortalFichaPago.tsx` además solo lo deshabilitaba con
+  `processing`, y `FichaConfirmacion.tsx` no lo deshabilitaba nunca.
+- `checkout.min.js` deja en `sessionStorage` la llave
+  `HostedCheckout_embedContainer#sisa-evo-checkout` y nadie la borraba (§2.8), así que
+  un reintento podía arrancar con el estado del intento anterior. Además, si el
+  Aspirante navegaba fuera con el panel abierto, quedaban el iframe de EVO y esa llave.
+
+### Qué cambió
+
+- `useFichaPayment` expone `pagoEnCurso` (`processing || evoLoading || evoCheckout`):
+  la ventana completa en la que no se acepta un segundo intento, no solo la petición.
+  La regla queda en el hook y las dos vistas la comparten.
+- `FichaConfirmacion.tsx` y `PortalFichaPago.tsx`: el botón usa `disabled={pagoEnCurso}`.
+- `teardownEvoDom()` borra también la llave `HostedCheckout_embedContainer#…`, no solo
+  el iframe. El `<script>` y `window.Checkout` se siguen dejando, que es lo correcto:
+  se cachean por sesión de página.
+- `useFichaPayment` barre el DOM de EVO **al desmontar**, igual que en las rutas de
+  cierre y cancelación.
+
+### Verificación
+
+`npm run typecheck` limpio.
+
+---
+
 ## [2026-09-30] La ficha muestra su plazo real de pago, no la ventana del concepto
 
 Commit: pendiente. Requiere el backend de `feat/cupo-proceso-admision`.

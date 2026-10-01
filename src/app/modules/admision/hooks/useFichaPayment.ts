@@ -55,20 +55,35 @@ export function fichaAccessStorageKey(candidateId: string): string {
 const EVO_SDK_IFRAME_ID = 'hc-comms-layer-iframe'
 
 /**
- * Drops the nodes `checkout.min.js` appended to `document.body` on its own.
+ * `sessionStorage` key `checkout.min.js` writes for the embedded container, on
+ * our own origin, and never removes (§2.8). Left behind, the next attempt can
+ * boot from the state of the one before it, so it goes with the DOM nodes.
+ */
+const EVO_SESSION_STORAGE_KEY = `HostedCheckout_embedContainer#${EVO_CHECKOUT_CONTAINER_ID}`
+
+/**
+ * Drops the nodes `checkout.min.js` appended to `document.body` on its own, and
+ * the session-storage key it wrote.
  *
  * `Checkout.showEmbeddedPage` mounts the payment form into OUR container, but the
  * SDK keeps its comms iframe as a sibling outside the React tree. Clearing
  * `evoCheckout` therefore unmounts the container and leaves that frame behind: a
  * stale layer sitting over a page the payer already finished with. React never
- * owned it, so React cannot clean it up.
+ * owned it, so React cannot clean it up — same for the `HostedCheckout_…` key,
+ * which is the SDK's own handoff state and would otherwise survive a retry.
  *
  * The `<script>` tag and `window.Checkout` are deliberately left in place — they
  * are cached for the whole page session and `loadEvoCheckoutScript` reuses them
- * on the next attempt. Only called on the close/cancel paths, never mid-payment.
+ * on the next attempt. Called on the close/cancel paths and on unmount, never
+ * mid-payment.
  */
 function teardownEvoDom(): void {
   document.getElementById(EVO_SDK_IFRAME_ID)?.remove()
+  try {
+    sessionStorage.removeItem(EVO_SESSION_STORAGE_KEY)
+  } catch {
+    // sessionStorage unavailable — nothing to clean
+  }
 }
 
 /**
@@ -223,6 +238,14 @@ export interface UseFichaPaymentResult {
 
   /** True while starting or confirming a payment. */
   processing: boolean
+
+  /**
+   * True from the "Pagar" click until the panel is closed: starting, the SDK
+   * loading and an open session. Keep the button disabled for all of it — a
+   * second start means a second `orderId` and a second quota slot held for one
+   * payment (§3.9).
+   */
+  pagoEnCurso: boolean
 
   /** Set once the backend has confirmed the payment. */
   confirmData: PaymentConfirmationBackend | null
@@ -483,6 +506,11 @@ export function useFichaPayment({
     }
   })
 
+  // Navigating away while the panel is open leaves the SDK's iframe and its
+  // session-storage key behind, because React only unmounts its own container.
+  // Sweep both on unmount, exactly as the close paths do.
+  useEffect(() => teardownEvoDom, [])
+
   // Pay online → start a real EVO Hosted Checkout.
   const startCheckout = useCallback(async () => {
     if (!esCandidatoReal) {
@@ -547,6 +575,11 @@ export function useFichaPayment({
     notifyRef.current('Pago cancelado. Tu ficha sigue pendiente.')
   }, [storageKey])
 
+  // The window in which a second "Pagar" must not be accepted: from the click
+  // (processing) through the SDK loading and the panel being open. Two starts
+  // would burn two `orderId`s and hold two quota slots for one payment.
+  const pagoEnCurso = processing || evoLoading || evoCheckout !== null
+
   return {
     startCheckout,
     cancelCheckout,
@@ -554,6 +587,7 @@ export function useFichaPayment({
     evoCheckout,
     evoLoading,
     processing,
+    pagoEnCurso,
     confirmData,
     alreadyPaid,
     pagoNoDisponible,

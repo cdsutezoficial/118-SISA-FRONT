@@ -164,6 +164,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     evoCheckout,
     evoLoading,
     processing,
+    pagoEnCurso,
     confirmData,
     alreadyPaid,
     pagoNoDisponible,
@@ -279,7 +280,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           pago vuelve a caer aquí, y el motivo tiene que estar en su línea de
           lectura antes de volver a pulsar. */}
       {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
-      <Button onClick={startCheckout} loading={processing} className="w-full sm:w-auto">
+      <Button onClick={startCheckout} loading={processing} disabled={pagoEnCurso} className="w-full sm:w-auto">
         Pagar en línea — ${ficha.monto.toFixed(2)}
       </Button>
       <p className="text-center text-[12px] leading-relaxed text-[#6B7280]">
