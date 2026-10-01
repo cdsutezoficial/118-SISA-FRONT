@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
-import { GraduationCap, Download, Loader2 } from 'lucide-react'
+import { GraduationCap, Download, Info, Loader2 } from 'lucide-react'
 import { Toast } from '@app/core/components/ui'
 import { FormPage, Button } from '@app/core/components/form'
 import { Breadcrumb } from '@app/core/components/list'
@@ -164,6 +164,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     evoCheckout,
     evoLoading,
     processing,
+    pagoEnCurso,
     confirmData,
     alreadyPaid,
     pagoNoDisponible,
@@ -207,14 +208,16 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           email: f.email,
           referencia: f.referenceNumber,
           monto: Number(f.amount),
-          // Cada fecha conserva su propia ventana al refrescar: la del GET es
-          // más fresca que la del route state (el concepto pudo extenderse entre
-          // el registro y ahora), así que solo se cae si el backend no la manda.
+          // Cada fecha se reapunta a la del GET, que es la más fresca (la ventana
+          // de venta y el plazo de la ficha pueden haberse movido desde el
+          // registro), así que solo se cae a la del route state si no viene.
           fechaLimiteInscripcion: f.registrationDeadline
             ? formatDate(new Date(`${f.registrationDeadline}T00:00:00`))
             : prev.fechaLimiteInscripcion,
-          fechaLimitePago: f.paymentClosesOn
-            ? formatDate(new Date(`${f.paymentClosesOn}T00:00:00`))
+          // La fecha que se promete es el plazo visible de la ficha
+          // (`paymentDeadline`), no `available_until` del concepto.
+          fechaLimitePago: f.paymentDeadline
+            ? formatDate(new Date(`${f.paymentDeadline}T00:00:00`))
             : prev.fechaLimitePago,
           estado: f.paymentStatus,
           // La fila pagada trae el comprobante; sin esto, recargar la pantalla
@@ -277,13 +280,39 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           pago vuelve a caer aquí, y el motivo tiene que estar en su línea de
           lectura antes de volver a pulsar. */}
       {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
-      <Button onClick={startCheckout} loading={processing} className="w-full sm:w-auto">
-        Pagar en línea — ${ficha.monto.toFixed(2)}
+      {/* Mismo criterio que `PortalFichaPago`: el aviso y el botón no pueden
+          contradecirse. Con `pagoNoDisponible` el backend ya dijo que esta ficha no
+          entra al cobro, y un botón habilitado al lado ofrecería insistir una
+          operación que devuelve el mismo 409. Se apaga, se relabela y deja de
+          `primary`, que en este flujo ya significa "pago confirmado". */}
+      <Button
+        onClick={startCheckout}
+        loading={processing}
+        disabled={pagoEnCurso || pagoNoDisponible !== null}
+        variant={pagoNoDisponible ? 'secondary' : 'primary'}
+        className="w-full sm:w-auto"
+      >
+        {pagoNoDisponible ? (
+          <span className="inline-flex items-center gap-2">
+            <Info size={14} />
+            Pago en línea no disponible
+          </span>
+        ) : (
+          `Pagar en línea — $${ficha.monto.toFixed(2)}`
+        )}
       </Button>
-      <p className="text-center text-[12px] leading-relaxed text-[#6B7280]">
-        La ficha de admisión se paga únicamente en línea. Una vez confirmado el pago recibirás un correo de
-        confirmación y podrás continuar con el proceso.
-      </p>
+      {/* Con el pago bloqueado, el párrafo que lo describe se oculta: decir "se
+          paga únicamente en línea" debajo de un botón que no cobra sería la misma
+          contradicción del botón habilitable. */}
+      {!pagoNoDisponible && (
+        <p className="text-center text-[12px] leading-relaxed text-[#6B7280]">
+          La ficha de admisión se paga únicamente en línea. Una vez confirmado el pago recibirás un correo de
+          confirmación y podrás continuar con el proceso.
+        </p>
+      )}
+      {/* El PDF se sigue ofreciendo con el pago bloqueado: la copia sirve para
+          tener la ficha a la mano mientras se resuelve, y no promete nada que el
+          botón de arriba haya dejado de ofrecer. */}
       <div className="flex flex-col items-center gap-1.5">
         <Button
           variant="secondary"

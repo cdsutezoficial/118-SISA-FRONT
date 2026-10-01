@@ -30,14 +30,24 @@ import { FolioMontoClave } from './FolioMontoClave'
  * significa "pago confirmado" en `FichaPagoConfirmado`; reutilizarlo aquí haría
  * que una ficha sin pagar se leyera como una ficha pagada.
  *
- * LAS DOS VENTANAS
+ * LAS DOS FECHAS
  * Se muestran las dos y se nombran distinto, porque contestan preguntas distintas.
  * "Fecha límite de inscripción" es el cierre de la venta —el snapshot con el que
- * se emitió la ficha, una fecha que a estas alturas ya pasó— y
- * "Fecha límite de pago" es `payment_concept.available_until`, leída en vivo del
- * catálogo y la única que hoy decide si el dinero entra. La que gobierna el cobro
- * va destacada en el bloque de folio, y la de inscripción va como dato de contexto
- * en el bloque de abajo: no compiten.
+ * se emitió la ficha— y "Fecha límite de pago" es el plazo visible de la ficha. La
+ * que gobierna el cobro va destacada en el bloque de folio, y la de inscripción va
+ * como dato de contexto en el bloque de abajo: no compiten.
+ *
+ * POR QUÉ ESTA EXPLICACIÓN YA NO ES TEXTO FIJO
+ * Decía, sin mirar nada, que la fecha "es la más corta entre el cierre del registro
+ * y los días de plazo que corren desde que tu ficha se generó", que "el sistema la
+ * revisa al iniciar el pago" y que "no es la fecha en que se cerró el registro: esa
+ * ya pasó". Las tres eran afirmaciones que esta pantalla no puede comprobar, y la
+ * tercera era falsa justo para quien se acaba de registrar: si el registro sigue
+ * abierto, esa fecha no es un cierre que ya pasó sino una que todavía va a pasar.
+ * Ahora el párrafo solo describe lo que el backend mandó —las dos fechas que
+ * llegaron— y explica por qué pueden coincidir, que es el caso que más confunde
+ * cuando las dos muestran el mismo número. No inventa de dónde salió la fecha ni
+ * promete un plazo que puede cambiar.
  *
  * POR QUÉ HAY UN AVISO EXPLÍCITO
  * Una fecha sin consecuencia visible se lee como decorativa, que es como esta
@@ -45,10 +55,6 @@ import { FolioMontoClave } from './FolioMontoClave'
  * iniciar el pago, así que la consecuencia existe y conviene decirla en la propia
  * pantalla, no solo en el toast que alguien pudo no leer. El texto no promete
  * expiry ni "quedan X días" — eso sería calcular una fecha que puede cambiar.
- *
- * La fila de inscripción se omite si no vino, y la de pago también: un concepto
- * sin `available_until` es un periodo sin fin, no una fecha perdida, y un "—"
- * daría a entender lo segundo.
  */
 export function FichaPagoPendiente({
   folio,
@@ -105,14 +111,31 @@ export function FichaPagoPendiente({
         }
       />
 
-      {/* 2b — por qué esa fecha manda, y no la otra */}
+      {/* 2b — qué significa esa fecha. Solo puede decir lo que las dos fechas
+          que llegaron muestran: si coinciden, si el pago cierra antes, o si no
+          vino la de inscripción. Nada de afirmar de dónde salió la fecha. */}
       {fechaLimitePago && (
         <div className="border-t border-amber-200 bg-amber-50/60 px-6 py-4">
           <p className="text-[13px] leading-relaxed text-[#6B7280]">
-            <span className="font-bold text-[#333333]">¿Por qué esta fecha?</span> Porque{' '}
-            <span className="font-semibold text-amber-800">{fechaLimitePago}</span> es el último día en que
-            el Concepto de Pago de tu carrera acepta el cobro, y el sistema la revisa al iniciar el pago. No es la
-            fecha en que se cerró el registro: esa ya pasó, y por eso tu ficha existe.
+            <span className="font-bold text-[#333333]">¿Por qué esta fecha?</span>{' '}
+            {fechaLimiteInscripcion && fechaLimiteInscripcion === fechaLimitePago ? (
+              <>
+                Porque <span className="font-semibold text-amber-800">{fechaLimitePago}</span> es la fecha en que
+                tu ficha cierra para pagos, y en tu caso es el mismo día en que cierra la inscripción: por eso las
+                dos se ven iguales. La que manda aquí es la del pago.
+              </>
+            ) : fechaLimiteInscripcion ? (
+              <>
+                Porque <span className="font-semibold text-amber-800">{fechaLimitePago}</span> es el último día
+                para pagar tu ficha, y llega antes que el cierre de la inscripción ({fechaLimiteInscripcion}). Son
+                dos fechas distintas y la que se muestra destacada es la que llega primero.
+              </>
+            ) : (
+              <>
+                Porque <span className="font-semibold text-amber-800">{fechaLimitePago}</span> es el último día
+                para pagar tu ficha.
+              </>
+            )}
           </p>
         </div>
       )}

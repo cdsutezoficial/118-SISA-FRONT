@@ -4,6 +4,198 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-10-01] El aviso de "no se puede pagar" ya no convive con un botón de pagar
+
+Commit: `eeb3283`.
+
+### Qué cambió
+
+- `PortalFichaPago.tsx`: con `pagoNoDisponible` puesto, el botón se **deshabilita**,
+  se **relabela** a "Pago en línea no disponible" y pasa a `secondary`. El párrafo
+  que explica que el pago se hace en esta misma página se oculta, porque con el pago
+  bloqueado también es falso.
+- `FichaConfirmacion.tsx`: lo mismo. El aviso y el botón habilitable estaban en las
+  dos pantallas de pago, no solo en el portal, y arreglar una sola dejaba la otra
+  contradiciéndose.
+- `FichaPagoPendiente.tsx`: el bloque "¿Por qué esta fecha?" deja de ser texto fijo y
+  describe lo que el backend mandó. Tres variantes según lo que llegó: si ambas fechas
+  coinciden, si el pago cierra antes que la inscripción, o si no vino la de inscripción.
+
+### Por qué el botón se apaga en vez de solo avisar
+
+`pagoNoDisponible` no es un toast que se va: es un hecho permanente sobre la ficha, y el
+backend lo devolvió ya con su propio motivo (`ADMISSION_QUOTA_REACHED`,
+`ADMISSION_PAYMENT_WINDOW_CLOSED`). Con el aviso arriba y un botón "Pagar en línea —
+$0.00" habilitado abajo, la pantalla se contradecía y empujaba a repetir un intento que
+iba a devolver el mismo 409. Insistir no cambia nada, así que el botón deja de ofrecer
+esa opción. El motivo sigue siendo el del backend: el front solo apaga y rotula, no
+inventa la razón.
+
+La variante visual acompaña: `secondary` en vez de `primary` verde, que en este flujo ya
+significa "pago confirmado" (`FichaPagoConfirmado`). Un botón verde deshabilitado al 60%
+de opacidad todavía se lee como la acción principal de la pantalla.
+
+### Por qué la explicación de la fecha ya no afirma nada que no se pueda comprobar
+
+Decía, sin mirar ningún dato:
+
+> "...es la fecha más corta entre el cierre del registro y los días de plazo que corren
+> desde que tu ficha se generó, y el sistema la revisa al iniciar el pago. No es la
+> fecha en que se cerró el registro: esa ya pasó, y por eso tu ficha existe."
+
+Las tres afirmaciones eran un problema a la vez:
+
+1. **"La fecha viene del concepto de pago"** y **"la revisa al iniciar el pago"**:
+   describir la regla del backend desde el front es una afirmación que la pantalla no
+   puede verificar, y que cambia si el backend cambia. `paymentDeadline` es lo que
+   llegó; eso es lo que se puede decir.
+2. **"El registro ya pasó"**: es **falsa** para quien se acaba de registrar. Si el
+   registro sigue abierto, esa fecha no es un cierre que ya ocurrió sino una que todavía
+   va a ocurrir, y el texto afirmaba un hecho pasado que nadie comprobó. Era el caso
+   mayoritario: la mayoría de las fichas se emiten el día 1 y se pagan después.
+
+Ahora el texto se limita a las dos fechas del payload y explica por qué pueden verse
+iguales, que es el caso que más confunde cuando las dos muestran el mismo número.
+
+---
+
+## [2026-09-30] El navegador avisa cuando el Aspirante abandona el pago
+
+Commit: `eb0fbaf`.
+
+### Qué cambió
+
+- `useFichaPayment.ts`: `onEvoError` y `onEvoTimeout` ahora hacen
+  `POST /candidates/{id}/payments/release` con el `orderId` que ya estaba guardado, en
+  lugar de solo limpiar el estado local.
+- `types.ts`: `PaymentReleaseBackend` y `PaymentReleaseOutcome`.
+
+### Qué estaba roto
+
+Cuando el SDK del banco emitía `timeout` o `error`, el front limpiaba su estado y le
+avisaba al Aspirante, pero **el backend no se enteraba**. El lugar del cupo seguía
+apartado, así que la siguiente persona que pulsaba "Pagar" en esa carrera recibía
+"El cupo de esta carrera se agotó" por un lugar que el primer Aspirante ya había
+soltado — y el primero, además, no podía pagar aunque quedara sitio.
+
+### Por qué los cuatro mensajes son distintos
+
+El endpoint **no le cree al navegador**. Un timeout y un error del navegador son
+compatibles con una orden que EVO creó y capturó segundos después, así que el backend
+pregunta al banco y decide con su respuesta. De ahí los cuatro mensajes:
+
+| `outcome` | Qué se le dice |
+|---|---|
+| `SLOT_RELEASED` | No se completó, ya puedes reintentar |
+| `PAYMENT_CAPTURED` | El dinero **sí** entró; no intentes otra vez |
+| `PAYMENT_IN_PROGRESS` | Sigue en proceso con el banco, espera |
+| `RETAINED_UNEXPLAINED` | El mensaje original |
+
+`PAYMENT_CAPTURED` es el que obliga a no usar un mensaje genérico de "no se pudo
+completar": sería una mentira que la persona actúa pagando una segunda vez.
+
+El POST es best-effort y la limpieza local ocurre igual. Si falla, el lugar simplemente
+queda apartado un poco más — el barrido diario lo recupera igual — mientras que
+esperarlo bloquearía el panel.
+
+---
+
+## [2026-09-30] El botón "Pagar" desaparece cuando la ficha ya venció
+
+Commit: `304b782`.
+
+### Qué cambió
+
+- `CandidateStatus` incluye `PAYMENT_EXPIRED`, con su badge en `STATUS_META`
+  ("Pago Vencido", ámbar) y sin acciones en `STATUS_ACTIONS`: no hay pago que confirmar
+  y la persona puede volver a registrarse, lo cual es otro folio, no una acción de fila.
+  Usa ámbar y no el rojo de "Rechazado" a propósito: ese estado es de la evaluación
+  académica, no de un pago que no llegó.
+- `STATUS_ORDER` en `CandidatosList.tsx` lo coloca justo después de `REGISTERED`, que es
+  donde está en el tiempo: es la misma ficha, vencida sin pagar. Antes una ficha
+  vencida se veía idéntica a una viva y se filtraba dentro del mismo "Registrado".
+- `FichaPaymentAccessBackend` suma `candidateStatus` y `paymentExpired`.
+- `PortalFichaPago.tsx`: cuando `paymentExpired` es true se muestra el aviso de
+  vencimiento **sin botón de pagar**.
+
+### Por qué se usa `paymentExpired` y no `candidateStatus`
+
+Porque responden a preguntas distintas. El estado es lo que el barrido de las 00:10 dejó
+escrito; el flag es lo que el backend calcula hoy. Entre que un plazo vence y el barrido
+corre se diferencian, y ofrecer un botón que el checkout va a rechazar con 409 es
+exactamente el defecto que el flag evita.
+
+El flag **no** se vuelve a derivar aquí desde `paymentDeadline`. En este endpoint la
+pantalla no tiene `registeredAt`, y una segunda copia de la regla de ventana en
+TypeScript es justo cómo el portal y el motor empiezan a discrepar.
+
+---
+
+## [2026-09-30] "Pagar" no se puede pulsar dos veces, y el intento anterior no se filtra al reintento
+
+Commit: pendiente.
+
+### Por qué
+
+Fase 0 del plan de cupo, los dos puntos que se notan de inmediato:
+
+- El botón "Pagar en línea" solo se deshabilitaba mientras el backend contestaba el
+  `POST /payments/checkout`. En cuanto la sesión abría, volvía a habilitarse, así que
+  un segundo clic creaba **otro** `orderId` y el backend apartaba **otro** lugar de la
+  carrera para el mismo pago. `PortalFichaPago.tsx` además solo lo deshabilitaba con
+  `processing`, y `FichaConfirmacion.tsx` no lo deshabilitaba nunca.
+- `checkout.min.js` deja en `sessionStorage` la llave
+  `HostedCheckout_embedContainer#sisa-evo-checkout` y nadie la borraba (§2.8), así que
+  un reintento podía arrancar con el estado del intento anterior. Además, si el
+  Aspirante navegaba fuera con el panel abierto, quedaban el iframe de EVO y esa llave.
+
+### Qué cambió
+
+- `useFichaPayment` expone `pagoEnCurso` (`processing || evoLoading || evoCheckout`):
+  la ventana completa en la que no se acepta un segundo intento, no solo la petición.
+  La regla queda en el hook y las dos vistas la comparten.
+- `FichaConfirmacion.tsx` y `PortalFichaPago.tsx`: el botón usa `disabled={pagoEnCurso}`.
+- `teardownEvoDom()` borra también la llave `HostedCheckout_embedContainer#…`, no solo
+  el iframe. El `<script>` y `window.Checkout` se siguen dejando, que es lo correcto:
+  se cachean por sesión de página.
+- `useFichaPayment` barre el DOM de EVO **al desmontar**, igual que en las rutas de
+  cierre y cancelación.
+
+### Verificación
+
+`npm run typecheck` limpio.
+
+---
+
+## [2026-09-30] La ficha muestra su plazo real de pago, no la ventana del concepto
+
+Commit: pendiente. Requiere el backend de `feat/cupo-proceso-admision`.
+
+### Por qué
+
+La pantalla de pago pendiente mostraba como "Fecha límite de pago" el
+`paymentClosesOn` (el `available_until` del Concepto de Pago), que es una frontera
+del motor y no la fecha sobre la que el Aspirante puede actuar. El backend ahora
+manda `paymentDeadline`: el más corto entre el cierre de la venta y los N días de
+la ficha.
+
+### Qué cambió
+
+- `VentanaFechas` (data/types.ts) gana `paymentDeadline`, y el comentario explica
+  las tres fechas. `FichaPaymentBackend`, `FichaPaymentAccessBackend` y
+  `CandidateFichaBackend` lo heredan.
+- `PortalFichaPago.tsx`, `FichaConfirmacion.tsx` y `CandidatoRegistro.tsx` usan
+  `paymentDeadline` para "Fecha límite de pago" en vez de `paymentClosesOn`.
+- `FichaPagoPendiente.tsx`: el aviso "¿Por qué esta fecha?" ya no afirma que la
+  fecha sea la del Concepto de Pago; dice que es el plazo más corto entre el cierre
+  del registro y los días de la ficha.
+
+### Verificación
+
+`npx tsc --noEmit` sin errores.
+
+---
+
 ## [2026-09-29] El precio de la ficha se cotiza desde la tarifa
 
 Commits de esta rama: `f86e106` y `9d75b90`. Requiere el backend de
