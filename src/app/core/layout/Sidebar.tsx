@@ -90,7 +90,7 @@ export const SYSTEM_NAV: NavEntry[] = [
     children: [
       { icon: <LayoutDashboard size={16} />, label: 'Dashboard',                 base: 'admision-dash',   path: '/admision',                  roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
       { icon: <Ticket size={16} />,          label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
-      { icon: <Users size={16} />,           label: 'Candidatos',                base: 'candidatos',       path: '/admision/candidatos',       roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
+      { icon: <Users size={16} />,           label: 'Candidatos',                base: 'candidatos',       path: '/admision/candidatos',       roles: ADMISSION_ROLES, permissionKeys: ['CANDIDATES_READ'] },
       { icon: <UserPlus size={16} />,        label: 'Registrar Candidato',       base: 'candidato-registrar', path: '/admision/candidatos/registrar', roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
       { icon: <ClipboardCheck size={16} />,  label: 'Selección de Candidatos',   base: 'seleccion',        path: '/admision/seleccion',        roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
       { icon: <IdCard size={16} />,          label: 'Generar Matrículas',        base: 'matriculas',       path: '/admision/matriculas',       roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
