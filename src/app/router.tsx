@@ -204,11 +204,11 @@ const router = createBrowserRouter([
           },
           {
             path: 'candidatos/pago-ficha',
-            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoFicha /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION', 'FINANZAS']}><ConfirmarPagoFicha /></RequireRole>,
           },
           {
             path: 'candidatos/pago-induccion',
-            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoInduccion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION', 'FINANZAS']}><ConfirmarPagoInduccion /></RequireRole>,
           },
           {
             path: 'candidatos/induccion',

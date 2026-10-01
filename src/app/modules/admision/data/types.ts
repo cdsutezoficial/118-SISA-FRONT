@@ -484,3 +484,32 @@ export function isAdmisionActionEnabled(candidate: Candidate, action: AdmisionAc
 
 /** Screen 13 payment-method choice — mirrors `CandidatoRegistro`'s `MetodoPago`. */
 export type MetodoPagoFicha = 'ONLINE' | 'VENTANILLA'
+
+// ── Screen 3 (Candidatos Listado) real-backend flow types ─────────────────────
+// Mirrors `GET /candidates` (`CandidateListItemResponse` / `CandidateListResponse`).
+// Deliberately leaner than the mock `Candidate` shape: the list renders exactly
+// these columns and row actions, so payments/induction flags/exam results stay on
+// `GET /candidates/{id}` instead of leaking onto the list.
+
+/** A single row of `GET /candidates` — `{id, folio, fullName, curp, programId, programName, status, registeredAt}`. */
+export interface CandidateListRow {
+  id: string
+  folio: string
+  fullName: string
+  curp: string
+  /** Id of the chosen `AcademicProgram` (NOT the admission-config id). */
+  programId: string
+  programName: string
+  status: CandidateStatus
+  /** ISO-8601 `Instant`. */
+  registeredAt: string
+}
+
+/** `GET /candidates` envelope — same `{items, totalElements, totalPages, page, size}` as every paginated list. */
+export interface CandidateListPage {
+  items: CandidateListRow[]
+  totalElements: number
+  totalPages: number
+  page: number
+  size: number
+}
