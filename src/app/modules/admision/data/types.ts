@@ -108,6 +108,30 @@ export interface CheckoutInitiationBackend {
 }
 
 /**
+ * What `POST /candidates/{id}/payments/release` reports — the quota slot the
+ * browser gave up on, settled against the gateway rather than against the
+ * browser's word.
+ *
+ * The two fields are separate because they answer different questions, and the
+ * applicant needs to hear something different about each: a freed slot invites
+ * a retry, while `PAYMENT_CAPTURED` means the money already arrived and the
+ * timeout was cosmetic. One boolean would collapse those into the same
+ * message.
+ */
+export type PaymentReleaseOutcome =
+  | 'SLOT_RELEASED'
+  | 'PAYMENT_IN_PROGRESS'
+  | 'PAYMENT_CAPTURED'
+  | 'RETAINED_UNEXPLAINED'
+
+export interface PaymentReleaseBackend {
+  candidateId: string
+  orderId: string
+  outcome: PaymentReleaseOutcome
+  slotReleased: boolean
+}
+
+/**
  * `POST /candidates/payment-access` — the "vuelve a pagar mi ficha" lookup.
  *
  * Reached with a sequential folio plus the last 3 characters of the CURP, so

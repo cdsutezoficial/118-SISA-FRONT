@@ -3,7 +3,11 @@ import { useSearchParams } from 'react-router'
 import { ADMISSION_ERROR_CODES, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
 import { toBrowserPath } from '@app/core/infra/basePath'
-import type { CheckoutInitiationBackend, PaymentConfirmationBackend } from '../data/types'
+import type {
+  CheckoutInitiationBackend,
+  PaymentConfirmationBackend,
+  PaymentReleaseBackend,
+} from '../data/types'
 
 /**
  * The EVO Hosted Checkout flow for paying a ficha, shared by the two screens
@@ -33,6 +37,12 @@ import type { CheckoutInitiationBackend, PaymentConfirmationBackend } from '../d
  * 4. The SDK callback alone is NOT proof of payment: the backend re-checks the
  *    order against EVO (SUCCESS status + amount) before marking the ficha
  *    `PAID`.
+ * 5. The two give-up paths (`data-error`, `data-timeout`) POST
+ *    `/candidates/{id}/payments/release` so the quota slot is handed back
+ *    instead of staying held against a career until the expiry sweep. The
+ *    backend asks the gateway before releasing — our report is a question, not
+ *    an answer — and the reply decides which of four different things the
+ *    applicant is told.
  */
 
 /** Id of the container the SDK injects its payment form into. */
@@ -386,17 +396,68 @@ export function useFichaPayment({
     void confirmAfterReturn(orderId)
   }, [closeEvoPanel, confirmAfterReturn, storageKey])
 
+  /**
+   * Tell the backend the browser gave up on this attempt, so the quota slot it is
+   * holding can be handed back — and then tell the applicant what the gateway
+   * actually said.
+   *
+   * The release is best-effort and the local cleanup happens regardless: if the
+   * POST fails the slot is simply held a while longer, which the daily sweep
+   * reclaims, whereas blocking the UI on it would leave the panel stuck.
+   *
+   * The backend does not take our word for it. A browser timeout and a browser
+   * error are both compatible with an order that was created and captured
+   * seconds later, so the reply decides, and these four messages are genuinely
+   * different situations rather than three ways of saying "it did not work".
+   */
+  const releaseAbandonedAttempt = useCallback(
+    async (orderId: string, fallbackMessage: string) => {
+      try {
+        const res = await apiPost<PaymentReleaseBackend>(
+          `/candidates/${candidateId}/payments/release`,
+          { orderId },
+        )
+        if (res.outcome === 'SLOT_RELEASED') {
+          notifyRef.current('Tu pago no se completó. Ya puedes volver a intentarlo.')
+        } else if (res.outcome === 'PAYMENT_CAPTURED') {
+          // The money is in. Saying "it failed" here would be a lie the applicant
+          // acts on by paying a second time.
+          notifyRef.current(
+            'Tu pago sí fue recibido; estamos verificándolo. No es necesario que intentes de nuevo.',
+          )
+        } else if (res.outcome === 'PAYMENT_IN_PROGRESS') {
+          notifyRef.current(
+            'Tu pago sigue en proceso con el banco. Espera un momento antes de intentar de nuevo.',
+          )
+        } else {
+          notifyRef.current(fallbackMessage)
+        }
+      } catch {
+        notifyRef.current(fallbackMessage)
+      }
+    },
+    [candidateId],
+  )
+
   const onEvoError = useCallback(() => {
+    const orderId = getStoredOrderId()
     clearStoredOrderId()
     closeEvoPanel()
-    notifyRef.current('No se pudo completar tu pago. Tu ficha sigue pendiente.')
-  }, [closeEvoPanel, storageKey])
+    void releaseAbandonedAttempt(
+      orderId ?? '',
+      'No se pudo completar tu pago. Tu ficha sigue pendiente.',
+    )
+  }, [closeEvoPanel, releaseAbandonedAttempt, storageKey])
 
   const onEvoTimeout = useCallback(() => {
+    const orderId = getStoredOrderId()
     clearStoredOrderId()
     closeEvoPanel()
-    notifyRef.current('La sesión de pago expiró. Vuelve a intentar el pago.')
-  }, [closeEvoPanel, storageKey])
+    void releaseAbandonedAttempt(
+      orderId ?? '',
+      'La sesión de pago expiró. Vuelve a intentar el pago.',
+    )
+  }, [closeEvoPanel, releaseAbandonedAttempt, storageKey])
 
   // Mount the official EVO Hosted Checkout SDK into the panel container that the
   // view already rendered. `configure` only takes the session id: the gateway

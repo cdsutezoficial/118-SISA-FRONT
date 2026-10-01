@@ -4,9 +4,50 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
-## [2026-09-30] El botón "Pagar" desaparece cuando la ficha ya venció
+## [2026-09-30] El navegador avisa cuando el Aspirante abandona el pago
 
 Commit: pendiente.
+
+### Qué cambió
+
+- `useFichaPayment.ts`: `onEvoError` y `onEvoTimeout` ahora hacen
+  `POST /candidates/{id}/payments/release` con el `orderId` que ya estaba guardado, en
+  lugar de solo limpiar el estado local.
+- `types.ts`: `PaymentReleaseBackend` y `PaymentReleaseOutcome`.
+
+### Qué estaba roto
+
+Cuando el SDK del banco emitía `timeout` o `error`, el front limpiaba su estado y le
+avisaba al Aspirante, pero **el backend no se enteraba**. El lugar del cupo seguía
+apartado, así que la siguiente persona que pulsaba "Pagar" en esa carrera recibía
+"El cupo de esta carrera se agotó" por un lugar que el primer Aspirante ya había
+soltado — y el primero, además, no podía pagar aunque quedara sitio.
+
+### Por qué los cuatro mensajes son distintos
+
+El endpoint **no le cree al navegador**. Un timeout y un error del navegador son
+compatibles con una orden que EVO creó y capturó segundos después, así que el backend
+pregunta al banco y decide con su respuesta. De ahí los cuatro mensajes:
+
+| `outcome` | Qué se le dice |
+|---|---|
+| `SLOT_RELEASED` | No se completó, ya puedes reintentar |
+| `PAYMENT_CAPTURED` | El dinero **sí** entró; no intentes otra vez |
+| `PAYMENT_IN_PROGRESS` | Sigue en proceso con el banco, espera |
+| `RETAINED_UNEXPLAINED` | El mensaje original |
+
+`PAYMENT_CAPTURED` es el que obliga a no usar un mensaje genérico de "no se pudo
+completar": sería una mentira que la persona actúa pagando una segunda vez.
+
+El POST es best-effort y la limpieza local ocurre igual. Si falla, el lugar simplemente
+queda apartado un poco más — el barrido diario lo recupera igual — mientras que
+esperarlo bloquearía el panel.
+
+---
+
+## [2026-09-30] El botón "Pagar" desaparece cuando la ficha ya venció
+
+Commit: `304b782`.
 
 ### Qué cambió
 
