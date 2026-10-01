@@ -6,7 +6,7 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ## [2026-10-01] El aviso de "no se puede pagar" ya no convive con un botón de pagar
 
-Commit: pendiente.
+Commit: `eeb3283`.
 
 ### Qué cambió
 
