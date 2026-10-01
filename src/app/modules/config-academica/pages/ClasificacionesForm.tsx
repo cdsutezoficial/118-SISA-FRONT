@@ -3,8 +3,7 @@ import { FormPage, FormHeader, FormCard, FormActions, TextField } from '@app/cor
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
-import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,16 +69,7 @@ export default function ClasificacionesForm() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 404) {
-          setLoadErrorMsg('No se encontró la clasificación solicitada.')
-        } else if (apiErr.status === 401) {
-          setLoadErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setLoadErrorMsg('No tienes permiso para consultar esta clasificación.')
-        } else {
-          setLoadErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setLoadErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,20 +95,7 @@ export default function ClasificacionesForm() {
       }
     } catch (err) {
       setSubmitStatus('error')
-      const apiErr = err as Partial<ApiError>
-      if (apiErr.status === 409) {
-        // Unlike Division, `name` is NOT unique here — the backend only
-        // checks `code`, so the message must not say "el nombre o la clave".
-        setSubmitErrorMsg(apiErr.message ?? 'La clave ya está en uso por otra clasificación.')
-      } else if (apiErr.status === 400) {
-        setSubmitErrorMsg(apiErr.message ?? 'Revisa los datos capturados: hay un valor inválido.')
-      } else if (apiErr.status === 401) {
-        setSubmitErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-      } else if (apiErr.status === 403) {
-        setSubmitErrorMsg('No tienes permiso para realizar esta acción.')
-      } else {
-        setSubmitErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-      }
+      setSubmitErrorMsg(getApiErrorMessage(err))
     }
   }
 

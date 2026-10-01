@@ -6,8 +6,7 @@ import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } f
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
-import { apiGet, apiPost, apiPut, apiDelete } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, apiDelete, getApiErrorMessage } from '@app/core/infra/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -123,34 +122,12 @@ function newLevelRow(levelNumber: number): LevelRow {
   return { key: crypto.randomUUID(), originalId: null, levelNumber, type: 'REGULAR', description: '' }
 }
 
-function levelErrorMessage(apiErr: Partial<ApiError>): string {
-  if (apiErr.status === 409) return apiErr.message ?? 'El número de nivel ya está en uso en este plan.'
-  if (apiErr.status === 400) return apiErr.message ?? 'Datos de nivel inválidos.'
-  if (apiErr.status === 404) return 'El plan ya no existe.'
-  return 'No se pudo guardar este nivel.'
+function levelErrorMessage(err: unknown): string {
+  return getApiErrorMessage(err, 'No se pudo guardar este nivel.')
 }
 
-// Backend messages for the two 409 causes on DELETE (AcademicPlan.java):
-// "Plan level still has subjects: {id}" (PlanLevelHasSubjectsException) vs
-// "Plan level is referenced as socialServiceMinLevelId and cannot be
-// removed: {id}" (PlanLevelInUseException). We match on the raw message text
-// to give a precise Spanish message when possible, falling back to a single
-// accurate combined message when the body doesn't let us tell them apart.
-function deleteLevelErrorMessage(apiErr: Partial<ApiError>): string {
-  if (apiErr.status === 409) {
-    const raw = apiErr.message ?? ''
-    const hasSubjects = /subjects/i.test(raw)
-    const inUse = /socialServiceMinLevelId|referenced|servicio social/i.test(raw)
-    if (hasSubjects && !inUse) {
-      return 'No se puede eliminar este nivel porque tiene materias asignadas. Quítalas primero desde el detalle del plan.'
-    }
-    if (inUse && !hasSubjects) {
-      return 'No se puede eliminar este nivel porque está definido como el nivel mínimo de servicio social del plan.'
-    }
-    return 'No se puede eliminar este nivel: tiene materias asignadas o está referenciado como nivel mínimo de servicio social del plan.'
-  }
-  if (apiErr.status === 404) return 'El nivel ya no existe (puede que ya haya sido eliminado).'
-  return 'No se pudo eliminar este nivel.'
+function deleteLevelErrorMessage(err: unknown): string {
+  return getApiErrorMessage(err, 'No se pudo eliminar este nivel.')
 }
 
 interface LevelDiff {
@@ -296,16 +273,7 @@ export default function PlanForm() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 404) {
-          setLoadErrorMsg('No se encontró el plan de estudios solicitado.')
-        } else if (apiErr.status === 401) {
-          setLoadErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setLoadErrorMsg('No tienes permiso para consultar este plan de estudios.')
-        } else {
-          setLoadErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setLoadErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -483,18 +451,7 @@ export default function PlanForm() {
       }
     } catch (err) {
       setSubmitStatus('error')
-      const apiErr = err as Partial<ApiError>
-      if (apiErr.status === 409) {
-        setSubmitErrorMsg(apiErr.message ?? 'La versión ya está en uso por otro plan de esta carrera.')
-      } else if (apiErr.status === 400) {
-        setSubmitErrorMsg(apiErr.message ?? 'Revisa los datos capturados: hay un valor inválido.')
-      } else if (apiErr.status === 401) {
-        setSubmitErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-      } else if (apiErr.status === 403) {
-        setSubmitErrorMsg('No tienes permiso para realizar esta acción.')
-      } else {
-        setSubmitErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-      }
+      setSubmitErrorMsg(getApiErrorMessage(err))
     }
   }
 
@@ -512,8 +469,7 @@ export default function PlanForm() {
         const levelPayload: LevelPayload = { levelNumber: row.levelNumber, type: row.type, description: row.description.trim() || null }
         await apiPost<PlanLevelDetail>(`/plans/${created.id}/levels`, levelPayload)
       } catch (err) {
-        const apiErr = err as Partial<ApiError>
-        failedLevels.push({ levelNumber: row.levelNumber, message: levelErrorMessage(apiErr) })
+        failedLevels.push({ levelNumber: row.levelNumber, message: levelErrorMessage(err) })
       }
     }
 
@@ -556,7 +512,7 @@ export default function PlanForm() {
         await apiDelete<void>(`/plans/${id}/levels/${row.originalId}`)
         if (row.originalId) successfullyDeletedIds.add(row.originalId)
       } catch (err) {
-        failedLevels.push({ levelNumber: row.levelNumber, message: deleteLevelErrorMessage(err as Partial<ApiError>) })
+        failedLevels.push({ levelNumber: row.levelNumber, message: deleteLevelErrorMessage(err) })
       }
     }
 
@@ -587,7 +543,7 @@ export default function PlanForm() {
         const levelPayload: LevelPayload = { levelNumber: row.levelNumber, type: row.type, description: row.description.trim() || null }
         await apiPut<PlanLevelDetail>(`/plans/${id}/levels/${row.originalId}`, levelPayload)
       } catch (err) {
-        failedLevels.push({ levelNumber: row.levelNumber, message: levelErrorMessage(err as Partial<ApiError>) })
+        failedLevels.push({ levelNumber: row.levelNumber, message: levelErrorMessage(err) })
       }
     }
     for (const row of added) {
@@ -596,10 +552,9 @@ export default function PlanForm() {
         const levelPayload: LevelPayload = { levelNumber: row.levelNumber, type: row.type, description: row.description.trim() || null }
         await apiPost<PlanLevelDetail>(`/plans/${id}/levels`, levelPayload)
       } catch (err) {
-        failedLevels.push({ levelNumber: row.levelNumber, message: levelErrorMessage(err as Partial<ApiError>) })
+        failedLevels.push({ levelNumber: row.levelNumber, message: levelErrorMessage(err) })
       }
     }
-
     if (failedLevels.length === 0) {
       navigate(`/planes/detalle?id=${id}`, { state: { toast: 'Plan de estudios actualizado exitosamente.' } })
       return

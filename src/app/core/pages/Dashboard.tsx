@@ -4,8 +4,7 @@ import { usePendingToast } from '../infra/hooks'
 import { useRole } from '../infra/RoleContext'
 import { Breadcrumb, PageHeader, ErrorBanner } from '@app/core/components/list'
 import { KpiCards, QuickAccess, type KpiCardData, type QuickAccessItem } from '@app/core/components/dashboard'
-import { apiGet } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiGet, getApiErrorMessage } from '@app/core/infra/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // El dashboard NO hace una consulta por módulo: el BACK expone
@@ -57,14 +56,7 @@ export default function Dashboard() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 401) {
-          setErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setErrorMsg('No tienes permiso para consultar las estadísticas.')
-        } else {
-          setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
   }, [])
