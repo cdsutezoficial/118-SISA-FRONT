@@ -5,8 +5,7 @@ import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } f
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
-import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // `Group` per the corrected Pantalla 9 (2026-07-27): Programa Educativo is a
@@ -174,16 +173,7 @@ export default function GruposForm() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 404) {
-          setLoadErrorMsg('No se encontró el grupo solicitado.')
-        } else if (apiErr.status === 401) {
-          setLoadErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setLoadErrorMsg('No tienes permiso para consultar este grupo.')
-        } else {
-          setLoadErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setLoadErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,23 +239,7 @@ export default function GruposForm() {
       }
     } catch (err) {
       setSubmitStatus('error')
-      const apiErr = err as Partial<ApiError>
-      if (apiErr.status === 400) {
-        // Backend: GenerationReferenceNotFoundException ("Generation not
-        // found: ...") or PeriodNotFoundException ("Period not found: ...")
-        // — both map to 400. Message forwarded verbatim when present.
-        setSubmitErrorMsg(apiErr.message ?? 'Revisa la Generación y el Periodo seleccionados: alguno no es válido.')
-      } else if (apiErr.status === 404) {
-        // Backend: PlanLevelNotFoundException — the selected Nivel doesn't
-        // belong to the Generación's plan.
-        setSubmitErrorMsg(apiErr.message ?? 'El nivel seleccionado no pertenece al plan de la generación.')
-      } else if (apiErr.status === 401) {
-        setSubmitErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-      } else if (apiErr.status === 403) {
-        setSubmitErrorMsg('No tienes permiso para realizar esta acción.')
-      } else {
-        setSubmitErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-      }
+      setSubmitErrorMsg(getApiErrorMessage(err))
     }
   }
 

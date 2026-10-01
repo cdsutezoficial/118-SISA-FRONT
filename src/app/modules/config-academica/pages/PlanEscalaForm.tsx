@@ -5,8 +5,7 @@ import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, Button, IconButton, TextField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate, useSearchParams } from 'react-router'
-import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // This screen registers/edits a GradeScale *inside a plan* — there is no
@@ -156,16 +155,7 @@ export default function PlanEscalaForm() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 404) {
-          setLoadErrorMsg('No se encontró el plan de estudios solicitado.')
-        } else if (apiErr.status === 401) {
-          setLoadErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setLoadErrorMsg('No tienes permiso para consultar este plan de estudios.')
-        } else {
-          setLoadErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setLoadErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -310,20 +300,7 @@ export default function PlanEscalaForm() {
       }
     } catch (err) {
       setSubmitStatus('error')
-      const apiErr = err as Partial<ApiError>
-      if (apiErr.status === 409) {
-        setSubmitErrorMsg(apiErr.message ?? 'Esta clasificación ya tiene una escala registrada en este plan.')
-      } else if (apiErr.status === 400) {
-        setSubmitErrorMsg(apiErr.message ?? 'Revisa los rangos capturados: deben cubrir exactamente el rango numérico sin huecos ni traslapes.')
-      } else if (apiErr.status === 401) {
-        setSubmitErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-      } else if (apiErr.status === 403) {
-        setSubmitErrorMsg('No tienes permiso para realizar esta acción.')
-      } else if (apiErr.status === 404) {
-        setSubmitErrorMsg('No se encontró el plan o la escala indicados.')
-      } else {
-        setSubmitErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-      }
+      setSubmitErrorMsg(getApiErrorMessage(err))
     }
   }
 

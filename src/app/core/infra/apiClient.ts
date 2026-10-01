@@ -50,6 +50,15 @@ export interface ApiError {
    * which case `message` is the only signal available.
    */
   code?: string
+  /**
+   * The `message` field of the backend's `ErrorResponse`, kept separate from
+   * {@link ApiError.message} because that one degrades into non-user-facing text
+   * (the `error` status label, or `Error <status>`) when the body carries no
+   * message. `undefined` means "the backend did not describe this failure", so
+   * a caller can tell "render what the backend said" apart from "render
+   * something generic". Use {@link getApiErrorMessage} to read it.
+   */
+  backendMessage?: string
 }
 
 /** Error codes the admission flow branches on. Mirrors the backend's
@@ -83,6 +92,7 @@ export const ADMISSION_ERROR_CODES = {
 async function parseApiError(res: Response): Promise<ApiError> {
   let message = `Error ${res.status}`
   let code: string | undefined
+  let backendMessage: string | undefined
   try {
     const body: unknown = await res.json()
     if (body && typeof body === 'object') {
@@ -90,11 +100,41 @@ async function parseApiError(res: Response): Promise<ApiError> {
       if (typeof candidate.message === 'string') message = candidate.message
       else if (typeof candidate.error === 'string') message = candidate.error
       if (typeof candidate.code === 'string' && candidate.code !== '') code = candidate.code
+      // Only `message` counts as user-facing copy: `error` is a status label
+      // ("No encontrado", "Bad Request") that says nothing about what failed.
+      if (typeof candidate.message === 'string' && candidate.message.trim() !== '') {
+        backendMessage = candidate.message
+      }
     }
   } catch {
     // Non-JSON or empty error body — fall back to the generic status message.
   }
-  return { status: res.status, message, code }
+  return { status: res.status, message, code, backendMessage }
+}
+
+/** Shown when the request never produced a body-level message: the server is
+ *  down, the response was not JSON, or Spring rejected the request before any
+ *  handler ran (unmapped URL, wrong method, unsupported media type). */
+export const NETWORK_ERROR_MESSAGE = 'No se pudo conectar con el servidor. Intenta de nuevo más tarde.'
+
+/**
+ * The text to show the user for a caught error: the backend's own `message` when
+ * it sent one, otherwise `fallback`.
+ *
+ * <p>The backend owns this copy. Every app-generated error carries a
+ * human-readable Spanish `message` (see `ErrorResponse`), so branching on
+ * `status` in the UI to pick a string would only duplicate — and eventually
+ * contradict — what the server already said. Pass a `fallback` only for the
+ * case the backend genuinely cannot describe (no response reached us).
+ *
+ * <p>Accepts `unknown` so it can be called directly on a `catch` binding.
+ */
+export function getApiErrorMessage(err: unknown, fallback: string = NETWORK_ERROR_MESSAGE): string {
+  if (err && typeof err === 'object') {
+    const { backendMessage } = err as Partial<ApiError>
+    if (typeof backendMessage === 'string' && backendMessage.trim() !== '') return backendMessage
+  }
+  return fallback
 }
 
 // ─── 401 hook ───────────────────────────────────────────────────────────────
