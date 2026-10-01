@@ -6,7 +6,11 @@ import { Toast } from '@app/core/components/ui'
 import { useRole } from '@app/core/infra/RoleContext'
 import { apiDownload, saveBlobDownload } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
-import { useFichaPayment, fichaAccessStorageKey } from '@app/modules/admision/hooks/useFichaPayment'
+import {
+  clearEvoCheckoutSessionStorage,
+  useFichaPayment,
+  fichaAccessStorageKey,
+} from '@app/modules/admision/hooks/useFichaPayment'
 import { FichaPagoConfirmado } from '@app/modules/admision/components/FichaPagoConfirmado'
 import { FichaPagoPendiente } from '@app/modules/admision/components/FichaPagoPendiente'
 import { EvoPaymentPanel } from '@app/modules/admision/components/EvoPaymentPanel'
@@ -119,8 +123,10 @@ export default function PortalFichaPago() {
   }, [acceso, candidateIdFromUrl, navigate])
 
   function handleCerrarSesion() {
+    cancelCheckout()
+    clearEvoCheckoutSessionStorage()
     setRole(null)
-    navigate('/portal/ficha')
+    navigate('/portal/ficha', { replace: true })
   }
 
   async function handleDescargarPdf() {

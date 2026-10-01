@@ -69,7 +69,27 @@ const EVO_SDK_IFRAME_ID = 'hc-comms-layer-iframe'
  * our own origin, and never removes (§2.8). Left behind, the next attempt can
  * boot from the state of the one before it, so it goes with the DOM nodes.
  */
-const EVO_SESSION_STORAGE_KEY = `HostedCheckout_embedContainer#${EVO_CHECKOUT_CONTAINER_ID}`
+/**
+ * Removes payment-flow state left on our origin by SISA or the Hosted Checkout
+ * SDK. The gateway's own origin has separate storage and cannot be cleared by
+ * JavaScript running on localhost because of the browser same-origin policy.
+ */
+export function clearEvoCheckoutSessionStorage(): void {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i)
+      if (
+        key?.startsWith('sisa.checkout.')
+        || key?.startsWith('sisa.acceso.')
+        || key?.startsWith('HostedCheckout_')
+      ) {
+        sessionStorage.removeItem(key)
+      }
+    }
+  } catch {
+    // sessionStorage unavailable — there is nothing to clean.
+  }
+}
 
 /**
  * Drops the nodes `checkout.min.js` appended to `document.body` on its own, and
@@ -89,11 +109,7 @@ const EVO_SESSION_STORAGE_KEY = `HostedCheckout_embedContainer#${EVO_CHECKOUT_CO
  */
 function teardownEvoDom(): void {
   document.getElementById(EVO_SDK_IFRAME_ID)?.remove()
-  try {
-    sessionStorage.removeItem(EVO_SESSION_STORAGE_KEY)
-  } catch {
-    // sessionStorage unavailable — nothing to clean
-  }
+  clearEvoCheckoutSessionStorage()
 }
 
 /**
