@@ -457,11 +457,11 @@ function MultiSelectField({
           {selectedOptions.map((o) => (
             <span
               key={o.id}
-              className="inline-flex items-center gap-1 rounded-full bg-[#e6f5f1] px-2 py-0.5 text-xs text-[#007a5e]"
+              className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#e6f5f1] px-2 py-0.5 text-xs text-[#007a5e]"
             >
-              {o.label}
+              <span className="truncate">{o.label}</span>
               {!disabled && (
-                <button type="button" onClick={() => toggle(o.id)} className="hover:text-[#009574]">
+                <button type="button" onClick={() => toggle(o.id)} className="shrink-0 hover:text-[#009574]">
                   <X className="h-3 w-3" />
                 </button>
               )}
@@ -735,26 +735,29 @@ function TarifasLista({
   return (
     <>
       {/* Escritorio: la lista densa es lo que hace falta cuando hay muchas
-          carreras. */}
-      <div className="hidden border border-[#E5E7EB] rounded-lg overflow-hidden md:block">
-        <table className="w-full text-[12px]">
+          carreras. Sin `overflow-hidden`: el selector de destino abre un popover
+          `absolute` y un recorte lo cortaba contra el borde de la tabla. Las
+          esquinas se redondean con `border-separate`, que sí pinta el radio
+          sobre las celdas. */}
+      <div className="hidden border border-[#E5E7EB] rounded-lg md:block">
+        <table className="w-full text-[12px] border-separate border-spacing-0">
           <thead>
-            <tr className="bg-[#F8F9FA] border-b border-[#E5E7EB]">
-              <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">
+            <tr>
+              <th className="rounded-tl-lg bg-[#F8F9FA] border-b border-[#E5E7EB] text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">
                 {scope === 'LEVEL' ? 'Nivel' : 'Destino'}
               </th>
-              <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-52">
+              <th className="bg-[#F8F9FA] border-b border-[#E5E7EB] text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-52">
                 Monto
               </th>
-              <th className="w-16" />
+              <th className="rounded-tr-lg bg-[#F8F9FA] border-b border-[#E5E7EB] w-16" />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="[&_tr:last-child_td]:border-b-0">
             {filas.map(t => (
-              <tr key={t.key} className="border-b border-[#E5E7EB] last:border-0 align-top">
-                <td className="px-3 py-2">{destino(t)}</td>
-                <td className="px-3 py-2">{monto(t)}</td>
-                <td className="px-2 py-2">{acciones(t)}</td>
+              <tr key={t.key} className="align-top">
+                <td className="border-b border-[#E5E7EB] px-3 py-2">{destino(t)}</td>
+                <td className="border-b border-[#E5E7EB] px-3 py-2">{monto(t)}</td>
+                <td className="border-b border-[#E5E7EB] px-2 py-2">{acciones(t)}</td>
               </tr>
             ))}
           </tbody>
