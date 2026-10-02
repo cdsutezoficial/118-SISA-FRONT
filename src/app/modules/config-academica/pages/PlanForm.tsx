@@ -104,6 +104,8 @@ type FormErrors = Partial<Record<
   string
 >>
 
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/
+
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 // La API trabaja con ISO (YYYY-MM-DD); el DatePicker muestra dd/mm/yyyy.
 function isoToDisplay(iso: string): string {
@@ -363,8 +365,14 @@ export default function PlanForm() {
     const e: FormErrors = {}
     if (isRegister && !programId) e.programId = 'Selecciona la carrera.'
     if (!version.trim()) e.version = 'La versión del plan es requerida.'
+    else if (CONTROL_CHARACTERS.test(version.trim())) e.version = 'La versión contiene caracteres no válidos.'
+    else if (version.trim().length > 50) e.version = 'La versión no puede superar 50 caracteres.'
     if (!validityPeriod.trim()) e.validityPeriod = 'El periodo de vigencia es requerido.'
+    else if (CONTROL_CHARACTERS.test(validityPeriod.trim())) e.validityPeriod = 'El periodo de vigencia contiene caracteres no válidos.'
+    else if (validityPeriod.trim().length > 100) e.validityPeriod = 'El periodo de vigencia no puede superar 100 caracteres.'
     if (!titulationKey.trim()) e.titulationKey = 'La clave de titulación es requerida.'
+    else if (CONTROL_CHARACTERS.test(titulationKey.trim())) e.titulationKey = 'La clave de titulación contiene caracteres no válidos.'
+    else if (titulationKey.trim().length > 100) e.titulationKey = 'La clave de titulación no puede superar 100 caracteres.'
     if (!effectiveFrom) e.effectiveFrom = 'La fecha de vigencia es requerida.'
 
     const totalLevelsNum = Number(totalLevels)
@@ -674,6 +682,7 @@ export default function PlanForm() {
                 onChange={v => { setVersion(v); setErrors(prev => ({ ...prev, version: undefined })) }}
                 disabled={disabled}
                 error={errors.version}
+                maxLength={50}
                 placeholder="Ej. 2024-1"
                 help="Identifica el plan dentro de la carrera (único por carrera)."
                 className="col-span-12 sm:col-span-4"
@@ -687,6 +696,7 @@ export default function PlanForm() {
                 onChange={v => { setValidityPeriod(v); setErrors(prev => ({ ...prev, validityPeriod: undefined })) }}
                 disabled={disabled}
                 error={errors.validityPeriod}
+                maxLength={100}
                 placeholder="Ej. 2024-2028"
                 className="col-span-12 sm:col-span-6"
               />
@@ -699,6 +709,7 @@ export default function PlanForm() {
                 onChange={v => { setTitulationKey(v); setErrors(prev => ({ ...prev, titulationKey: undefined })) }}
                 disabled={disabled}
                 error={errors.titulationKey}
+                maxLength={100}
                 placeholder="Ej. IDGS-TIT-2024"
                 className="col-span-12 sm:col-span-6"
               />

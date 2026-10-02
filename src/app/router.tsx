@@ -426,12 +426,12 @@ const router = createBrowserRouter([
       // wrapped here, mirroring the `divisiones`/`clasificaciones`/`usuarios`
       // precedent — every `/plans` verb is enforced server-side to
       // ADMIN/SERVICIOS_ESCOLARES.
-      { path: 'planes', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_READ']} redirectTo="/dashboard"><PlanesList /></RequirePermission></RequireRole> },
-      { path: 'planes/new',          element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><PlanForm /></RequireRole> },
-      { path: 'planes/form',         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><PlanForm /></RequireRole> },
-      { path: 'planes/detalle',      element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><PlanDetalle /></RequireRole> },
-      { path: 'planes/materia/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><PlanMateriaForm /></RequireRole> },
-      { path: 'planes/escala/form',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><PlanEscalaForm /></RequireRole> },
+      { path: 'planes', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_READ']} redirectTo="/dashboard"><PlanesList /></RequirePermission></RequireRole> },
+      { path: 'planes/new',          element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_CREATE']} redirectTo="/dashboard"><PlanForm /></RequirePermission></RequireRole> },
+      { path: 'planes/form',         element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_UPDATE']} redirectTo="/dashboard"><PlanForm /></RequirePermission></RequireRole> },
+      { path: 'planes/detalle',      element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_READ']} redirectTo="/dashboard"><PlanDetalle /></RequirePermission></RequireRole> },
+      { path: 'planes/materia/form', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_UPDATE']} redirectTo="/dashboard"><PlanMateriaForm /></RequirePermission></RequireRole> },
+      { path: 'planes/escala/form',  element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_UPDATE']} redirectTo="/dashboard"><PlanEscalaForm /></RequirePermission></RequireRole> },
 
       // Usuarios (includes extras: detalle + asignar-rol + cambiar-password)
       //
