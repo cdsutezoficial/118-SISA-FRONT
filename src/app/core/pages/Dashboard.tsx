@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Building2, GraduationCap, BookOpen, BookMarked, CalendarRange, Users, CreditCard, Tags, Users2, CheckCircle2 } from 'lucide-react'
+import { Building2, GraduationCap, BookOpen, BookMarked, CalendarRange, Users, Tags, Users2, CheckCircle2, RefreshCw } from 'lucide-react'
 import { usePendingToast } from '../infra/hooks'
 import { useRole } from '../infra/RoleContext'
 import { Breadcrumb, PageHeader, ErrorBanner } from '@app/core/components/list'
@@ -17,7 +17,7 @@ interface ConfigStatistics {
   programs: number
   subjects: number
   groupsForCurrentPeriod: number
-  currentPeriod: { id: string; name: string } | null
+  currentPeriod: { id: string; name: string; active: boolean } | null
 }
 
 interface DashboardQuickAccessItem extends QuickAccessItem {
@@ -31,7 +31,6 @@ const quickAccess: DashboardQuickAccessItem[] = [
   { label: 'Clasificaciones', icon: <Tags size={20} />, url: '/clasificaciones', permissionKey: 'SUBJECT_CLASSIFICATIONS_READ' },
   { label: 'Periodos', icon: <CalendarRange size={20} />, url: '/periodos', permissionKey: 'PERIODS_READ' },
   { label: 'Grupos', icon: <Users size={20} />, url: '/grupos', permissionKey: 'GROUPS_READ' },
-  { label: 'Conceptos de Pago', icon: <CreditCard size={20} />, url: '/conceptos', permissionKey: 'PAYMENT_CONCEPTS_READ' },
   { label: 'Generaciones', icon: <Users2 size={20} />, url: '/generaciones', permissionKey: 'GENERATIONS_READ' },
 ]
 
@@ -43,10 +42,10 @@ export default function Dashboard() {
   const [errorMsg, setErrorMsg] = useState('')
   const { hasAnyPermission } = useRole()
 
-  useEffect(() => {
-    let cancelled = false
+  function loadStatistics() {
     setLoadStatus('loading')
     setErrorMsg('')
+    let cancelled = false
     apiGet<ConfigStatistics>('/config-academica/statistics')
       .then(data => {
         if (cancelled) return
@@ -59,7 +58,9 @@ export default function Dashboard() {
         setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
-  }, [])
+  }
+
+  useEffect(() => loadStatistics(), [])
 
   const loading = loadStatus === 'loading'
 
@@ -67,7 +68,7 @@ export default function Dashboard() {
     { label: 'Divisiones Académicas', value: loading ? '—' : String(statistics?.divisions ?? 0), sub: loading ? 'Consultando datos…' : 'Divisiones registradas', color: 'bg-blue-50 text-blue-600', icon: <Building2 size={20} />, trend: false },
     { label: 'Carreras', value: loading ? '—' : String(statistics?.programs ?? 0), sub: loading ? 'Consultando datos…' : 'Carreras registradas', color: 'bg-violet-50 text-violet-600', icon: <GraduationCap size={20} />, trend: false },
     { label: 'Materias', value: loading ? '—' : String(statistics?.subjects ?? 0), sub: loading ? 'Consultando datos…' : 'Materias registradas', color: 'bg-amber-50 text-amber-600', icon: <BookMarked size={20} />, trend: false },
-    { label: 'Grupos', value: loading ? '—' : String(statistics?.groupsForCurrentPeriod ?? 0), sub: loading ? 'Consultando datos…' : statistics?.currentPeriod ? `Periodo ${statistics.currentPeriod.name}` : 'Sin periodo vigente', color: 'bg-emerald-50 text-emerald-600', icon: <Users size={20} />, trend: false },
+    { label: 'Grupos', value: loading ? '—' : String(statistics?.groupsForCurrentPeriod ?? 0), sub: loading ? 'Consultando datos…' : statistics?.currentPeriod ? `${statistics.currentPeriod.active ? 'Periodo vigente' : 'Periodo más reciente'}: ${statistics.currentPeriod.name}` : 'Sin periodos configurados', color: 'bg-emerald-50 text-emerald-600', icon: <Users size={20} />, trend: false },
   ]
 
   const visibleQuickAccess = quickAccess.filter(item => !item.permissionKey || hasAnyPermission([item.permissionKey]))
@@ -90,8 +91,16 @@ export default function Dashboard() {
 
       {/* KPI Cards */}
       {loadStatus === 'error' ? (
-        <div className="mb-8">
+        <div className="mb-8 space-y-3">
           <ErrorBanner message={errorMsg} />
+          <button
+            type="button"
+            onClick={loadStatistics}
+            className="inline-flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-[#333333] border border-[#E5E7EB] rounded-md hover:border-[#009574] hover:text-[#009574] transition-colors"
+          >
+            <RefreshCw size={14} />
+            Reintentar
+          </button>
         </div>
       ) : (
         <KpiCards cards={kpiCards} />
