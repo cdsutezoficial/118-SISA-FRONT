@@ -57,6 +57,13 @@ interface ProgramFormPayload {
 
 type FormErrors = Partial<Record<'name' | 'offerName' | 'code' | 'divisionId' | 'level' | 'modality', string>>
 
+const PROGRAM_CODE_PATTERN = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/
+
+function normalizeProgramCode(value: string): string {
+  return value.trim().toUpperCase()
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function CarrerasForm() {
@@ -145,9 +152,18 @@ export default function CarrerasForm() {
   // ─── Validation ────────────────────────────────────────────────────────────
   function validate(): FormErrors {
     const e: FormErrors = {}
-    if (!name.trim()) e.name = 'El nombre de la carrera es requerido.'
-    if (!offerName.trim()) e.offerName = 'El nombre de oferta es requerido.'
-    if (!code.trim()) e.code = 'La clave es requerida.'
+    const normalizedName = name.trim()
+    const normalizedOfferName = offerName.trim()
+    const normalizedCode = normalizeProgramCode(code)
+    if (!normalizedName) e.name = 'El nombre de la carrera es requerido.'
+    else if (normalizedName.length > 150) e.name = 'El nombre no puede superar 150 caracteres.'
+    else if (CONTROL_CHARACTERS.test(normalizedName)) e.name = 'El nombre contiene caracteres no válidos.'
+    if (!normalizedOfferName) e.offerName = 'El nombre de oferta es requerido.'
+    else if (normalizedOfferName.length > 200) e.offerName = 'El nombre de oferta no puede superar 200 caracteres.'
+    else if (CONTROL_CHARACTERS.test(normalizedOfferName)) e.offerName = 'El nombre de oferta contiene caracteres no válidos.'
+    if (!normalizedCode) e.code = 'La clave es requerida.'
+    else if (normalizedCode.length < 2 || normalizedCode.length > 41) e.code = 'La clave debe tener entre 2 y 41 caracteres.'
+    else if (!PROGRAM_CODE_PATTERN.test(normalizedCode)) e.code = 'La clave solo puede contener letras, números y guiones.'
     if (!divisionId) e.divisionId = 'Selecciona una división académica.'
     if (!level) e.level = 'Selecciona el nivel académico.'
     if (!modality) e.modality = 'Selecciona la modalidad.'
@@ -169,7 +185,7 @@ export default function CarrerasForm() {
       divisionId,
       name: name.trim(),
       offerName: offerName.trim(),
-      code: code.trim(),
+      code: normalizeProgramCode(code),
       level: level as AcademicLevel,
       modality: modality as ProgramModality,
       continuityProgramId,
@@ -237,6 +253,7 @@ export default function CarrerasForm() {
             onChange={v => { setName(v); setErrors(prev => ({ ...prev, name: undefined })) }}
             disabled={disabled}
             error={errors.name}
+            maxLength={150}
             placeholder="Ej. Ingeniería en Desarrollo y Gestión de Software"
             help="Nombre oficial y completo de la carrera."
             className="col-span-12 sm:col-span-8"
@@ -245,9 +262,10 @@ export default function CarrerasForm() {
             label="Clave"
             required={!isView}
             value={code}
-            onChange={v => { setCode(v); setErrors(prev => ({ ...prev, code: undefined })) }}
+            onChange={v => { setCode(normalizeProgramCode(v)); setErrors(prev => ({ ...prev, code: undefined })) }}
             disabled={disabled}
             error={errors.code}
+            maxLength={41}
             placeholder="Ej. IDGS"
             help="Identificador corto único de la carrera."
             className="col-span-12 sm:col-span-4"
@@ -259,6 +277,7 @@ export default function CarrerasForm() {
             onChange={v => { setOfferName(v); setErrors(prev => ({ ...prev, offerName: undefined })) }}
             disabled={disabled}
             error={errors.offerName}
+            maxLength={200}
             placeholder="Ej. Ingeniería en Desarrollo y Gestión de Software Presencial"
             help="Nombre oficial de la oferta educativa (único junto con la modalidad)."
             className="col-span-12 sm:col-span-8"
@@ -307,6 +326,7 @@ export default function CarrerasForm() {
             value={dgpCode}
             onChange={setDgpCode}
             disabled={disabled}
+            maxLength={100}
             placeholder="Ej. 220740067"
             help="Clave asignada por la Dirección General de Profesiones. Opcional."
             className="col-span-12 sm:col-span-4"
@@ -317,6 +337,7 @@ export default function CarrerasForm() {
             onChange={setDescription}
             disabled={disabled}
             rows={3}
+            maxLength={500}
             placeholder="Descripción breve de la carrera y su enfoque académico."
             className="col-span-12"
           />

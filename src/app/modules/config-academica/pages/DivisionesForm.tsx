@@ -27,6 +27,36 @@ interface DivisionFormPayload {
   directorPersonId: string | null
 }
 
+type DivisionField = 'name' | 'code' | 'description'
+type DivisionFormErrors = Partial<Record<DivisionField, string>>
+
+const DIVISION_CODE_PATTERN = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/
+
+function normalizeDivisionCode(value: string): string {
+  return value.trim().toUpperCase()
+}
+
+function validateDivisionForm(name: string, code: string, description: string): DivisionFormErrors {
+  const errors: DivisionFormErrors = {}
+  const normalizedName = name.trim()
+  const normalizedCode = normalizeDivisionCode(code)
+  const normalizedDescription = description.trim()
+
+  if (!normalizedName) errors.name = 'El nombre de la división es requerido.'
+  else if (normalizedName.length > 150) errors.name = 'El nombre no puede superar 150 caracteres.'
+  else if (CONTROL_CHARACTERS.test(normalizedName)) errors.name = 'El nombre contiene caracteres no válidos.'
+
+  if (!normalizedCode) errors.code = 'La clave es requerida.'
+  else if (normalizedCode.length < 2 || normalizedCode.length > 12) errors.code = 'La clave debe tener entre 2 y 12 caracteres.'
+  else if (!DIVISION_CODE_PATTERN.test(normalizedCode)) errors.code = 'La clave solo puede contener letras, números y guiones.'
+
+  if (normalizedDescription.length > 500) errors.description = 'La descripción no puede superar 500 caracteres.'
+  else if (CONTROL_CHARACTERS.test(normalizedDescription)) errors.description = 'La descripción contiene caracteres no válidos.'
+
+  return errors
+}
+
 // Only the users search needs — `GET /users?role=DIRECTOR_DIVISION&divisionId=`
 // (added 2026-07-28, plan `118-SISA-BACK/docs/plans/2026-07-28-director-division-role-filter.md`)
 // resolves candidates who already hold that role scoped to THIS division. There
@@ -141,6 +171,7 @@ export default function DivisionesForm() {
   const [clave, setClave] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [directorPersonId, setDirectorPersonId] = useState('')
+  const [errors, setErrors] = useState<DivisionFormErrors>({})
 
   // `loadStatus` covers the edit/view GET-by-id fetch; `submitStatus` covers
   // the register/edit POST-PUT submit — separate so a slow initial fetch
@@ -158,6 +189,7 @@ export default function DivisionesForm() {
       setClave('')
       setDescripcion('')
       setDirectorPersonId('')
+      setErrors({})
       setLoadStatus('idle')
       setLoadErrorMsg('')
     }
@@ -190,12 +222,18 @@ export default function DivisionesForm() {
   const isSubmitting = submitStatus === 'submitting'
 
   async function handleSubmit() {
+    const validationErrors = validateDivisionForm(nombre, clave, descripcion)
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors)
+      return
+    }
+    setErrors({})
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
     const payload: DivisionFormPayload = {
-      name: nombre,
-      code: clave,
-      description: descripcion,
+      name: nombre.trim(),
+      code: normalizeDivisionCode(clave),
+      description: descripcion.trim(),
       directorPersonId: directorPersonId.trim() || null,
     }
     try {
@@ -249,8 +287,10 @@ export default function DivisionesForm() {
               label="Nombre de la División"
               required={!isView}
               value={nombre}
-              onChange={setNombre}
+              onChange={value => { setNombre(value); if (errors.name) setErrors(previous => ({ ...previous, name: undefined })) }}
               disabled={disabled}
+              error={errors.name}
+              maxLength={150}
               placeholder="Ej. División de Tecnologías de la Información"
               help="Nombre completo y oficial de la división académica."
               className="col-span-12 sm:col-span-8"
@@ -259,8 +299,10 @@ export default function DivisionesForm() {
               label="Clave"
               required={!isView}
               value={clave}
-              onChange={setClave}
+              onChange={value => { setClave(normalizeDivisionCode(value)); if (errors.code) setErrors(previous => ({ ...previous, code: undefined })) }}
               disabled={disabled}
+              error={errors.code}
+              maxLength={12}
               placeholder="Ej. DTI"
               help="Identificador corto único."
               className="col-span-12 sm:col-span-4"
@@ -268,8 +310,9 @@ export default function DivisionesForm() {
             <TextAreaField
               label="Descripción"
               value={descripcion}
-              onChange={setDescripcion}
+              onChange={value => { setDescripcion(value); if (errors.description) setErrors(previous => ({ ...previous, description: undefined })) }}
               disabled={disabled}
+              maxLength={500}
               rows={4}
               placeholder="Descripción breve de la división y su enfoque académico."
               className="col-span-12"

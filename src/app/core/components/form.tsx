@@ -377,7 +377,7 @@ export function TimeField({ label, required, value, onChange, disabled, error, c
 }
 
 // ─── TextAreaField ────────────────────────────────────────────────────────────
-export function TextAreaField({ label, required, value, onChange, disabled, error, help, placeholder, rows = 4, className }: {
+export function TextAreaField({ label, required, value, onChange, disabled, error, help, placeholder, rows = 4, maxLength, className }: {
   label?: string
   required?: boolean
   value: string
@@ -387,6 +387,7 @@ export function TextAreaField({ label, required, value, onChange, disabled, erro
   help?: string
   placeholder?: string
   rows?: number
+  maxLength?: number
   className?: string
 }) {
   return (
@@ -397,6 +398,7 @@ export function TextAreaField({ label, required, value, onChange, disabled, erro
         onChange={e => onChange?.(e.target.value)}
         disabled={disabled}
         rows={rows}
+        maxLength={maxLength}
         placeholder={placeholder}
         className={inputCls(disabled ?? false, !!error) + ' resize-none'}
       />
