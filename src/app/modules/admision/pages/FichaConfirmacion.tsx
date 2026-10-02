@@ -6,7 +6,6 @@ import { FormPage, Button } from '@app/core/components/form'
 import { Breadcrumb } from '@app/core/components/list'
 import { formatDate } from '@app/core/infra/utils'
 import { apiDownload, apiGet, saveBlobDownload } from '@app/core/infra/apiClient'
-import { mockCandidates } from '../data/mockData'
 import { useFichaPayment } from '../hooks/useFichaPayment'
 import { FichaPagoConfirmado } from '../components/FichaPagoConfirmado'
 import { FichaPagoPendiente } from '../components/FichaPagoPendiente'
@@ -48,9 +47,10 @@ import type { Candidate, CandidateFichaBackend, FichaRouteState } from '../data/
  *   (real PDF blob, stamped as a non-official copy by the backend).
  * - The payment is online-only: there is no counter/ventanilla option and no
  *   "send instructions by email" action (the endpoint was removed).
- * - Only real candidates (UUID ids, i.e. backend-created) call the backend;
- *   the mock-candidate fallback (direct mock navigation) keeps the toast-only
- *   simulation.
+ * - Every candidate here is backend-created: the id must be the UUID that
+ *   `POST /candidates` returned (route state or `?id=`, which survives a
+ *   refresh). A mount with neither is not a ficha — it renders an error state
+ *   instead of inventing one.
  */
 
 // Mirrors `CandidatoRegistro.tsx`'s page-local `ScreenOrigin` union — kept local
@@ -61,11 +61,13 @@ interface FichaConfirmacionProps {
   origin: ScreenOrigin
 }
 
-// Matches the "periodo activo" convention used across the Admisión screens
-// (see `CandidatosList.tsx`/`AdmisionDashboard.tsx`).
-const PERIODO_ACTIVO = 'Enero – Abril 2026'
+// El "periodo activo" NO se inventa: el backend no manda periodo en
+// `CandidateFichaResponse` ni en el `POST /candidates`, y una fecha fija
+// ("Enero - Abril 2026") se quedaba congelada en pantalla para siempre. Se
+// pasa `null` y `FichaPagoPendiente` omite el fragmento en vez de mentir.
+// La fuente correcta (exponer el periodo al candidato) está pendiente: C-11.
 
-/** Lens over the mock `Candidate` + route `pagoFicha` + optional `GET /ficha`. */
+/** Lens over the backend `Candidate` + route `pagoFicha` + `GET /ficha`. */
 interface FichaDisplay {
   id: string
   folio: string
@@ -103,7 +105,8 @@ interface FichaDisplay {
   fechaPago: string | null
 }
 
-// Backend candidate ids are UUIDs; mock candidates use ids like "cand-01".
+// Candidate ids are the UUIDs `POST /candidates` returns. Anything else is not a
+// real candidate \u2014 there is no simulation to fall back to.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
@@ -114,13 +117,14 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
   const [searchParams] = useSearchParams()
   const state = location.state as FichaRouteState | null
 
-  const routeCandidate: Candidate = state?.candidate ?? mockCandidates[0]
+  const routeCandidate: Candidate | null = state?.candidate ?? null
   const idFromUrl = searchParams.get('id') ?? ''
   // Prefer the querystring id (survives refresh); route state supplies instant display data.
-  const candidateId: string = UUID_RE.test(idFromUrl) ? idFromUrl : routeCandidate.id
+  const candidateId: string = UUID_RE.test(idFromUrl) ? idFromUrl : routeCandidate?.id ?? ''
   const esCandidatoReal: boolean = UUID_RE.test(candidateId)
 
-  function buildInitial(): FichaDisplay {
+  function buildInitial(): FichaDisplay | null {
+    if (!routeCandidate) return null
     const pf = state?.pagoFicha
     return {
       id: candidateId,
@@ -146,11 +150,10 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     }
   }
 
-  const [ficha, setFicha] = useState<FichaDisplay>(buildInitial)
+  const [ficha, setFicha] = useState<FichaDisplay | null>(buildInitial)
   const [toast, setToast] = useState('')
   const [busyPdf, setBusyPdf] = useState(false)
-
-  const pagado = ficha.estado === 'PAID'
+  const [loadError, setLoadError] = useState('')
 
   /**
    * EVO Hosted Checkout, 3DS return handling and the single-fire confirm all
@@ -177,7 +180,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     returnPath: '/portal/registro/ficha',
     notify: setToast,
     onConfirmed: data =>
-      setFicha(prev => ({
+      setFicha(prev => prev ? ({
         ...prev,
         estado: 'PAID',
         referencia: data.referenceNumber,
@@ -185,18 +188,18 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
         folio: data.folio,
         recibo: data.receiptNumber,
         fechaPago: data.paidAt,
-      })),
-    onAlreadyPaid: () => setFicha(prev => ({ ...prev, estado: 'PAID' })),
+      }) : prev),
+    onAlreadyPaid: () => setFicha(prev => prev ? { ...prev, estado: 'PAID' } : prev),
     preserveQuery: { id: candidateId },
   })
 
 
-  // Refresh/fallback: direct mount or hard refresh has no `pagoFicha` in route
-  // state — sync from `GET /candidates/{id}`, the same projection CandidatoRegistro's
-  // POST just created. Route-state data (instant render) silently takes over
-  // if the GET fails (e.g. backend down while the mock demo still navigates).
+  // Direct mount or hard refresh loads the ficha projection from the backend.
   useEffect(() => {
-    if (!esCandidatoReal) return
+    if (!esCandidatoReal) {
+      setLoadError('No se encontró una ficha real para mostrar.')
+      return
+    }
     apiGet<CandidateFichaBackend>(`/candidates/${candidateId}`)
       .then(f => {
         setFicha(prev => ({
@@ -213,12 +216,12 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           // registro), así que solo se cae a la del route state si no viene.
           fechaLimiteInscripcion: f.registrationDeadline
             ? formatDate(new Date(`${f.registrationDeadline}T00:00:00`))
-            : prev.fechaLimiteInscripcion,
+            : prev?.fechaLimiteInscripcion ?? null,
           // La fecha que se promete es el plazo visible de la ficha
           // (`paymentDeadline`), no `available_until` del concepto.
           fechaLimitePago: f.paymentDeadline
             ? formatDate(new Date(`${f.paymentDeadline}T00:00:00`))
-            : prev.fechaLimitePago,
+            : prev?.fechaLimitePago ?? null,
           estado: f.paymentStatus,
           // La fila pagada trae el comprobante; sin esto, recargar la pantalla
           // lo mostraba como "—".
@@ -227,20 +230,37 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
         }))
       })
       .catch(() => {
-        // Silent — route state / mock display is already rendering.
+        setLoadError('No se pudo cargar la ficha desde el servidor.')
       })
   }, [candidateId, esCandidatoReal])
+
+  if (!ficha) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center px-6">
+        <div className="max-w-md rounded-lg border border-[#E5E7EB] bg-white p-6 text-center">
+          <h1 className="text-[18px] font-semibold text-[#333333]">
+            {loadError ? 'Ficha no disponible' : 'Cargando ficha...'}
+          </h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-[#6B7280]">
+            {loadError ?? 'Consultando la información real de la ficha.'}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const pagado = ficha.estado === 'PAID'
 
   // Download the real PDF ficha → `GET /candidates/{id}/ficha.pdf` (OpenPDF blob).
   async function handleDescargarPdf() {
     if (!esCandidatoReal) {
-      setToast('Descarga simulada: esta versión de prototipo no genera un PDF real.')
+      setToast('No hay una ficha real disponible para descargar.')
       return
     }
     setBusyPdf(true)
     try {
       const blob = await apiDownload(`/candidates/${candidateId}/ficha.pdf`)
-      saveBlobDownload(blob, `ficha-admision-${ficha.folio}.pdf`)
+      saveBlobDownload(blob, `ficha-admision-${ficha!.folio}.pdf`)
       setToast('Copia de tu ficha descargada en PDF.')
     } catch {
       setToast('No se pudo generar el PDF de la ficha.')
@@ -378,7 +398,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           nombre={ficha.nombre}
           curp={ficha.curp}
           carrera={ficha.programa}
-          periodo={PERIODO_ACTIVO}
+          periodo={null}
         >
           {paymentAction}
         </FichaPagoPendiente>
