@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Wallet, ClipboardList, Eye, Pencil, Plus as PlusIcon } from 'lucide-react'
+import { ClipboardList, Eye, Pencil, Plus as PlusIcon, Layers } from 'lucide-react'
 import { Toast, Switch } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
@@ -31,7 +31,14 @@ import {
 // same pattern as Generaciones/Divisiones/Grupos — there is NO physical
 // delete for this aggregate (`ChangePaymentConceptStatusUseCase`).
 
-type PaymentConceptType = 'ADMISSION' | 'ENROLLMENT' | 'REINSCRIPTION' | 'EXTRAORDINARY' | 'DOCUMENT' | 'OTHER'
+type PaymentConceptType =
+  | 'ADMISSION'
+  | 'ENROLLMENT'
+  | 'REINSCRIPTION'
+  | 'EXTRAORDINARY'
+  | 'DOCUMENT'
+  | 'PERIODIC_QUOTA'
+  | 'OTHER'
 type PaymentConceptStatus = 'ACTIVE' | 'INACTIVE'
 
 const TYPE_LABELS: Record<PaymentConceptType, string> = {
@@ -40,19 +47,22 @@ const TYPE_LABELS: Record<PaymentConceptType, string> = {
   REINSCRIPTION: 'Reinscripción',
   EXTRAORDINARY: 'Extraordinario',
   DOCUMENT: 'Documento',
+  PERIODIC_QUOTA: 'Cuota periódica',
   OTHER: 'Otro',
 }
 
 // El verde es a propósito: `ADMISSION` es el tipo que el flujo de fichas
-// busca para cotizar y cobrar la admisión (con `isTuition` encendido), y
-// entenderlo de un vistazo en el listado evita registrar la cuota de
-// admisión como "Inscripción" y que la ficha salga sin precio.
+// busca para cotizar y cobrar la admisión, y entenderlo de un vistazo en el
+// listado evita registrar la cuota de admisión como "Inscripción" y que la
+// ficha salga sin precio. `PERIODIC_QUOTA` va en otro color porque no compite
+// con los demás: se identifica por su nivel, no por su tipo.
 const TYPE_BADGE_MAP: Record<PaymentConceptType, BadgeStyle> = {
   ADMISSION: { label: TYPE_LABELS.ADMISSION, className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
   ENROLLMENT: { label: TYPE_LABELS.ENROLLMENT, className: 'bg-blue-50 text-blue-700 border border-blue-200' },
   REINSCRIPTION: { label: TYPE_LABELS.REINSCRIPTION, className: 'bg-purple-50 text-purple-700 border border-purple-200' },
   EXTRAORDINARY: { label: TYPE_LABELS.EXTRAORDINARY, className: 'bg-amber-50 text-amber-700 border border-amber-200' },
   DOCUMENT: { label: TYPE_LABELS.DOCUMENT, className: 'bg-slate-50 text-slate-700 border border-slate-200' },
+  PERIODIC_QUOTA: { label: TYPE_LABELS.PERIODIC_QUOTA, className: 'bg-cyan-50 text-cyan-700 border border-cyan-200' },
   OTHER: { label: TYPE_LABELS.OTHER, className: 'bg-gray-100 text-gray-600 border border-gray-200' },
 }
 
@@ -73,8 +83,9 @@ function typeBadge(type: string): BadgeStyle {
 interface PaymentConceptListItem {
   id: string
   name: string
+  code: string
   type: PaymentConceptType
-  isTuition: boolean
+  levelNumber: number | null
   isStandalone: boolean
   status: PaymentConceptStatus
 }
@@ -175,19 +186,28 @@ export default function ConceptosList() {
 
   const columns: ColumnDef<PaymentConceptListItem>[] = [
     { key: 'name', header: 'Nombre', type: 'name' },
-    { key: 'type', header: 'Tipo', type: 'badge', badge: TYPE_BADGE_MAP, className: 'w-32' },
     {
-      key: 'isTuition',
-      header: 'Cuota',
-      className: 'w-28 text-center',
+      key: 'code',
+      header: 'Código',
+      className: 'w-28 font-mono text-[12px] text-[#6B7280]',
+    },
+    { key: 'type', header: 'Tipo', type: 'badge', badge: TYPE_BADGE_MAP, className: 'w-36' },
+    {
+      key: 'levelNumber',
+      header: 'Nivel',
+      className: 'w-20 text-center',
       cellClassName: 'text-center',
-      render: row => (
-        row.isTuition ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <Wallet size={11} />Cuota
+      // Sólo las cuotas periódicas tienen nivel: el backend garantiza que el
+      // resto viene `null`, así que el guion no es un caso que haya que
+      // distinguir de un 0.
+      render: row =>
+        row.levelNumber != null ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
+            <Layers size={11} />{row.levelNumber}
           </span>
-        ) : null
-      ),
+        ) : (
+          <span className="text-[#9CA3AF]">—</span>
+        ),
     },
     { key: 'status', header: 'Estado', type: 'status', className: 'w-32' },
   ]
@@ -225,7 +245,7 @@ export default function ConceptosList() {
         <SearchInput
           value={search}
           onChange={v => { setSearch(v); setPage(1) }}
-          placeholder="Buscar por nombre de concepto..."
+          placeholder="Buscar por nombre o código..."
         />
         <ResultCount count={totalElements} />
       </FilterBar>
@@ -274,13 +294,14 @@ export default function ConceptosList() {
                 </span>
               </div>
             </div>
-            {/* Nombre */}
+            {/* Nombre + código */}
             <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{row.name}</p>
-            {/* Cuota flag */}
-            {row.isTuition && (
+            <p className="text-[11px] font-mono text-[#6B7280] mb-2">{row.code}</p>
+            {/* Nivel — sólo las cuotas periódicas */}
+            {row.levelNumber != null && (
               <p className="mb-3">
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Wallet size={11} />Cuota cuatrimestral
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
+                  <Layers size={11} />Nivel {row.levelNumber}
                 </span>
               </p>
             )}
