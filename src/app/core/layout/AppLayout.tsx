@@ -6,11 +6,10 @@ import type { Role } from '../infra/RoleContext'
 import { Sidebar } from './Sidebar'
 import { ROLE_LABELS, ROLE_DEFAULT_PATHS } from './layoutRoles'
 import { decodeJwtPayload } from '../infra/auth'
-import { getAccessToken, getStoredAuthMode } from '../infra/apiClient'
+import { getAccessToken } from '../infra/apiClient'
 import { toBrowserPath } from '../infra/basePath'
 
-function isRealSessionActive(): boolean {
-  if (getStoredAuthMode() !== 'real') return false
+function isSessionActive(): boolean {
   const token = getAccessToken()
   const claims = token ? decodeJwtPayload(token) : null
   return claims !== null && claims.exp * 1000 > Date.now()
@@ -28,11 +27,10 @@ function Navbar({
   onMobileMenuToggle: () => void
 }) {
   const navigate = useNavigate()
-  const { role, setRole, availableRoles, user, authMode, logout } = useRole()
-  const isRealSession = authMode === 'real'
+  const { role, setRole, availableRoles, user, logout } = useRole()
 
   function handleLogout() {
-    if (isRealSession) logout()
+    logout()
     navigate('/login')
   }
 
@@ -124,11 +122,11 @@ export default function AppLayout() {
 
   // Browser Back/Forward can restore a protected page from the bfcache with
   // its DOM intact even after the session was cleared — the user would briefly
-  // SEE the stale screen. On any such restore in real mode without a live
-  // token, hard-leave to /login instead of showing that snapshot.
+  // SEE the stale screen. On any such restore without a live token, hard-leave
+  // to /login instead of showing that snapshot.
   useEffect(() => {
     const onPageshow = (e: PageTransitionEvent) => {
-      if (e.persisted && !isRealSessionActive()) {
+      if (e.persisted && !isSessionActive()) {
         window.location.replace(toBrowserPath('/login'))
       }
     }

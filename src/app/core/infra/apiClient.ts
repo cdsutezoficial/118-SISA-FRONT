@@ -13,13 +13,12 @@
 export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080'
 
 // ─── Session read accessors ─────────────────────────────────────────────────
-// Read-only accessors needed to build requests (auth header, mock-vs-real
+// Read-only accessors needed to build requests (auth header, authenticated-only
 // gating). The WRITE side (`persistSession`, `clearSession`,
 // `persistMustChangePasswordCleared`, `getStoredMustChangePassword`) stays in
 // `auth.ts` — those are session-domain concerns, not HTTP concerns.
 
 const ACCESS_TOKEN_KEY = 'sisa.accessToken'
-const AUTH_MODE_KEY = 'sisa.authMode'
 
 export function getAccessToken(): string | null {
   try {
@@ -29,12 +28,13 @@ export function getAccessToken(): string | null {
   }
 }
 
-export function getStoredAuthMode(): 'mock' | 'real' {
-  try {
-    return sessionStorage.getItem(AUTH_MODE_KEY) === 'real' ? 'real' : 'mock'
-  } catch {
-    return 'mock'
-  }
+/**
+ * Whether the current tab holds a session. The presence of an access token IS
+ * the signal — there is no separate mode flag, so this can never disagree with
+ * what the request builder actually attaches.
+ */
+export function hasSession(): boolean {
+  return getAccessToken() !== null
 }
 
 // ─── Errors ─────────────────────────────────────────────────────────────────

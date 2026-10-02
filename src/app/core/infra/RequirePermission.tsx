@@ -14,9 +14,10 @@ export function RequirePermission({
   redirectToRoleMain?: boolean
   children: ReactNode
 }) {
-  const { role, authMode, availableRoles, permissionsStatus, hasAnyPermission } = useRole()
+  const { role, availableRoles, permissionsStatus, hasAnyPermission } = useRole()
 
-  if (authMode === 'real' && role === null && availableRoles.length > 0) {
+  // Active role not resolved yet — render nothing (see `RequireRole`).
+  if (role === null && availableRoles.length > 0) {
     return null
   }
 
@@ -26,7 +27,7 @@ export function RequirePermission({
    * This is what prevents the reload false-positive: permissions arrive async,
    * so "not resolved yet" must NOT be treated as "no permission".
    */
-  if (authMode === 'real' && (permissionsStatus === 'pending' || permissionsStatus === 'loading')) {
+  if (permissionsStatus === 'pending' || permissionsStatus === 'loading') {
     return null
   }
 

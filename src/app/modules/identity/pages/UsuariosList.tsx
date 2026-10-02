@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import {
-  Eye, Plus, LockKeyholeOpen, KeyRound, Clock, X,
+  Eye, Plus, LockKeyholeOpen, KeyRound, Clock, X, Copy, Check, AlertTriangle,
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { apiGet, apiPost } from '@app/core/infra/apiClient'
+import { apiGet, apiPatch, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
-import { Toast, ActionBtn, SearchSelectField, ConfirmModal } from '@app/core/components/ui'
+import { Toast, ActionBtn, SearchSelectField, ConfirmModal, Modal } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { Button } from '@app/core/components/form'
 import {
@@ -230,6 +230,9 @@ export default function UsuariosList() {
   const [estadoFilter, setEstadoFilter] = useState('')
   const [page, setPage] = useState(1)
   const [resetTarget, setResetTarget] = useState<Usuario | null>(null)
+  const [resettingId, setResettingId] = useState<string | null>(null)
+  const [issued, setIssued] = useState<{ nombre: string; usuario: string; password: string } | null>(null)
+  const [copied, setCopied] = useState(false)
   const [unlockTarget, setUnlockTarget] = useState<Usuario | null>(null)
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [totalElements, setTotalElements] = useState(0)
@@ -251,7 +254,7 @@ export default function UsuariosList() {
     setLoadStatus('loading')
     setErrorMsg('')
     apiGet<UsersPageResponse>('/users', {
-      role: rolFilter || undefined,
+      roleKey: rolFilter || undefined,
       status: estadoFilter || undefined,
       search: debouncedSearch || undefined,
       page: page - 1,
@@ -283,32 +286,62 @@ export default function UsuariosList() {
 
   function handleResetConfirm() {
     if (!resetTarget) return
-    const nombre = resetTarget.nombre
-    const username = resetTarget.usuario
+    const target = resetTarget
     setResetTarget(null)
+    setResettingId(target.id)
     void (async () => {
       try {
-        // 204 regardless of account existence — never reveal whether a given
-        // username is registered (matches the backend's silent-success contract).
-        await apiPost('/auth/forgot-password', { username })
-        setToast(`Correo de restablecimiento enviado a ${nombre}.`)
+        // Server-generated, no request body: the 8-char policy cannot be
+        // bypassed from the browser. The plaintext comes back in the response
+        // and nowhere else — it is shown once and dropped.
+        const res = await apiPost<{ userId: string; username: string; temporaryPassword: string }>(
+          `/users/${target.id}/reset-password`,
+        )
+        // The reset also re-arms mustChangePassword, clears failed attempts and
+        // unlocks — reflect all of it locally instead of re-fetching the page.
+        setUsuarios(prev => prev.map(u => u.id === target.id
+          ? { ...u, estado: 'ACTIVE' as const }
+          : u))
+        setCopied(false)
+        setIssued({ nombre: target.nombre, usuario: res.username, password: res.temporaryPassword })
       } catch (err) {
         const apiErr = err as Partial<ApiError>
         if (apiErr.status === 400 || apiErr.status === 422) {
-          setToast(apiErr.message ?? 'No se pudo enviar el correo de restablecimiento.')
+          setToast(apiErr.message ?? 'No se pudo restablecer la contraseña.')
         } else {
           setToast('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
         }
+      } finally {
+        setResettingId(null)
       }
     })()
   }
 
+  async function handleCopyPassword() {
+    if (!issued) return
+    try {
+      await navigator.clipboard.writeText(issued.password)
+      setCopied(true)
+    } catch {
+      // Clipboard is permission-gated (and absent on plain http origins other
+      // than localhost) — the password stays selectable either way.
+      setCopied(false)
+    }
+  }
+
   function handleUnlockConfirm() {
     if (!unlockTarget) return
-    const nombre = unlockTarget.nombre
-    setUsuarios(prev => prev.map(u => u.id === unlockTarget.id ? { ...u, estado: 'ACTIVE' as const } : u))
+    const target = unlockTarget
     setUnlockTarget(null)
-    setToast(`Cuenta desbloqueada. ${nombre} puede iniciar sesión nuevamente.`)
+    void apiPatch(`/users/${target.id}/unlock`)
+      .then(() => {
+        setUsuarios(prev => prev.map(u => u.id === target.id ? { ...u, estado: 'ACTIVE' as const } : u))
+        setToast(`Cuenta desbloqueada. ${target.nombre} puede iniciar sesión nuevamente.`)
+      })
+      .catch((err: unknown) => {
+        const apiErr = err as Partial<ApiError>
+        setToast(apiErr.message ?? 'No se pudo desbloquear la cuenta.')
+      })
   }
 
   const emptyHint = loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'
@@ -340,11 +373,74 @@ export default function UsuariosList() {
       {resetTarget && (
         <ConfirmModal
           title="Restablecer contraseña"
-          confirmLabel="Enviar correo"
-          message={`Se enviará un correo de restablecimiento a ${resetTarget.nombre} con instrucciones para crear una nueva contraseña.`}
+          confirmLabel="Generar contraseña"
+          message={`Se generará una contraseña temporal para ${resetTarget.nombre} y se le enviará por correo. Se cerrarán las sesiones abiertas de esa cuenta y el usuario deberá cambiarla al iniciar sesión.`}
           onConfirm={handleResetConfirm}
           onCancel={() => setResetTarget(null)}
         />
+      )}
+      {issued && (
+        <Modal
+          title="Contraseña temporal"
+          subtitle={issued.usuario}
+          onClose={() => setIssued(null)}
+          maxWidth="max-w-md"
+          footer={
+            <Button onClick={() => setIssued(null)}>Cerrar</Button>
+          }
+        >
+          <div className="space-y-5">
+            {/* La credencial es el motivo del modal, así que encabeza el
+                bloque. Sin `tracking`: en 8 caracteres, el espaciado extra
+                vuelve ambiguos `O`/`0` y `l`/`1`, y el usuario la transcribe
+                a mano. `select-all` porque copiar a mano es la fuente de
+                errores, y el botón de copiado existe justo por eso. */}
+            <div className="rounded-lg border border-[#E5E7EB] border-l-[3px] border-l-[#009574] bg-[#F8F9FA] px-4 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] mb-2">
+                Contraseña temporal
+              </p>
+              <div className="flex items-center gap-3">
+                <code
+                  className="flex-1 select-all font-mono text-[22px] leading-none font-semibold text-[#111827]"
+                  onDoubleClick={() => void handleCopyPassword()}
+                >
+                  {issued.password}
+                </code>
+                <Button
+                  variant={copied ? 'outline' : 'secondary'}
+                  onClick={() => void handleCopyPassword()}
+                  className="flex-shrink-0"
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? 'Copiada' : 'Copiar'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2.5 rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5">
+              <AlertTriangle size={15} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-[12.5px] text-amber-900 leading-relaxed">
+                Se muestra una sola vez y no queda guardada en el sistema. Entrégasela a{' '}
+                <span className="font-medium">{issued.nombre}</span> por un canal seguro.
+              </p>
+            </div>
+
+            <ul className="space-y-1.5 text-[12.5px] text-[#6B7280]">
+              <li className="flex items-start gap-2">
+                <span className="text-[#009574] mt-[3px]">•</span>
+                También se envió por correo a {issued.usuario}.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-[#009574] mt-[3px]">•</span>
+                Se cerraron las sesiones que esa cuenta tenía abiertas.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-[#009574] mt-[3px]">•</span>
+                El usuario deberá cambiarla en su primer ingreso.
+              </li>
+            </ul>
+          </div>
+        </Modal>
       )}
       {unlockTarget && (
         <ConfirmModal
@@ -420,7 +516,15 @@ export default function UsuariosList() {
           view: row => navigate(`/usuarios/detalle?id=${row.id}`),
           extra: row => (
             <>
-              <ActionBtn icon={<KeyRound size={15} />} tooltip="Restablecer contraseña" danger onClick={() => setResetTarget(row)} />
+              <ActionBtn
+                icon={<KeyRound size={15} />}
+                tooltip="Restablecer contraseña"
+                danger
+                // Guards against a double click minting two passwords: the
+                // response of the first would silently overwrite the second.
+                disabled={resettingId === row.id}
+                onClick={() => setResetTarget(row)}
+              />
               {row.estado === 'LOCKED' && (
                 <ActionBtn icon={<LockKeyholeOpen size={15} />} tooltip="Desbloquear cuenta" onClick={() => setUnlockTarget(row)} />
               )}
