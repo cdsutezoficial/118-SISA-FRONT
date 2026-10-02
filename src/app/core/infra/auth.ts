@@ -146,14 +146,14 @@ export interface LoginResponse {
 }
 
 // ─── Storage ────────────────────────────────────────────────────────────────
-// `sisa.` prefix mirrors the existing `sisa.mockRole` key (untouched by this
-// change). sessionStorage: tab-scoped, survives reload, cleared on tab close.
-// Read accessors for the access/auth-mode keys live in `apiClient.ts` (needed
-// there to build requests); this module keeps the WRITE side only.
+// `sisa.` prefix scopes every key this app owns, so `removeSisaKeys` can wipe
+// the session wholesale without touching anything else.
+// sessionStorage: tab-scoped, survives reload, cleared on tab close.
+// Read accessors for the access-token key live in `apiClient.ts` (needed there
+// to build requests); this module keeps the WRITE side only.
 
 const ACCESS_TOKEN_KEY = 'sisa.accessToken'
 const REFRESH_TOKEN_KEY = 'sisa.refreshToken'
-const AUTH_MODE_KEY = 'sisa.authMode'
 const MUST_CHANGE_PASSWORD_KEY = 'sisa.mustChangePassword'
 const SIGNED_OUT_KEY = 'sisa.signedOut'
 const USER_PROFILE_KEY = 'sisa.userProfile'
@@ -166,12 +166,11 @@ export function getStoredMustChangePassword(): boolean {
   }
 }
 
-/** Persists a successful login response and switches storage into real mode. */
+/** Persists a successful login response. */
 export function persistSession(res: LoginResponse): void {
   try {
     sessionStorage.setItem(ACCESS_TOKEN_KEY, res.accessToken)
     sessionStorage.setItem(REFRESH_TOKEN_KEY, res.refreshToken)
-    sessionStorage.setItem(AUTH_MODE_KEY, 'real')
     sessionStorage.setItem(MUST_CHANGE_PASSWORD_KEY, String(res.mustChangePassword))
     // A fresh login must not inherit a stale "signed out"/expired marker.
     sessionStorage.removeItem(SIGNED_OUT_KEY)
@@ -181,10 +180,10 @@ export function persistSession(res: LoginResponse): void {
 }
 
 /**
- * Removes every `sisa.*` key from the given storage — tokens, mock role,
- * active role, pending-password flag, sign-out marker — so a logout/expiry
- * leaves nothing behind. Both storages get cleaned because a session must not
- * survive in one if a future flow writes it to the other.
+ * Removes every `sisa.*` key from the given storage — tokens, active role,
+ * pending-password flag, sign-out marker — so a logout/expiry leaves nothing
+ * behind. Both storages get cleaned because a session must not survive in one
+ * if a future flow writes it to the other.
  */
 function removeSisaKeys(storage: Storage): void {
   for (let i = storage.length - 1; i >= 0; i--) {
@@ -194,20 +193,17 @@ function removeSisaKeys(storage: Storage): void {
 }
 
 /**
- * Clears the whole session (tokens, mock/active role, pending-password) from
- * BOTH browser storages on logout/expiry, but keeps `authMode` at `'real'` — a
- * subsequent visit (or back-navigation) must still be routed to `/login`, not
- * silently fall back to mock mode.
+ * Clears the whole session (tokens, active role, pending-password) from BOTH
+ * browser storages on logout/expiry.
+ *
+ * The absence of an access token is now itself the "no session" signal — there
+ * is no separate mode flag to keep in sync — so this leaves nothing behind but
+ * the `signedOut` marker that `logout()`/`markSignedOut()` sets to distinguish a
+ * deliberate sign-out from an involuntary one.
  */
 export function clearSession(): void {
   try { removeSisaKeys(sessionStorage) } catch { /* storage unavailable — nothing to clear. */ }
   try { removeSisaKeys(localStorage) } catch { /* storage unavailable — nothing to clear. */ }
-  try {
-    sessionStorage.setItem(AUTH_MODE_KEY, 'real')
-    sessionStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'false')
-  } catch {
-    // sessionStorage unavailable — nothing to re-mark.
-  }
 }
 
 /**
@@ -294,10 +290,10 @@ export async function apiMeProfile(): Promise<MeProfile> {
 
 /**
  * Reads the access token implicitly via `apiPost`'s automatic Bearer
- * attachment rather than taking it as a parameter — at every call site
- * (`CambiarPassword.tsx`), `authMode` is already `'real'`, meaning `login()`
- * already ran and `persistSession()` already stored the token, so it's
- * always present in storage by the time this is called.
+ * attachment rather than taking it as a parameter — at the call site
+ * (`CambiarPassword.tsx`) a session necessarily exists, meaning `login()`
+ * already ran and `persistSession()` already stored the token, so it's always
+ * present in storage by the time this is called.
  */
 export async function apiChangePassword(currentPassword: string, newPassword: string): Promise<void> {
   await apiPost<void>('/auth/change-password', { currentPassword, newPassword })

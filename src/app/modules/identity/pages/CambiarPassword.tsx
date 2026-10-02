@@ -77,7 +77,7 @@ function PasswordInput({ id, value, onChange, placeholder, hasError, disabled }:
 
 export default function CambiarPassword() {
   const navigate = useNavigate()
-  const { authMode, mustChangePassword, completePasswordChange, logout } = useRole()
+  const { mustChangePassword, completePasswordChange, logout } = useRole()
   const [actual, setActual] = useState('')
   const [nueva, setNueva] = useState('')
   const [confirmar, setConfirmar] = useState('')
@@ -100,24 +100,12 @@ export default function CambiarPassword() {
     if (!actual.trim() || !nueva.trim() || nueva !== confirmar) return
     setLoading(true)
 
-    // Mock mode has no real session/token — only ADMIN has a backend user
-    // today, so every other role's dev workflow keeps the legacy simulation
-    // unchanged (this change scopes real integration to login/session only).
-    if (authMode === 'mock') {
-      setTimeout(() => {
-        setLoading(false)
-        setDone(true)
-        setTimeout(() => navigate('/dashboard'), 2500)
-      }, 1000)
-      return
-    }
-
     try {
       // No explicit token param — `apiChangePassword` reads it from storage
       // via `apiPost`'s automatic Bearer attachment. `RequireAuth` already
-      // guarantees a valid token before this screen renders in real mode; a
-      // 401/403 here (e.g. token invalidated mid-session) is still caught
-      // below and routes back to `/login`.
+      // guarantees a valid token before this screen renders; a 401/403 here
+      // (e.g. token invalidated mid-session) is still caught below and routes
+      // back to `/login`.
       await apiChangePassword(actual, nueva)
       setLoading(false)
       setDone(true)

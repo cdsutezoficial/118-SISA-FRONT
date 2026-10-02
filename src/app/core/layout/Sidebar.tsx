@@ -162,6 +162,20 @@ function treeMatches(nav: NavEntry[], pathname: string): boolean {
 }
 
 /** Ids de los subgrupos (cadena de ancestros) que contienen la ruta activa. */
+/**
+ * Initials for the shell avatar, derived from the account's real name.
+ * `null` name (profile still loading, or the fetch failed) falls back to the
+ * placeholder the rest of the shell already shows rather than a fake identity.
+ */
+function initialsOf(name: string | null): string {
+  if (!name) return '—'
+  const parts = name.trim().split(/\s+/).filter(p => p.length > 0 && p !== '-')
+  if (parts.length === 0) return '—'
+  const first = parts[0].charAt(0)
+  const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : ''
+  return (first + last).toUpperCase()
+}
+
 function ancestorGroups(nav: NavEntry[], pathname: string, out: Set<string>) {
   for (const e of nav) {
     if (!isGroup(e)) continue
@@ -224,8 +238,7 @@ export function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { role, setRole, availableRoles, user, authMode, logout, hasAnyPermission } = useRole()
-  const isRealSession = authMode === 'real'
+  const { role, setRole, availableRoles, user, logout, hasAnyPermission } = useRole()
 
   // ─── Accordion state ───────────────────────────────────────────────────────
   // Default: 'config' group open + every group that contains the active route
@@ -286,7 +299,7 @@ export function Sidebar({
   }
 
   function handleMobileLogout() {
-    if (isRealSession) logout()
+    logout()
     navigate('/login')
     onMobileClose()
   }
@@ -387,12 +400,12 @@ export function Sidebar({
         {/* User info */}
         {collapsed ? (
           <div className="px-3 py-4 border-b border-[#E5E7EB] flex justify-center">
-            <div className="w-9 h-9 rounded-full bg-[#009574] flex items-center justify-center text-white font-semibold text-xs">MG</div>
+            <div className="w-9 h-9 rounded-full bg-[#009574] flex items-center justify-center text-white font-semibold text-xs">{initialsOf(user?.name ?? null)}</div>
           </div>
         ) : (
           <div className="px-4 py-4 border-b border-[#E5E7EB]">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#009574] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">MG</div>
+              <div className="w-10 h-10 rounded-full bg-[#009574] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">{initialsOf(user?.name ?? null)}</div>
               <div className="min-w-0">
                 <p className="text-[13px] font-semibold text-[#333333] truncate">{user?.name ?? 'Usuario'}</p>
                 <p className="text-[11px] text-[#6B7280] truncate">{role ? ROLE_LABELS[role] : ''}</p>
@@ -484,7 +497,7 @@ export function Sidebar({
         {/* User info */}
         <div className="px-4 py-3 border-b border-[#E5E7EB] bg-[#F8F9FA] flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#009574] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">MG</div>
+            <div className="w-10 h-10 rounded-full bg-[#009574] flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">{initialsOf(user?.name ?? null)}</div>
             <div className="min-w-0">
               <p className="text-[13px] font-semibold text-[#333333] truncate">{user?.name ?? 'Usuario'}</p>
               <p className="text-[12px] text-[#6B7280]">{role ? ROLE_LABELS[role] : 'Sin rol'}</p>
@@ -497,8 +510,7 @@ export function Sidebar({
           {renderMobile(visibleEntries, 0)}
         </nav>
 
-        {/* Bottom: role switcher (when more than one selectable role — mock
-            staff catalog or a real multi-role account) + actions */}
+        {/* Bottom: role switcher for a real multi-role account + actions */}
         <div className="border-t border-[#E5E7EB] px-3 py-3 space-y-1 flex-shrink-0">
           {availableRoles.length > 1 && (
             <div className="mb-3">
