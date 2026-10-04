@@ -5,7 +5,7 @@ import { FormPage, FormHeader, FormCard, FormActions, TextField, TextAreaField, 
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
-import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -245,6 +245,19 @@ export default function DivisionesForm() {
         navigate(`/divisiones/form?mode=view&id=${id}`, { state: { toast: 'División actualizada exitosamente.' } })
       }
     } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
+        if (apiErr.backendMessage.includes('nombre')) {
+          setErrors(prev => ({ ...prev, name: apiErr.backendMessage }))
+          setSubmitStatus('idle')
+          return
+        }
+        if (apiErr.backendMessage.includes('clave')) {
+          setErrors(prev => ({ ...prev, code: apiErr.backendMessage }))
+          setSubmitStatus('idle')
+          return
+        }
+      }
       setSubmitStatus('error')
       setSubmitErrorMsg(getApiErrorMessage(err))
     }
