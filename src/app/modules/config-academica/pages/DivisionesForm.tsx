@@ -202,6 +202,7 @@ export default function DivisionesForm() {
     setFieldError,
     reset,
     validate,
+    isValid,
   } = useFieldValidation(DIVISION_SCHEMA, DIVISION_INITIAL_VALUES)
 
   // `loadStatus` covers the edit/view GET-by-id fetch; `submitStatus` covers
@@ -385,6 +386,7 @@ export default function DivisionesForm() {
           onPrimary={isView ? () => navigate(`/divisiones/form?mode=edit&id=${id}`) : handleSubmit}
           primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar División' : 'Guardar Cambios'}
           isSubmitting={isSubmitting}
+          primaryDisabled={!isView && !isValid}
         />
       )}
     </FormPage>

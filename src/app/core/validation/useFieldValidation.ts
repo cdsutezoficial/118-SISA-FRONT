@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { applyRules, type FieldRule } from './fieldRules'
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
@@ -79,6 +79,18 @@ export interface UseFieldValidation<F extends string, V extends Record<F, string
   reset: (values?: Partial<V>) => void
   /** Marca todos los campos como tocados y valida todo. `false` si hay errores. */
   validate: () => boolean
+  /**
+   * Si el formulario completo pasa el schema y no arrastra errores 409.
+   *
+   * Se calcula **sin tocar nada**: no marca campos como tocados ni escribe
+   * estado, así que un formulario recién abierto sale `false` sin ponerse rojo.
+   * Es lo que usan los formularios para deshabilitar el botón de guardar, en
+   * lugar de dejar que el usuario descubra los errores al pulsar.
+   *
+   * No depende de `touched` a propósito: la validez es una propiedad de los
+   * valores, no de si el usuario ya pasó por el campo.
+   */
+  isValid: boolean
 }
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
@@ -270,6 +282,13 @@ export function useFieldValidation<F extends string, V extends Record<F, string>
     return !hasErrors
   }, [fields, runAllRules, values, backendErrors, fieldNames])
 
+  // `runAllRules` es puro y no escribe estado, así que se puede evaluar durante
+  // el render. El `useMemo` evita repetir el trabajo en cada render.
+  const isValid = useMemo(
+    () => Object.keys(runAllRules(values)).length === 0 && Object.keys(backendErrors).length === 0,
+    [runAllRules, values, backendErrors],
+  )
+
   return {
     values,
     errors: { ...computed.current, ...backendErrors },
@@ -286,5 +305,6 @@ export function useFieldValidation<F extends string, V extends Record<F, string>
     clearErrors,
     reset,
     validate,
+    isValid,
   }
 }
