@@ -313,18 +313,19 @@ const router = createBrowserRouter([
 
       // Clasificaciones de Materias
       //
-      // Role guard: only the list route is wrapped here, mirroring the
-      // `divisiones` precedent — every `/subject-classifications` verb is
-      // enforced server-side to ADMIN/SERVICIOS_ESCOLARES, so wrapping the
-      // list gives a clean redirect instead of a raw 403/blank state for any
-      // other role. `clasificaciones/new`/`clasificaciones/form` are
-      // untouched — out of scope for this change.
+      // Role guard + fine-grained permissions, mirroring the `carreras`
+      // precedent (Fase F, 2026-10-05). `clasificaciones/new` and
+      // `clasificaciones/form` used to be `RequireRole`-only, so a
+      // SERVICIOS_ESCOLARES with `SUBJECT_CLASSIFICATIONS_READ` but not
+      // `SUBJECT_CLASSIFICATIONS_CREATE` could open the register form and only
+      // find out at the API with a raw 403. The keys are the ones the backend
+      // declares in `PermissionRegistry` for this resource.
       {
         path: 'clasificaciones',
         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['SUBJECT_CLASSIFICATIONS_READ']} redirectTo="/dashboard"><ClasificacionesList /></RequirePermission></RequireRole>,
       },
-      { path: 'clasificaciones/new', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><ClasificacionesForm /></RequireRole> },
-      { path: 'clasificaciones/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><ClasificacionesForm /></RequireRole> },
+      { path: 'clasificaciones/new', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['SUBJECT_CLASSIFICATIONS_CREATE']} redirectTo="/dashboard"><ClasificacionesForm /></RequirePermission></RequireRole> },
+      { path: 'clasificaciones/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['SUBJECT_CLASSIFICATIONS_UPDATE']} redirectTo="/dashboard"><ClasificacionesForm /></RequirePermission></RequireRole> },
 
       // Carreras
       { path: 'carreras', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['CARRERAS_READ']} redirectTo="/dashboard"><CarrerasList /></RequirePermission></RequireRole> },
