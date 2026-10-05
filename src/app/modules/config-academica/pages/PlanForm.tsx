@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, Info, AlertCircle } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, ModeSwitcher, SearchSelectField, Switch, DatePicker } from '@app/core/components/ui'
+import { FieldLabel, FieldHelp, FieldError, ModeSwitcher, SearchSelectField, Switch, DatePicker, inputCls } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
@@ -15,7 +15,9 @@ import {
   noControlChars,
   numeric,
   decimal,
+  applyRules,
   normalizeText,
+  type FieldRule,
 } from '@app/core/validation/fieldRules'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -277,9 +279,15 @@ function orderLevelUpdates(
 
 // ─── Validación de las filas de niveles ────────────────────────────────────────
 // El array `levels` no entra al schema de `useFieldValidation`: no son campos
-// fijos sino una tabla dinámica, y estas reglas son de fila y de colección
-// (números inválidos o repetidos, tope del total, ciclos de renumeración), no
-// reglas de campo.
+// fijos sino una tabla dinámica, y las reglas de numeración que le quedan —números
+// inválidos o repetidos, tope del total, ciclos de renumeración— son de fila y de
+// colección, no reglas de campo.
+//
+// Eso no dice nada de sus celdas. La `description` de cada nivel sí tiene reglas
+// propias, declaradas en `LEVEL_CELL_RULES`, y antes no tenía ninguna:
+// `AddPlanLevelRequest` y `UpdatePlanLevelRequest` le ponen `@Size(max = 255)` y
+// el `@Pattern` de caracteres de control. Pegas 300 caracteres y el backend
+// respondía 400 sin que el navegador hubiera dicho nada.
 //
 // `totalLevelsValue` es el texto crudo del campo del total, para no usar como
 // referencia de comparación un total que todavía no es un entero válido.
@@ -329,6 +337,37 @@ function validateLevels(
   return undefined
 }
 
+// Reglas por celda de la tabla de niveles. Sólo `description` tiene: el número de
+// nivel y el tipo los valida `validateLevels`, porque dependen del resto de la
+// tabla.
+//
+// Sin `required`: la columna es nullable y el payload manda
+// `normalizeText(...) || null`, así que una descripción vacía es válida.
+const LEVEL_CELL_RULES = {
+  description: [
+    maxLength(255, 'descripción del nivel', 'f'),
+    noControlChars('descripción del nivel', 'f'),
+  ],
+} as const satisfies Record<string, readonly FieldRule[]>
+
+/**
+ * Errores de celda por fila, indexados por la `key` de la fila y no por su
+ * posición: las filas se reordenan y se borran, y con una posición el error
+ * acabaría en otra fila.
+ *
+ * Se evalúa con `normalizeText`, que es lo que manda el payload: si la regla
+ * midiera el texto crudo y el payload mandara el compacto, un texto de 300
+ * espacios daría un error de longitud que el servidor nunca vería.
+ */
+function levelDescriptionErrors(levels: LevelRow[]): Partial<Record<string, string>> {
+  const errors: Partial<Record<string, string>> = {}
+  levels.forEach(row => {
+    const error = applyRules(normalizeText(row.description), ...LEVEL_CELL_RULES.description)
+    if (error) errors[row.key] = error
+  })
+  return errors
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PlanForm() {
@@ -352,6 +391,10 @@ export default function PlanForm() {
   // ─── Auxiliary state ───────────────────────────────────────────────────────
   const [programs, setPrograms] = useState<SelectOption[]>([])
   const [levelError, setLevelError] = useState<PlanLevelError>(undefined)
+  // Igual que en la tabla de rangos de la escala: las celdas no llevan `touched`
+  // individual, se enmascara el conjunto y se activa al primer intento de envío.
+  // Sin esto, una descripción larga se vería sin error mientras se pega.
+  const [levelsTouched, setLevelsTouched] = useState(false)
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>(isRegister ? 'idle' : 'loading')
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
@@ -451,6 +494,11 @@ export default function PlanForm() {
     }))
 
   // ─── Level row helpers ─────────────────────────────────────────────────────
+  // Los errores de celda se derivan del estado en vez de guardarse, para que se
+  // recalculen en cada tecla una vez que las filas están tocadas — el mismo
+  // comportamiento que `fieldError` tiene en los campos del schema.
+  const levelCellErrors = useMemo(() => (levelsTouched ? levelDescriptionErrors(levels) : {}), [levelsTouched, levels])
+
   function updateLevel(key: string, patch: Partial<Pick<LevelRow, 'levelNumber' | 'type' | 'description'>>) {
     setLevels(prev => prev.map(r => r.key === key ? { ...r, ...patch } : r))
     setLevelError(undefined)
@@ -500,9 +548,12 @@ export default function PlanForm() {
   async function handleSubmit() {
     // `validate()` marca todos los escalares como tocados y valida; si algo
     // falla no sale ninguna petición. Las filas de niveles se validan aparte,
-    // porque no son campos del schema (ver validateLevels).
+    // porque no son campos del schema: la numeración por `validateLevels` y la
+    // descripción por `levelCellErrors`.
     const invalidLevels = validateLevels(levels, values.totalLevels, isEdit, originalLevels)
-    if (!validate() || invalidLevels) {
+    const invalidCell = Object.keys(levelDescriptionErrors(levels)).length > 0
+    if (!validate() || invalidLevels || invalidCell) {
+      setLevelsTouched(true)
       setLevelError(invalidLevels)
       return
     }
@@ -974,13 +1025,17 @@ export default function PlanForm() {
                           {isView ? (
                             <span className="text-[13px] text-[#333333]">{row.description || '—'}</span>
                           ) : (
-                            <input
-                              type="text"
-                              placeholder="Ej. Estadía I (opcional)"
-                              value={row.description}
-                              onChange={e => updateLevel(row.key, { description: e.target.value })}
-                              className="w-full px-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
-                            />
+                            <>
+                              <input
+                                type="text"
+                                placeholder="Ej. Estadía I (opcional)"
+                                maxLength={255}
+                                value={row.description}
+                                onChange={e => updateLevel(row.key, { description: e.target.value })}
+                                className={inputCls(false, !!levelCellErrors[row.key]) + ' placeholder-[#6B7280]'}
+                              />
+                              {levelCellErrors[row.key] && <FieldError>{levelCellErrors[row.key]}</FieldError>}
+                            </>
                           )}
                         </td>
                         {!isView && (
@@ -1060,6 +1115,8 @@ export default function PlanForm() {
                           label="Descripción"
                           value={row.description}
                           onChange={v => updateLevel(row.key, { description: v })}
+                          maxLength={255}
+                          error={levelCellErrors[row.key]}
                           placeholder="Opcional"
                         />
                       </div>

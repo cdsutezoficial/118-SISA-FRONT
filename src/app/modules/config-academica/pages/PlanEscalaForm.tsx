@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, Plus, Trash2 } from 'lucide-react'
 import { FieldLabel, FieldHelp, FieldError, inputCls, SearchSelectField, Switch } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
@@ -11,7 +11,11 @@ import {
   required,
   selectionRequired,
   decimal,
+  maxLength,
+  noControlChars,
+  applyRules,
   normalizeText,
+  type FieldRule,
 } from '@app/core/validation/fieldRules'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -94,9 +98,12 @@ function emptyRow(): EntryRow {
 // entero, de ahí los 4 dígitos.
 //
 // El array `entries` **no** entra al schema: es una tabla dinámica y su
-// validación es de colección (cobertura sin huecos ni traslapes, paso de 0.1),
-// no de campo. Conserva `validateEntries`, que es el espejo del
-// `GradeScale.validateEntries` del backend.
+// validación **cross-fila** —cobertura sin huecos ni traslapes, paso de 0.1— no
+// se puede expresar como reglas por campo. Conserva `validateEntries`, que es el
+// espejo del `GradeScale.validateEntries` del backend.
+//
+// Eso no significa que sus celdas no tengan reglas: cada una tiene las suyas,
+// declaradas en `ENTRY_CELL_RULES` más abajo.
 const SCALE_SCHEMA = {
   classificationId: { rules: [selectionRequired('la clasificación')] },
   numericMin: {
@@ -126,6 +133,71 @@ const SCALE_CROSS_RULES = (values: typeof SCALE_INITIAL_VALUES) => {
   return {}
 }
 
+// ─── Reglas por celda de la tabla de rangos ───────────────────────────────────
+//
+// Las filas de la tabla no entran al schema porque su validación **cross-fila**
+// no se puede expresar como reglas por campo. Pero eso no dice nada de sus
+// celdas, que sí tienen reglas propias, y que antes no tenían ninguna:
+// `GradeScaleEntryRequest` declara `@Digits`, `@Size` y `@Pattern` sobre las
+// cuatro columnas. Se componen con `applyRules` —que para eso está— en vez de
+// con un schema del hook, porque no hay un conjunto fijo de campos: hay las
+// mismas cuatro columnas repetidas en un número de filas que el usuario decide.
+//
+//   fromValue, toValue → @NotNull + @Digits(integer = 4, fraction = 1)
+//   letter              → @NotBlank + @Pattern(Cc)
+//   description         → @NotBlank + @Size(255) + @Pattern(Cc)
+//
+// `letter` no lleva `maxLength`: el input limita a 4, más estricto que los 255
+// del backend, y una letra de nomenclatura no ocupa 255 caracteres.
+//
+// `fraction: 1` es lo que hace falta aquí. Sin él, `Desde`/`Hasta` aceptaban
+// `6.95` y el usuario recibía un 400 del servidor sin haber visto nada: la
+// cobertura con paso de 0.1 lo daba por bueno, porque `6.95 + 0.1` cae en
+// `7.05` dentro del épsilon de `1e-9` que usa la comparación.
+const ENTRY_CELL_RULES = {
+  fromValue: [
+    required('valor inicial del rango'),
+    decimal({ label: 'valor inicial del rango', intDigits: 4, fraction: 1 }),
+  ],
+  toValue: [
+    required('valor final del rango'),
+    decimal({ label: 'valor final del rango', intDigits: 4, fraction: 1 }),
+  ],
+  letter: [
+    required('letra del rango'),
+    noControlChars('letra del rango'),
+  ],
+  description: [
+    required('descripción del rango', 'f'),
+    maxLength(255, 'descripción del rango', 'f'),
+    noControlChars('descripción del rango', 'f'),
+  ],
+} as const satisfies Record<string, readonly FieldRule[]>
+
+type EntryCellKey = keyof typeof ENTRY_CELL_RULES
+
+/** Errores por fila y columna: `{ 0: { toValue: '…' } }`. */
+type EntryCellErrors = Partial<Record<number, Partial<Record<EntryCellKey, string>>>>
+
+/**
+ * Evalúa las cuatro celdas de cada fila con `normalizeText` antes de las reglas.
+ * Es lo mismo que hace el payload con `letter` y `description`: si la regla
+ * midiera el texto crudo y el payload mandara el compacto, un texto de 260
+ * espacios daría un error de longitud que el servidor nunca vería. A los
+ * números el `normalizeText` no les hace nada útil ni dañino.
+ */
+function entryCellErrors(entries: EntryRow[]): EntryCellErrors {
+  const errors: EntryCellErrors = {}
+  const keys = Object.keys(ENTRY_CELL_RULES) as EntryCellKey[]
+  entries.forEach((row, index) => {
+    keys.forEach(key => {
+      const error = applyRules(normalizeText(row[key]), ...ENTRY_CELL_RULES[key])
+      if (error) errors[index] = { ...errors[index], [key]: error }
+    })
+  })
+  return errors
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PlanEscalaForm() {
@@ -144,7 +216,12 @@ export default function PlanEscalaForm() {
   const [classifications, setClassifications] = useState<SelectOption[]>([])
   const [plan, setPlan] = useState<AcademicPlanSummary | null>(null)
   const [entriesError, setEntriesError] = useState<string | undefined>(undefined)
-  const [rowErrors, setRowErrors] = useState<boolean[]>([])
+  // Las celdas no llevan `touched` individual como los campos del schema: se
+  // enmascara todo el conjunto con un solo interruptor que se activa al primer
+  // intento de envío. Sin él, la tabla arranca con una fila vacía y
+  // mostraría "El valor inicial del rango es requerido." antes de que el usuario
+  // haya escrito nada.
+  const [rowsTouched, setRowsTouched] = useState(false)
 
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
@@ -247,89 +324,105 @@ export default function PlanEscalaForm() {
     setEntries(prev => prev.filter((_, i) => i !== index))
   }
 
-  // Las filas de rangos se validan aparte del schema: son una tabla dinámica y
-  // estas reglas son de colección. `boundsOk` indica que los dos extremos de la
-  // escala ya son números válidos (los valida el schema), porque la cobertura se
-  // compara contra ellos.
-  function validateEntries(boundsOk: boolean): { error?: string; rowErrors: boolean[] } {
-    const e: { error?: string } = {}
+  // Los errores de celda se derivan del estado, no se guardan: así se
+  // recalculan en cada tecla una vez que las filas están tocadas, que es el
+  // mismo comportamiento que `fieldError` tiene en los campos del schema.
+  const cellErrors = useMemo(() => (rowsTouched ? entryCellErrors(entries) : {}), [rowsTouched, entries])
+
+  // Las filas de rangos se validan en dos capas, y el orden importa.
+  //
+  // Capa 1 — cada celda contra sus reglas (`ENTRY_CELL_RULES`).
+  // Capa 2 — la cobertura de la tabla entera: sin huecos ni traslapes, el primer
+  //          rango inicia en el mínimo y el último termina en el máximo, con paso
+  //          de 0.1 entre rangos adyacentes. Espejo del
+  //          `GradeScale.validateEntries` del backend.
+  //
+  // Si hay un error de celda, la capa 2 **no** corre. Comparar rangos con
+  // valores que ya son inválidos produce un segundo error que confunde: con
+  // `6.95` como "Hasta", la regla de paso espera `7.05` y lo presentaría como
+  // un hueco, cuando lo que está mal es que el valor lleva dos decimales.
+  //
+  // `boundsOk` indica que los dos extremos de la escala ya son números válidos
+  // (los valida el schema), porque la cobertura se compara contra ellos.
+  function validateEntries(boundsOk: boolean): { cellErrors: EntryCellErrors; error?: string } {
+    const cellErrors = entryCellErrors(entries)
+    const flag = (index: number, key: EntryCellKey, message: string) => {
+      cellErrors[index] = { ...cellErrors[index], [key]: message }
+    }
+    if (entries.length === 0) {
+      // No hay celda a la que colgarlo: la tabla está vacía y no existe fila.
+      return { cellErrors, error: 'Agrega al menos un rango.' }
+    }
+    if (Object.keys(cellErrors).length > 0 || !boundsOk) return { cellErrors }
+
     const min = Number(values.numericMin)
     const max = Number(values.numericMax)
+    const STEP = 0.1
+    const around = (a: number, b: number) => Math.abs(a - b) < 1e-9
+    const fmt = (n: number) => (Math.round(n * 10) / 10).toFixed(1)
+    const nums = entries.map((row, i) => ({ index: i, from: Number(row.fromValue), to: Number(row.toValue) }))
 
-    const rErrors = entries.map(row => {
-      const rowMin = Number(row.fromValue)
-      const rowMax = Number(row.toValue)
-      const invalid = !row.fromValue.trim() || !row.toValue.trim() || isNaN(rowMin) || isNaN(rowMax)
-        || !row.letter.trim() || !row.description.trim()
-      return invalid
-    })
-    if (entries.length === 0) {
-      e.error = 'Agrega al menos un rango.'
-    } else if (rErrors.some(Boolean)) {
-      e.error = 'Completa todos los campos de los rangos marcados.'
-    } else if (boundsOk) {
-      // ---- Cobertura del rango [numericMin, numericMax] ----
-      // Espejo del backend (GradeScale.validateEntries): sin huecos ni
-      // traslapes, primer rango inicia en el mínimo y el último termina en
-      // el máximo, con paso de 0.1 entre rangos adyacentes.
-      const STEP = 0.1
-      const around = (a: number, b: number) => Math.abs(a - b) < 1e-9
-      const fmt = (n: number) => (Math.round(n * 10) / 10).toFixed(1)
-      const nums = entries.map((row, i) => ({ index: i, from: Number(row.fromValue), to: Number(row.toValue) }))
-
-      const inverted = nums.find(r => r.from > r.to)
-      if (inverted) {
-        e.error = `El rango de la fila ${inverted.index + 1} tiene el valor 'Desde' mayor que el valor 'Hasta'.`
-        rErrors[inverted.index] = true
-      } else {
-        const sorted = [...nums].sort((a, b) => a.from - b.from)
-        const first = sorted[0]
-        if (!around(first.from, min)) {
-          e.error = `Hueco inicial: los rangos deben comenzar en la calificación mínima (${fmt(min)}).`
-          rErrors[first.index] = true
-        } else {
-          for (let i = 0; i < sorted.length; i++) {
-            const cur = sorted[i]
-            if (i === sorted.length - 1) {
-              if (!around(cur.to, max)) {
-                e.error = `Hueco final: los rangos deben terminar en la calificación máxima (${fmt(max)}).`
-                rErrors[cur.index] = true
-              }
-            } else {
-              const next = sorted[i + 1]
-              const expected = cur.to + STEP
-              if (around(next.from, expected)) continue
-              if (next.from > expected) {
-                e.error = `Hueco entre el rango de la fila ${i + 1} (termina en ${fmt(cur.to)}) y el de la fila ${next.index + 1} (inicia en ${fmt(next.from)}).`
-              } else {
-                e.error = `Traslape entre el rango de la fila ${i + 1} (termina en ${fmt(cur.to)}) y el de la fila ${next.index + 1} (inicia en ${fmt(next.from)}).`
-              }
-              rErrors[next.index] = true
-            }
-            if (e.error) break
-          }
-        }
-      }
+    const inverted = nums.find(r => r.from > r.to)
+    if (inverted) {
+      flag(inverted.index, 'fromValue', 'El valor "Desde" es mayor que su valor "Hasta".')
+      return { cellErrors }
     }
 
-    return { error: e.error, rowErrors: rErrors }
+    const sorted = [...nums].sort((a, b) => a.from - b.from)
+    const first = sorted[0]
+    if (!around(first.from, min)) {
+      flag(first.index, 'fromValue', `El primer rango debe iniciar en la calificación mínima (${fmt(min)}).`)
+      return { cellErrors }
+    }
+
+    for (let i = 0; i < sorted.length; i++) {
+      const cur = sorted[i]
+      if (i === sorted.length - 1) {
+        if (!around(cur.to, max)) {
+          flag(cur.index, 'toValue', `El último rango debe terminar en la calificación máxima (${fmt(max)}).`)
+        }
+        break
+      }
+      const next = sorted[i + 1]
+      const expected = cur.to + STEP
+      if (around(next.from, expected)) continue
+      // El mensaje va en la celda "Desde" de la fila siguiente, que es donde está
+      // el número que está mal. Antes se marcaba la fila entera y el resaltado
+      // sólo se aplicaba a celdas vacías, así que un hueco — donde la celda no
+      // está vacía — no pintaba nada.
+      flag(
+        next.index,
+        'fromValue',
+        next.from > expected
+          ? `Hueco: el rango anterior termina en ${fmt(cur.to)} y este inicia en ${fmt(next.from)}. Debe iniciar en ${fmt(expected)}.`
+          : `Traslape: el rango anterior termina en ${fmt(cur.to)} y este inicia en ${fmt(next.from)}. Debe iniciar en ${fmt(expected)}.`,
+      )
+      break
+    }
+
+    return { cellErrors }
   }
 
   async function handleSubmit() {
     // El schema cubre la clasificación y los dos extremos; las filas se validan
-    // aparte y su error se pinta bajo la tabla. La cobertura sólo se comprueba
-    // cuando los dos extremos son números: comparar contra el `0` implícito de
-    // un campo vacío daría un "hueco inicial" que no es el problema real.
+    // aparte y su error se pinta en la celda que falló. La cobertura sólo se
+    // comprueba cuando los dos extremos son números: comparar contra el `0`
+    // implícito de un campo vacío daría un "hueco inicial" que no es el
+    // problema real.
     const boundsOk = values.numericMin.trim() !== '' && values.numericMax.trim() !== ''
       && Number.isFinite(Number(values.numericMin)) && Number.isFinite(Number(values.numericMax))
-    const { error: entriesInvalid, rowErrors: validationRowErrors } = validateEntries(boundsOk)
-    if (!validate() || entriesInvalid) {
-      setEntriesError(entriesInvalid)
-      setRowErrors(validationRowErrors)
+    const { cellErrors, error: entriesInvalid } = validateEntries(boundsOk)
+    const hasCellErrors = Object.keys(cellErrors).length > 0
+    if (!validate() || entriesInvalid || hasCellErrors) {
+      // A partir de aquí las filas ya están "tocadas": sus celdas muestran error
+      // y se recalculan con cada tecla, sin esperar otro intento de envío.
+      setRowsTouched(true)
+      // El mensaje de la tabla sólo se usa para el caso sin celda a la que
+      // colgarlo (no hay ninguna fila). Los demás errores ya van en su celda.
+      setEntriesError(entriesInvalid && !hasCellErrors ? entriesInvalid : undefined)
       return
     }
     setEntriesError(undefined)
-    setRowErrors([])
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
 
@@ -492,18 +585,19 @@ export default function PlanEscalaForm() {
                 </thead>
                 <tbody>
                   {entries.map((row, i) => {
-                    const rowHasError = !!rowErrors[i]
+                    const err = cellErrors[i] ?? {}
                     return (
-                      <tr key={i} className="border-b border-[#E5E7EB] last:border-0">
+                      <tr key={i} className="border-b border-[#E5E7EB] last:border-0 align-top">
                         <td className="px-2 py-2">
                           <input
                             type="number" step="0.1"
                             value={row.fromValue}
                             onChange={e => updateRow(i, { fromValue: e.target.value })}
                             disabled={disabled}
-                            className={inputCls(disabled, rowHasError && !row.fromValue.trim()) + ' tabular-nums'}
+                            className={inputCls(disabled, !!err.fromValue) + ' tabular-nums'}
                             placeholder="Ej. 0.0"
                           />
+                          {err.fromValue && <FieldError>{err.fromValue}</FieldError>}
                         </td>
                         <td className="px-2 py-2">
                           <input
@@ -511,9 +605,10 @@ export default function PlanEscalaForm() {
                             value={row.toValue}
                             onChange={e => updateRow(i, { toValue: e.target.value })}
                             disabled={disabled}
-                            className={inputCls(disabled, rowHasError && !row.toValue.trim()) + ' tabular-nums'}
+                            className={inputCls(disabled, !!err.toValue) + ' tabular-nums'}
                             placeholder="Ej. 6.9"
                           />
+                          {err.toValue && <FieldError>{err.toValue}</FieldError>}
                         </td>
                         <td className="px-2 py-2">
                           <input
@@ -521,18 +616,21 @@ export default function PlanEscalaForm() {
                             maxLength={4}
                             onChange={e => updateRow(i, { letter: e.target.value.toUpperCase() })}
                             disabled={disabled}
-                            className={inputCls(disabled, rowHasError && !row.letter.trim())}
+                            className={inputCls(disabled, !!err.letter)}
                             placeholder="Ej. NA"
                           />
+                          {err.letter && <FieldError>{err.letter}</FieldError>}
                         </td>
                         <td className="px-2 py-2">
                           <input
                             value={row.description}
+                            maxLength={255}
                             onChange={e => updateRow(i, { description: e.target.value })}
                             disabled={disabled}
-                            className={inputCls(disabled, rowHasError && !row.description.trim())}
+                            className={inputCls(disabled, !!err.description)}
                             placeholder="Ej. No Aprobatorio"
                           />
+                          {err.description && <FieldError>{err.description}</FieldError>}
                         </td>
                         <td className="px-2 py-2">
                           <div className="flex items-center justify-center">
@@ -557,7 +655,7 @@ export default function PlanEscalaForm() {
             {/* Mobile cards */}
             <div className="md:hidden space-y-3">
               {entries.map((row, i) => {
-                const rowHasError = !!rowErrors[i]
+                const err = cellErrors[i] ?? {}
                 return (
                   <div key={i} className="border border-[#E5E7EB] rounded-lg p-3">
                     <div className="grid grid-cols-2 gap-2 mb-2">
@@ -568,9 +666,10 @@ export default function PlanEscalaForm() {
                           value={row.fromValue}
                           onChange={e => updateRow(i, { fromValue: e.target.value })}
                           disabled={disabled}
-                          className={inputCls(disabled, rowHasError && !row.fromValue.trim()) + ' tabular-nums'}
+                          className={inputCls(disabled, !!err.fromValue) + ' tabular-nums'}
                           placeholder="Ej. 0.0"
                         />
+                        {err.fromValue && <FieldError>{err.fromValue}</FieldError>}
                       </div>
                       <div>
                         <FieldLabel>Hasta</FieldLabel>
@@ -579,9 +678,10 @@ export default function PlanEscalaForm() {
                           value={row.toValue}
                           onChange={e => updateRow(i, { toValue: e.target.value })}
                           disabled={disabled}
-                          className={inputCls(disabled, rowHasError && !row.toValue.trim()) + ' tabular-nums'}
+                          className={inputCls(disabled, !!err.toValue) + ' tabular-nums'}
                           placeholder="Ej. 6.9"
                         />
+                        {err.toValue && <FieldError>{err.toValue}</FieldError>}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
@@ -592,9 +692,10 @@ export default function PlanEscalaForm() {
                           maxLength={4}
                           onChange={e => updateRow(i, { letter: e.target.value.toUpperCase() })}
                           disabled={disabled}
-                          className={inputCls(disabled, rowHasError && !row.letter.trim())}
+                          className={inputCls(disabled, !!err.letter)}
                           placeholder="Ej. NA"
                         />
+                        {err.letter && <FieldError>{err.letter}</FieldError>}
                       </div>
                       <div className="flex flex-col">
                         <FieldLabel>¿Aprueba?</FieldLabel>
@@ -607,11 +708,13 @@ export default function PlanEscalaForm() {
                       <FieldLabel>Descripción</FieldLabel>
                       <input
                         value={row.description}
+                        maxLength={255}
                         onChange={e => updateRow(i, { description: e.target.value })}
                         disabled={disabled}
-                        className={inputCls(disabled, rowHasError && !row.description.trim())}
+                        className={inputCls(disabled, !!err.description)}
                         placeholder="Ej. No Aprobatorio"
                       />
+                      {err.description && <FieldError>{err.description}</FieldError>}
                     </div>
                     <Button
                       variant="danger"
