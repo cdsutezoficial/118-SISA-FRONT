@@ -6,6 +6,13 @@ import { FormPage, FormHeader, FormCard, FormActions, Button, IconButton, TextFi
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate, useSearchParams } from 'react-router'
 import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { useFieldValidation } from '@app/core/validation/useFieldValidation'
+import {
+  required,
+  selectionRequired,
+  decimal,
+  normalizeText,
+} from '@app/core/validation/fieldRules'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // This screen registers/edits a GradeScale *inside a plan* — there is no
@@ -76,7 +83,48 @@ function emptyRow(): EntryRow {
   return { fromValue: '', toValue: '', letter: '', description: '', passed: false }
 }
 
-type FormErrors = Partial<Record<'classificationId' | 'numericMin' | 'numericMax' | 'entries', string>>
+// ─── Schema de validación ──────────────────────────────────────────────────────
+// Se declara fuera del componente para que su identidad sea estable: el hook lo
+// usa como dependencia de sus callbacks.
+//
+// `numericMin` y `numericMax` replican el `@Digits(integer = 4, fraction = 1)`
+// de `SetGradeScaleRequest`, que es lo que permite la columna (precision = 5,
+// scale = 1): sin ese tope el navegador dejaría pasar `12345.6`, que el backend
+// rechaza con 400. El rango [0, 100] que usan las escalas reales se acepta
+// entero, de ahí los 4 dígitos.
+//
+// El array `entries` **no** entra al schema: es una tabla dinámica y su
+// validación es de colección (cobertura sin huecos ni traslapes, paso de 0.1),
+// no de campo. Conserva `validateEntries`, que es el espejo del
+// `GradeScale.validateEntries` del backend.
+const SCALE_SCHEMA = {
+  classificationId: { rules: [selectionRequired('la clasificación')] },
+  numericMin: {
+    rules: [required('calificación mínima', 'f'), decimal({ label: 'calificación mínima', gender: 'f', intDigits: 4, fraction: 1 })],
+  },
+  numericMax: {
+    rules: [required('calificación máxima', 'f'), decimal({ label: 'calificación máxima', gender: 'f', intDigits: 4, fraction: 1 })],
+  },
+} as const
+
+const SCALE_INITIAL_VALUES = {
+  classificationId: '',
+  numericMin: '',
+  numericMax: '',
+}
+
+// `numericMax > numericMin` es la única regla entre campos: la ve el backend en
+// `SetGradeScaleUseCaseImpl` y no la puede expresar `@Min`, porque depende del
+// otro valor. Vive en `crossRules` para que el error se actualice en vivo y para
+// que `isValid` (y por lo tanto el botón) la tenga en cuenta.
+const SCALE_CROSS_RULES = (values: typeof SCALE_INITIAL_VALUES) => {
+  const min = Number(values.numericMin)
+  const max = Number(values.numericMax)
+  if (values.numericMin.trim() && values.numericMax.trim() && !Number.isNaN(min) && !Number.isNaN(max) && min >= max) {
+    return { numericMax: 'La calificación máxima debe ser mayor que la mínima.' }
+  }
+  return {}
+}
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
@@ -88,20 +136,31 @@ export default function PlanEscalaForm() {
   const isRegister = (searchParams.get('mode') ?? 'register') !== 'edit'
 
   // ─── Field state ───────────────────────────────────────────────────────────
-  const [classificationId, setClassificationId] = useState('')
-  const [numericMin, setNumericMin] = useState('')
-  const [numericMax, setNumericMax] = useState('')
+  // Los tres escalares de la escala viven en `useFieldValidation`; las filas de
+  // rangos (`entries`) siguen en su propio estado, con su validación aparte.
   const [entries, setEntries] = useState<EntryRow[]>([emptyRow()])
 
   // ─── Auxiliary state ───────────────────────────────────────────────────────
   const [classifications, setClassifications] = useState<SelectOption[]>([])
   const [plan, setPlan] = useState<AcademicPlanSummary | null>(null)
-  const [errors, setErrors] = useState<FormErrors>({})
+  const [entriesError, setEntriesError] = useState<string | undefined>(undefined)
   const [rowErrors, setRowErrors] = useState<boolean[]>([])
+
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [submitErrorMsg, setSubmitErrorMsg] = useState('')
+
+  const {
+    values,
+    fieldError,
+    handleChange,
+    handleBlur,
+    setFieldValue,
+    setFieldError,
+    validate,
+    isValid,
+  } = useFieldValidation(SCALE_SCHEMA, SCALE_INITIAL_VALUES, { crossRules: SCALE_CROSS_RULES })
 
   // Missing route params — can't do anything on this screen without them.
   const missingParams = !planId || (!isRegister && !scaleId)
@@ -137,9 +196,9 @@ export default function PlanEscalaForm() {
             setLoadErrorMsg('No se encontró la escala de calificación solicitada en este plan.')
             return
           }
-          setClassificationId(scale.classificationId)
-          setNumericMin(String(scale.numericMin))
-          setNumericMax(String(scale.numericMax))
+          setFieldValue('classificationId', scale.classificationId)
+          setFieldValue('numericMin', String(scale.numericMin))
+          setFieldValue('numericMax', String(scale.numericMax))
           setEntries(scale.entries.length > 0
             ? scale.entries.map(e => ({
               fromValue: String(e.fromValue),
@@ -175,13 +234,9 @@ export default function PlanEscalaForm() {
   )
   const availableClassifications = classifications.filter(c => !usedClassificationIds.has(c.value))
 
-  function clearErr(field: keyof FormErrors) {
-    setErrors(prev => ({ ...prev, [field]: undefined }))
-  }
-
   function updateRow(index: number, patch: Partial<EntryRow>) {
     setEntries(prev => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)))
-    clearErr('entries')
+    setEntriesError(undefined)
   }
 
   function addRow() {
@@ -192,19 +247,14 @@ export default function PlanEscalaForm() {
     setEntries(prev => prev.filter((_, i) => i !== index))
   }
 
-  function validate(): { errors: FormErrors; rowErrors: boolean[] } {
-    const e: FormErrors = {}
-    if (!classificationId) e.classificationId = 'Selecciona la clasificación.'
-
-    const min = Number(numericMin)
-    const max = Number(numericMax)
-    if (!numericMin.trim()) e.numericMin = 'La calificación mínima es obligatoria.'
-    else if (isNaN(min)) e.numericMin = 'Ingresa un número válido.'
-    if (!numericMax.trim()) e.numericMax = 'La calificación máxima es obligatoria.'
-    else if (isNaN(max)) e.numericMax = 'Ingresa un número válido.'
-    if (!e.numericMin && !e.numericMax && min >= max) {
-      e.numericMax = 'La calificación máxima debe ser mayor que la mínima.'
-    }
+  // Las filas de rangos se validan aparte del schema: son una tabla dinámica y
+  // estas reglas son de colección. `boundsOk` indica que los dos extremos de la
+  // escala ya son números válidos (los valida el schema), porque la cobertura se
+  // compara contra ellos.
+  function validateEntries(boundsOk: boolean): { error?: string; rowErrors: boolean[] } {
+    const e: { error?: string } = {}
+    const min = Number(values.numericMin)
+    const max = Number(values.numericMax)
 
     const rErrors = entries.map(row => {
       const rowMin = Number(row.fromValue)
@@ -214,10 +264,10 @@ export default function PlanEscalaForm() {
       return invalid
     })
     if (entries.length === 0) {
-      e.entries = 'Agrega al menos un rango.'
+      e.error = 'Agrega al menos un rango.'
     } else if (rErrors.some(Boolean)) {
-      e.entries = 'Completa todos los campos de los rangos marcados.'
-    } else if (!e.numericMin && !e.numericMax) {
+      e.error = 'Completa todos los campos de los rangos marcados.'
+    } else if (boundsOk) {
       // ---- Cobertura del rango [numericMin, numericMax] ----
       // Espejo del backend (GradeScale.validateEntries): sin huecos ni
       // traslapes, primer rango inicia en el mínimo y el último termina en
@@ -229,20 +279,20 @@ export default function PlanEscalaForm() {
 
       const inverted = nums.find(r => r.from > r.to)
       if (inverted) {
-        e.entries = `El rango de la fila ${inverted.index + 1} tiene el valor 'Desde' mayor que el valor 'Hasta'.`
+        e.error = `El rango de la fila ${inverted.index + 1} tiene el valor 'Desde' mayor que el valor 'Hasta'.`
         rErrors[inverted.index] = true
       } else {
         const sorted = [...nums].sort((a, b) => a.from - b.from)
         const first = sorted[0]
         if (!around(first.from, min)) {
-          e.entries = `Hueco inicial: los rangos deben comenzar en la calificación mínima (${fmt(min)}).`
+          e.error = `Hueco inicial: los rangos deben comenzar en la calificación mínima (${fmt(min)}).`
           rErrors[first.index] = true
         } else {
           for (let i = 0; i < sorted.length; i++) {
             const cur = sorted[i]
             if (i === sorted.length - 1) {
               if (!around(cur.to, max)) {
-                e.entries = `Hueco final: los rangos deben terminar en la calificación máxima (${fmt(max)}).`
+                e.error = `Hueco final: los rangos deben terminar en la calificación máxima (${fmt(max)}).`
                 rErrors[cur.index] = true
               }
             } else {
@@ -250,42 +300,48 @@ export default function PlanEscalaForm() {
               const expected = cur.to + STEP
               if (around(next.from, expected)) continue
               if (next.from > expected) {
-                e.entries = `Hueco entre el rango de la fila ${i + 1} (termina en ${fmt(cur.to)}) y el de la fila ${next.index + 1} (inicia en ${fmt(next.from)}).`
+                e.error = `Hueco entre el rango de la fila ${i + 1} (termina en ${fmt(cur.to)}) y el de la fila ${next.index + 1} (inicia en ${fmt(next.from)}).`
               } else {
-                e.entries = `Traslape entre el rango de la fila ${i + 1} (termina en ${fmt(cur.to)}) y el de la fila ${next.index + 1} (inicia en ${fmt(next.from)}).`
+                e.error = `Traslape entre el rango de la fila ${i + 1} (termina en ${fmt(cur.to)}) y el de la fila ${next.index + 1} (inicia en ${fmt(next.from)}).`
               }
               rErrors[next.index] = true
             }
-            if (e.entries) break
+            if (e.error) break
           }
         }
       }
     }
 
-    return { errors: e, rowErrors: rErrors }
+    return { error: e.error, rowErrors: rErrors }
   }
 
   async function handleSubmit() {
-    const { errors: validationErrors, rowErrors: validationRowErrors } = validate()
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors)
+    // El schema cubre la clasificación y los dos extremos; las filas se validan
+    // aparte y su error se pinta bajo la tabla. La cobertura sólo se comprueba
+    // cuando los dos extremos son números: comparar contra el `0` implícito de
+    // un campo vacío daría un "hueco inicial" que no es el problema real.
+    const boundsOk = values.numericMin.trim() !== '' && values.numericMax.trim() !== ''
+      && Number.isFinite(Number(values.numericMin)) && Number.isFinite(Number(values.numericMax))
+    const { error: entriesInvalid, rowErrors: validationRowErrors } = validateEntries(boundsOk)
+    if (!validate() || entriesInvalid) {
+      setEntriesError(entriesInvalid)
       setRowErrors(validationRowErrors)
       return
     }
-    setErrors({})
+    setEntriesError(undefined)
     setRowErrors([])
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
 
     const payload: GradeScaleRequestPayload = {
-      classificationId,
-      numericMin: Number(numericMin),
-      numericMax: Number(numericMax),
+      classificationId: values.classificationId,
+      numericMin: Number(values.numericMin),
+      numericMax: Number(values.numericMax),
       entries: entries.map(row => ({
         fromValue: Number(row.fromValue),
         toValue: Number(row.toValue),
-        letter: row.letter.trim(),
-        description: row.description.trim(),
+        letter: normalizeText(row.letter),
+        description: normalizeText(row.description),
         passed: row.passed,
       })),
     }
@@ -302,7 +358,7 @@ export default function PlanEscalaForm() {
       const apiErr = err as ApiError
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         if (apiErr.backendMessage.includes('clasificación')) {
-          setErrors(prev => ({ ...prev, classificationId: apiErr.backendMessage }))
+          setFieldError('classificationId', apiErr.backendMessage)
           setSubmitStatus('idle')
           return
         }
@@ -365,25 +421,26 @@ export default function PlanEscalaForm() {
                 <FieldLabel required>Clasificación de Materia</FieldLabel>
                 <SearchSelectField
                   options={availableClassifications}
-                  value={classificationId}
-                  onChange={v => { setClassificationId(v); clearErr('classificationId') }}
+                  value={values.classificationId}
+                  onChange={handleChange('classificationId')}
                   placeholder="Selecciona la clasificación…"
                   disabled={disabled}
-                  hasError={!!errors.classificationId}
+                  hasError={!!fieldError('classificationId')}
                   searchPlaceholder="Buscar clasificación…"
                 />
-                {errors.classificationId
-                  ? <FieldError>{errors.classificationId}</FieldError>
+                {fieldError('classificationId')
+                  ? <FieldError>{fieldError('classificationId')}</FieldError>
                   : <FieldHelp>Las clasificaciones que ya tienen una escala en este plan no aparecen aquí.</FieldHelp>}
               </div>
               {/* Calificación Mínima */}
               <TextField
                 label="Calificación Mínima"
                 required
-                value={numericMin}
-                onChange={v => { setNumericMin(v); clearErr('numericMin') }}
+                value={values.numericMin}
+                onChange={handleChange('numericMin')}
+                onBlur={handleBlur('numericMin')}
                 disabled={disabled}
-                error={errors.numericMin}
+                error={fieldError('numericMin')}
                 type="number"
                 step={0.1}
                 numeric
@@ -395,10 +452,11 @@ export default function PlanEscalaForm() {
               <TextField
                 label="Calificación Máxima"
                 required
-                value={numericMax}
-                onChange={v => { setNumericMax(v); clearErr('numericMax') }}
+                value={values.numericMax}
+                onChange={handleChange('numericMax')}
+                onBlur={handleBlur('numericMax')}
                 disabled={disabled}
-                error={errors.numericMax}
+                error={fieldError('numericMax')}
                 type="number"
                 step={0.1}
                 numeric
@@ -569,7 +627,7 @@ export default function PlanEscalaForm() {
               })}
             </div>
 
-            {errors.entries && <FieldError>{errors.entries}</FieldError>}
+            {entriesError && <FieldError>{entriesError}</FieldError>}
 
             <Button variant="ghost" size="sm" className="mt-3" onClick={addRow} disabled={disabled}>
               <Plus size={14} />Agregar Rango
@@ -583,6 +641,7 @@ export default function PlanEscalaForm() {
             onPrimary={handleSubmit}
             primaryLabel={isRegister ? 'Registrar Escala' : 'Guardar Cambios'}
             isSubmitting={isSubmitting}
+            primaryDisabled={!isValid}
           />
         </>
       )}

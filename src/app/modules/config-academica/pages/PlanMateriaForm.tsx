@@ -6,6 +6,16 @@ import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } f
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate, useSearchParams } from 'react-router'
 import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { useFieldValidation } from '@app/core/validation/useFieldValidation'
+import {
+  required,
+  selectionRequired,
+  maxLength,
+  noControlChars,
+  numeric,
+  normalizeCode,
+  normalizeText,
+} from '@app/core/validation/fieldRules'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // This screen registers/edits a Subject *inside a plan level* — there is no
@@ -69,7 +79,75 @@ interface SubjectFormPayload {
   classificationId: string
 }
 
-type FormErrors = Partial<Record<'code' | 'name' | 'credits' | 'weeklyHours' | 'evaluationUnits' | 'displayOrder' | 'type' | 'classificationId', string>>
+// ─── Schema de validación ──────────────────────────────────────────────────────
+// Se declara fuera del componente para que su identidad sea estable: el hook lo
+// usa como dependencia de sus callbacks.
+//
+// Los límites son los de `AddSubjectRequest` / `UpdateSubjectRequest`, para que
+// el navegador no deje pasar nada que el servidor vaya a rechazar con 400:
+//   code, name           → @NotBlank + @Size(max = 255) + @Pattern(^[^\p{Cc}]*$)
+//   credits              → @Min(0)
+//   weeklyHours          → @Min(0)
+//   evaluationUnits      → @Min(1)
+//   displayOrder         → @Min(1)
+//   type                 → @NotNull, es un select
+//   classificationId     → @NotNull, es un select
+//
+// `code` lleva `normalize: normalizeCode` (recortar y mayúsculas al teclear),
+// igual que antes lo hacía `v.toUpperCase()` a mano, y ahora también recorta.
+// El backend normaliza el código con mayúsculas y compara sin distinguir caja
+// (`equalsIgnoreCase`), así que el navegador no puede dejar una variante.
+//
+// `name` es texto libre: `validateOn: normalizeText` y ningún `normalize`, para
+// que el cursor no salte al escribir un espacio entre palabras. El payload se
+// arma con el mismo `normalizeText`.
+const SUBJECT_SCHEMA = {
+  code: {
+    normalize: normalizeCode,
+    rules: [
+      required('código de la materia'),
+      maxLength(255, 'código de la materia'),
+      noControlChars('código de la materia'),
+    ],
+  },
+  name: {
+    validateOn: normalizeText,
+    rules: [
+      required('nombre de la materia'),
+      maxLength(255, 'nombre de la materia'),
+      noControlChars('nombre de la materia'),
+    ],
+  },
+  credits: {
+    rules: [required('créditos', 'mp'), numeric({ label: 'créditos', gender: 'mp', min: 0 })],
+  },
+  weeklyHours: {
+    rules: [required('horas semanales', 'fp'), numeric({ label: 'horas semanales', gender: 'fp', min: 0 })],
+  },
+  evaluationUnits: {
+    rules: [
+      required('unidades de evaluación', 'fp'),
+      numeric({ label: 'unidades de evaluación', gender: 'fp', min: 1 }),
+    ],
+  },
+  displayOrder: { rules: [required('orden en kardex'), numeric({ label: 'orden en kardex', min: 1 })] },
+  type: { rules: [selectionRequired('el tipo de materia')] },
+  classificationId: { rules: [selectionRequired('la clasificación')] },
+} as const
+
+const SUBJECT_INITIAL_VALUES = {
+  code: '',
+  name: '',
+  credits: '',
+  weeklyHours: '',
+  evaluationUnits: '',
+  displayOrder: '',
+  // El tipo viene preseleccionado como antes: es el valor por defecto que
+  // asumía el `useState` de este campo, y el backend exige uno. Forzar al
+  // usuario a elegirlo sería un paso extra sin ganancia.
+  type: 'CORE',
+  classificationId: '',
+}
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
@@ -82,20 +160,24 @@ export default function PlanMateriaForm() {
   const isRegister = (searchParams.get('mode') ?? 'register') !== 'edit'
 
   // ─── Field state ───────────────────────────────────────────────────────────
-  const [code, setCode] = useState('')
-  const [name, setName] = useState('')
-  const [credits, setCredits] = useState('')
-  const [weeklyHours, setWeeklyHours] = useState('')
-  const [evaluationUnits, setEvaluationUnits] = useState('')
-  const [displayOrder, setDisplayOrder] = useState('')
-  const [type, setType] = useState<SubjectType | ''>('CORE')
+  // Los ocho campos de la materia viven en `useFieldValidation`.
+  // `isRetakeable` no: es un switch sin reglas.
   const [isRetakeable, setIsRetakeable] = useState(true)
-  const [classificationId, setClassificationId] = useState('')
 
   // ─── Auxiliary state ───────────────────────────────────────────────────────
   const [classifications, setClassifications] = useState<SelectOption[]>([])
   const [plan, setPlan] = useState<AcademicPlanSummary | null>(null)
-  const [errors, setErrors] = useState<FormErrors>({})
+
+  const {
+    values,
+    fieldError,
+    handleChange,
+    handleBlur,
+    setFieldValue,
+    setFieldError,
+    validate,
+    isValid,
+  } = useFieldValidation(SUBJECT_SCHEMA, SUBJECT_INITIAL_VALUES)
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
@@ -135,15 +217,15 @@ export default function PlanMateriaForm() {
             setLoadErrorMsg('No se encontró la materia solicitada en este nivel.')
             return
           }
-          setCode(subject.code)
-          setName(subject.name)
-          setCredits(String(subject.credits))
-          setWeeklyHours(String(subject.weeklyHours))
-          setEvaluationUnits(String(subject.evaluationUnits))
-          setDisplayOrder(String(subject.displayOrder))
-          setType(subject.type)
+          setFieldValue('code', subject.code)
+          setFieldValue('name', subject.name)
+          setFieldValue('credits', String(subject.credits))
+          setFieldValue('weeklyHours', String(subject.weeklyHours))
+          setFieldValue('evaluationUnits', String(subject.evaluationUnits))
+          setFieldValue('displayOrder', String(subject.displayOrder))
+          setFieldValue('type', subject.type)
+          setFieldValue('classificationId', subject.classificationId)
           setIsRetakeable(subject.isRetakeable)
-          setClassificationId(subject.classificationId)
         }
         setLoadStatus('idle')
       })
@@ -160,47 +242,23 @@ export default function PlanMateriaForm() {
   const isSubmitting = submitStatus === 'submitting'
   const level = plan?.levels.find(l => l.id === levelId)
 
-  function clearErr(field: keyof FormErrors) {
-    setErrors(prev => ({ ...prev, [field]: undefined }))
-  }
-
-  function validate(): FormErrors {
-    const e: FormErrors = {}
-    if (!code.trim()) e.code = 'La clave de la materia es obligatoria.'
-    if (!name.trim()) e.name = 'El nombre de la materia es obligatorio.'
-    if (!credits.trim()) e.credits = 'Los créditos son obligatorios.'
-    else if (isNaN(Number(credits)) || Number(credits) < 0) e.credits = 'Ingresa un número válido.'
-    if (!weeklyHours.trim()) e.weeklyHours = 'Las horas semanales son obligatorias.'
-    else if (isNaN(Number(weeklyHours)) || Number(weeklyHours) < 0) e.weeklyHours = 'Ingresa un número válido.'
-    if (!evaluationUnits.trim()) e.evaluationUnits = 'Las unidades de evaluación son obligatorias.'
-    else if (isNaN(Number(evaluationUnits)) || Number(evaluationUnits) < 1) e.evaluationUnits = 'Ingresa un número válido mayor a 0.'
-    if (!displayOrder.trim()) e.displayOrder = 'El orden en kardex es obligatorio.'
-    else if (isNaN(Number(displayOrder)) || Number(displayOrder) < 1) e.displayOrder = 'Ingresa un número válido mayor a 0.'
-    if (!type) e.type = 'Selecciona el tipo de materia.'
-    if (!classificationId) e.classificationId = 'Selecciona la clasificación.'
-    return e
-  }
-
   async function handleSubmit() {
-    const validationErrors = validate()
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors)
-      return
-    }
-    setErrors({})
+    // Marca todos los campos como tocados y valida. Si algo falla, no sale
+    // ninguna petición.
+    if (!validate()) return
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
 
     const payload: SubjectFormPayload = {
-      code: code.trim(),
-      name: name.trim(),
-      credits: Number(credits),
-      weeklyHours: Number(weeklyHours),
-      evaluationUnits: Number(evaluationUnits),
-      displayOrder: Number(displayOrder),
-      type: type as SubjectType,
+      code: values.code,
+      name: normalizeText(values.name),
+      credits: Number(values.credits),
+      weeklyHours: Number(values.weeklyHours),
+      evaluationUnits: Number(values.evaluationUnits),
+      displayOrder: Number(values.displayOrder),
+      type: values.type as SubjectType,
       isRetakeable,
-      classificationId,
+      classificationId: values.classificationId,
     }
 
     try {
@@ -215,7 +273,7 @@ export default function PlanMateriaForm() {
       const apiErr = err as ApiError
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         if (apiErr.backendMessage.includes('código')) {
-          setErrors(prev => ({ ...prev, code: apiErr.backendMessage }))
+          setFieldError('code', apiErr.backendMessage)
           setSubmitStatus('idle')
           return
         }
@@ -289,10 +347,12 @@ export default function PlanMateriaForm() {
               <TextField
                 label="Código"
                 required
-                value={code}
-                onChange={v => { setCode(v.toUpperCase()); clearErr('code') }}
+                value={values.code}
+                onChange={handleChange('code')}
+                onBlur={handleBlur('code')}
                 disabled={disabled}
-                error={errors.code}
+                error={fieldError('code')}
+                maxLength={255}
                 placeholder="Ej. FP-101"
                 mono
                 className="col-span-12 sm:col-span-4"
@@ -301,10 +361,12 @@ export default function PlanMateriaForm() {
               <TextField
                 label="Nombre"
                 required
-                value={name}
-                onChange={v => { setName(v); clearErr('name') }}
+                value={values.name}
+                onChange={handleChange('name')}
+                onBlur={handleBlur('name')}
                 disabled={disabled}
-                error={errors.name}
+                error={fieldError('name')}
+                maxLength={255}
                 placeholder="Ej. Fundamentos de Programación"
                 className="col-span-12 sm:col-span-8"
               />
@@ -313,10 +375,11 @@ export default function PlanMateriaForm() {
               <TextField
                 label="Créditos"
                 required
-                value={credits}
-                onChange={v => { setCredits(v); clearErr('credits') }}
+                value={values.credits}
+                onChange={handleChange('credits')}
+                onBlur={handleBlur('credits')}
                 disabled={disabled}
-                error={errors.credits}
+                error={fieldError('credits')}
                 type="number"
                 min={0}
                 numeric
@@ -327,10 +390,11 @@ export default function PlanMateriaForm() {
               <TextField
                 label="Horas Semanales"
                 required
-                value={weeklyHours}
-                onChange={v => { setWeeklyHours(v); clearErr('weeklyHours') }}
+                value={values.weeklyHours}
+                onChange={handleChange('weeklyHours')}
+                onBlur={handleBlur('weeklyHours')}
                 disabled={disabled}
-                error={errors.weeklyHours}
+                error={fieldError('weeklyHours')}
                 type="number"
                 min={0}
                 numeric
@@ -342,15 +406,15 @@ export default function PlanMateriaForm() {
                 <FieldLabel required>Clasificación</FieldLabel>
                 <SearchSelectField
                   options={classifications}
-                  value={classificationId}
-                  onChange={v => { setClassificationId(v); clearErr('classificationId') }}
+                  value={values.classificationId}
+                  onChange={handleChange('classificationId')}
                   placeholder="Selecciona clasificación…"
                   disabled={disabled}
-                  hasError={!!errors.classificationId}
+                  hasError={!!fieldError('classificationId')}
                   searchPlaceholder="Buscar clasificación…"
                 />
-                {errors.classificationId
-                  ? <FieldError>{errors.classificationId}</FieldError>
+                {fieldError('classificationId')
+                  ? <FieldError>{fieldError('classificationId')}</FieldError>
                   : <FieldHelp>Determina la escala de calificaciones aplicable al evaluar esta materia.</FieldHelp>}
               </div>
             </div>
@@ -366,10 +430,11 @@ export default function PlanMateriaForm() {
               <TextField
                 label="Unidades de Evaluación"
                 required
-                value={evaluationUnits}
-                onChange={v => { setEvaluationUnits(v); clearErr('evaluationUnits') }}
+                value={values.evaluationUnits}
+                onChange={handleChange('evaluationUnits')}
+                onBlur={handleBlur('evaluationUnits')}
                 disabled={disabled}
-                error={errors.evaluationUnits}
+                error={fieldError('evaluationUnits')}
                 type="number"
                 min={1}
                 numeric
@@ -382,10 +447,10 @@ export default function PlanMateriaForm() {
               <SelectField
                 label="Tipo"
                 required
-                value={type}
-                onChange={v => { setType(v as SubjectType); clearErr('type') }}
+                value={values.type}
+                onChange={handleChange('type')}
                 disabled={disabled}
-                error={errors.type}
+                error={fieldError('type')}
                 options={(Object.keys(TYPE_LABELS) as SubjectType[]).map(t => ({ value: t, label: TYPE_LABELS[t] }))}
                 placeholder="Selecciona el tipo…"
                 className="col-span-12 sm:col-span-4"
@@ -395,10 +460,11 @@ export default function PlanMateriaForm() {
               <TextField
                 label="Orden en Kardex"
                 required
-                value={displayOrder}
-                onChange={v => { setDisplayOrder(v); clearErr('displayOrder') }}
+                value={values.displayOrder}
+                onChange={handleChange('displayOrder')}
+                onBlur={handleBlur('displayOrder')}
                 disabled={disabled}
-                error={errors.displayOrder}
+                error={fieldError('displayOrder')}
                 type="number"
                 min={1}
                 numeric
@@ -427,6 +493,7 @@ export default function PlanMateriaForm() {
             onPrimary={handleSubmit}
             primaryLabel={isRegister ? 'Registrar Materia' : 'Guardar Cambios'}
             isSubmitting={isSubmitting}
+            primaryDisabled={!isValid}
           />
         </>
       )}
