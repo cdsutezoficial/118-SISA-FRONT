@@ -209,6 +209,43 @@ export function lettersSpacesAndHyphens(label?: string, gender: Gender = 'm'): F
   return value => (LETTERS_SPACES_AND_HYPHENS_PATTERN.test(value) ? undefined : message)
 }
 
+// Nombres de catálogo: letras, dígitos, espacios y guiones. Es el contrato de
+// `lettersSpacesAndHyphens` **más los dígitos**, y sin la restricción de que el
+// guion tenga que ser ASCII. Ejemplos válidos: "Materia integradora - 1",
+// "Inglés III", "Práctica Profesional", "ServicioSocial", "Ingles-III".
+// Rechaza paréntesis, comas, signos de puntuación y caracteres de control.
+//
+// El separador de palabras es un espacio, o guiones con espacios opcionales
+// alrededor. Se aceptan las cinco variantes Unicode U+2010–U+2015 además del
+// guion ASCII, porque los datos ya guardados en la base usan la raya `–`. Por eso
+// "Materia integradora - 1" vale: el guion lleva un espacio a cada lado.
+//
+// La clase de espacios es `[ \uFEFF\u00A0\u2000-\u200A]`, igual que en
+// `LETTERS_SPACES_AND_HYPHENS_PATTERN`, y **acepta rachas a propósito** (`+` y
+// no un espacio suelto): esta regla ve el texto ya compacto, porque
+// `validateOn: normalizeText` colapsa antes de evaluar. El `@Pattern` del
+// backend tiene que aceptar lo mismo por el mismo motivo — se evalúa antes que
+// el normalizador, y si rechazara las rachas el 400 se adelantaría a la
+// limpieza. La compactación es la que limpia; el patrón sólo define la forma.
+//
+// La misma expresión está en `CreateSubjectClassificationRequest` y
+// `UpdateSubjectClassificationRequest`.
+const LETTERS_NUMBERS_SPACES_AND_HYPHENS_PATTERN = /^[ \uFEFF\u00A0\u2000-\u200A]*[\p{L}\p{N}]+(?:(?:[ \uFEFF\u00A0\u2000-\u200A]+|[ \uFEFF\u00A0\u2000-\u200A]*[\u2010-\u2015-][ \uFEFF\u00A0\u2000-\u200A]*)[\p{L}\p{N}]+)*[ \uFEFF\u00A0\u2000-\u200A]*$/u
+
+/**
+ * El campo sólo contiene letras, números, espacios y guiones. Para nombres de
+ * catálogo: no admite paréntesis, comas ni signos de puntuación.
+ *
+ * @example lettersNumbersSpacesAndHyphens('nombre')
+ *   // "El nombre solo puede contener letras, números, espacios y guiones."
+ */
+export function lettersNumbersSpacesAndHyphens(label?: string, gender: Gender = 'm'): FieldRule {
+  const message = label
+    ? `${article(gender)} ${label} solo ${verb(gender, 'puede', 'pueden')} contener letras, números, espacios y guiones.`
+    : 'Solo puede contener letras, números, espacios y guiones.'
+  return value => (LETTERS_NUMBERS_SPACES_AND_HYPHENS_PATTERN.test(value) ? undefined : message)
+}
+
 // ─── Números ────────────────────────────────────────────────────────────────
 
 interface NumericOptions {
