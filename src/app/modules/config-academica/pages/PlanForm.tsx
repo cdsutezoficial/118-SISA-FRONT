@@ -1,12 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, Info, AlertCircle } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, ModeSwitcher, SearchSelectField, Switch, DatePicker } from '@app/core/components/ui'
+import { FieldLabel, FieldHelp, FieldError, ModeSwitcher, SearchSelectField, Switch, DatePicker, inputCls } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
-import { apiGet, apiPost, apiPut, apiDelete, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, apiDelete, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { useFieldValidation } from '@app/core/validation/useFieldValidation'
+import {
+  required,
+  selectionRequired,
+  maxLength,
+  noControlChars,
+  numeric,
+  decimal,
+  applyRules,
+  normalizeText,
+  type FieldRule,
+} from '@app/core/validation/fieldRules'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,11 +110,84 @@ interface PartialSaveResult {
   failedLevels: LevelFailure[]
 }
 
-type FormErrors = Partial<Record<
-  | 'programId' | 'version' | 'validityPeriod' | 'titulationKey' | 'effectiveFrom'
-  | 'totalLevels' | 'minPassingGrade' | 'maxExtraordinaryExamsPerPeriod' | 'levels',
-  string
->>
+type PlanLevelError = string | undefined
+
+// ─── Schema de validación ──────────────────────────────────────────────────────
+// Se declara fuera del componente para que su identidad sea estable: el hook lo
+// usa como dependencia de sus callbacks.
+//
+// Los ocho escalares del plan entran al schema. El array `levels` **no**: es una
+// tabla dinámica, no un conjunto fijo de campos, y su validación (números
+// repetidos, ciclos de renumeración) sigue siendo la función `validateLevels`
+// de más abajo.
+//
+// Todos los límites son los mismos que declara el backend en
+// `CreateAcademicPlanRequest` / `UpdateAcademicPlanRequest`, para que el
+// navegador no deje pasar nada que el servidor vaya a rechazar con 400:
+//   version                     → @Size(max = 50) + @Pattern(^[^\p{Cc}]*$)
+//   validityPeriod              → @Size(max = 100) + @Pattern
+//   titulationKey               → @Size(max = 100) + @Pattern
+//   effectiveFrom               → @NotNull
+//   totalLevels                 → @Min(1)
+//   minPassingGrade             → @Digits(integer = 2, fraction = 1) + rango [0, 10]
+//   maxExtraordinaryExamsPerPeriod → @Min(0)
+//   programId                   → @NotNull (sólo aplica al alta: en edición el
+//                                 backend ni siquiera lo acepta)
+//
+// `version`, `validityPeriod` y `titulationKey` son etiquetas de texto libre:
+// llevan `validateOn: normalizeText` (compacta rachas de espacios y recorta
+// **sólo al evaluar las reglas**) y ningún `normalize`, porque recortar en cada
+// pulsación impediría escribir un espacio entre palabras. El payload se arma con
+// el mismo `normalizeText`.
+const PLAN_SCHEMA = {
+  programId: { rules: [selectionRequired('la carrera')] },
+  version: {
+    validateOn: normalizeText,
+    rules: [required('versión del plan', 'f'), maxLength(50, 'versión', 'f'), noControlChars('versión', 'f')],
+  },
+  validityPeriod: {
+    validateOn: normalizeText,
+    rules: [required('periodo de vigencia'), maxLength(100, 'periodo de vigencia'), noControlChars('periodo de vigencia')],
+  },
+  titulationKey: {
+    validateOn: normalizeText,
+    rules: [
+      required('clave de titulación', 'f'),
+      maxLength(100, 'clave de titulación', 'f'),
+      noControlChars('clave de titulación', 'f'),
+    ],
+  },
+  // El DatePicker trabaja en dd/mm/yyyy; la conversión a ISO ocurre al mandar
+  // el payload (displayToIso). Guardar el formato de pantalla en el hook evita
+  // tener dos estados para el mismo campo.
+  effectiveFrom: { rules: [required('fecha de vigencia', 'f')] },
+  totalLevels: {
+    rules: [required('total de niveles'), numeric({ label: 'total de niveles', min: 1 })],
+  },
+  minPassingGrade: {
+    rules: [
+      required('calificación mínima aprobatoria', 'f'),
+      decimal({ label: 'calificación mínima aprobatoria', gender: 'f', min: 0, max: 10, intDigits: 2, fraction: 1 }),
+    ],
+  },
+  maxExtraordinaryExamsPerPeriod: {
+    rules: [
+      required('exámenes extraordinarios por periodo', 'mp'),
+      numeric({ label: 'exámenes extraordinarios por periodo', gender: 'mp', min: 0 }),
+    ],
+  },
+} as const
+
+const PLAN_INITIAL_VALUES = {
+  programId: '',
+  version: '',
+  validityPeriod: '',
+  titulationKey: '',
+  effectiveFrom: '',
+  totalLevels: '',
+  minPassingGrade: '',
+  maxExtraordinaryExamsPerPeriod: '',
+}
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 // La API trabaja con ISO (YYYY-MM-DD); el DatePicker muestra dd/mm/yyyy.
@@ -192,6 +277,97 @@ function orderLevelUpdates(
   return { ordered, blocked: pending }
 }
 
+// ─── Validación de las filas de niveles ────────────────────────────────────────
+// El array `levels` no entra al schema de `useFieldValidation`: no son campos
+// fijos sino una tabla dinámica, y las reglas de numeración que le quedan —números
+// inválidos o repetidos, tope del total, ciclos de renumeración— son de fila y de
+// colección, no reglas de campo.
+//
+// Eso no dice nada de sus celdas. La `description` de cada nivel sí tiene reglas
+// propias, declaradas en `LEVEL_CELL_RULES`, y antes no tenía ninguna:
+// `AddPlanLevelRequest` y `UpdatePlanLevelRequest` le ponen `@Size(max = 255)` y
+// el `@Pattern` de caracteres de control. Pegas 300 caracteres y el backend
+// respondía 400 sin que el navegador hubiera dicho nada.
+//
+// `totalLevelsValue` es el texto crudo del campo del total, para no usar como
+// referencia de comparación un total que todavía no es un entero válido.
+// `isEdit` activa la detección de ciclos, que sólo aplica cuando el plan ya
+// existe en el backend y sus niveles se actualizan uno por uno.
+function validateLevels(
+  levels: LevelRow[],
+  totalLevelsValue: string,
+  isEdit: boolean,
+  originalLevels: LevelRow[],
+): PlanLevelError {
+  for (const row of levels) {
+    if (!Number.isInteger(row.levelNumber) || row.levelNumber < 1) {
+      return 'Todos los niveles deben tener un número entero mayor o igual a 1.'
+    }
+  }
+
+  const totalLevelsNum = Number(totalLevelsValue)
+  const seen = new Set<number>()
+  for (const row of levels) {
+    if (seen.has(row.levelNumber)) {
+      return `El número de nivel ${row.levelNumber} está repetido.`
+    }
+    seen.add(row.levelNumber)
+    if (Number.isInteger(totalLevelsNum) && totalLevelsNum >= 1 && row.levelNumber > totalLevelsNum) {
+      return `El nivel ${row.levelNumber} excede el total de niveles definido (${totalLevelsNum}).`
+    }
+  }
+
+  // Edit mode only: the backend has no batch endpoint, so renumbered
+  // levels are PUT one at a time. A pure cycle (e.g. swapping levelNumber
+  // 1↔2 with no free slot in between) can never be ordered without a
+  // transient collision — detect it here instead of letting the user hit
+  // an unrecoverable 409 mid-save.
+  if (isEdit) {
+    const { removed, changed } = computeLevelDiff(levels, originalLevels)
+    const occupiedInitial = new Set(
+      originalLevels.filter(o => !removed.some(r => r.originalId === o.originalId)).map(o => o.levelNumber),
+    )
+    const { blocked } = orderLevelUpdates(changed, occupiedInitial, originalLevels)
+    if (blocked.length > 0) {
+      const nums = blocked.map(b => b.levelNumber).join(', ')
+      return `No es posible intercambiar números de nivel directamente (nivel${blocked.length !== 1 ? 'es' : ''} ${nums}). Asigna primero un número libre (puedes aumentar temporalmente el total de niveles) y guarda en dos pasos.`
+    }
+  }
+
+  return undefined
+}
+
+// Reglas por celda de la tabla de niveles. Sólo `description` tiene: el número de
+// nivel y el tipo los valida `validateLevels`, porque dependen del resto de la
+// tabla.
+//
+// Sin `required`: la columna es nullable y el payload manda
+// `normalizeText(...) || null`, así que una descripción vacía es válida.
+const LEVEL_CELL_RULES = {
+  description: [
+    maxLength(255, 'descripción del nivel', 'f'),
+    noControlChars('descripción del nivel', 'f'),
+  ],
+} as const satisfies Record<string, readonly FieldRule[]>
+
+/**
+ * Errores de celda por fila, indexados por la `key` de la fila y no por su
+ * posición: las filas se reordenan y se borran, y con una posición el error
+ * acabaría en otra fila.
+ *
+ * Se evalúa con `normalizeText`, que es lo que manda el payload: si la regla
+ * midiera el texto crudo y el payload mandara el compacto, un texto de 300
+ * espacios daría un error de longitud que el servidor nunca vería.
+ */
+function levelDescriptionErrors(levels: LevelRow[]): Partial<Record<string, string>> {
+  const errors: Partial<Record<string, string>> = {}
+  levels.forEach(row => {
+    const error = applyRules(normalizeText(row.description), ...LEVEL_CELL_RULES.description)
+    if (error) errors[row.key] = error
+  })
+  return errors
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PlanForm() {
@@ -202,14 +378,9 @@ export default function PlanForm() {
   const isEdit = mode === 'edit'
 
   // ─── Field state ───────────────────────────────────────────────────────────
-  const [programId, setProgramId] = useState('')
-  const [version, setVersion] = useState('')
-  const [validityPeriod, setValidityPeriod] = useState('')
-  const [titulationKey, setTitulationKey] = useState('')
-  const [effectiveFrom, setEffectiveFrom] = useState('')
-  const [totalLevels, setTotalLevels] = useState('')
-  const [minPassingGrade, setMinPassingGrade] = useState('')
-  const [maxExtraordinaryExamsPerPeriod, setMaxExtraordinaryExamsPerPeriod] = useState('')
+  // Los ocho escalares viven en `useFieldValidation`. Los dos booleanos/id de
+  // servicio social no: son un switch y un select sin reglas, igual que
+  // `continuityProgramId` en Carreras y `directorPersonId` en División.
   const [requiresSocialService, setRequiresSocialService] = useState(false)
   const [socialServiceMinLevelId, setSocialServiceMinLevelId] = useState<string | null>(null)
 
@@ -219,7 +390,11 @@ export default function PlanForm() {
 
   // ─── Auxiliary state ───────────────────────────────────────────────────────
   const [programs, setPrograms] = useState<SelectOption[]>([])
-  const [errors, setErrors] = useState<FormErrors>({})
+  const [levelError, setLevelError] = useState<PlanLevelError>(undefined)
+  // Igual que en la tabla de rangos de la escala: las celdas no llevan `touched`
+  // individual, se enmascara el conjunto y se activa al primer intento de envío.
+  // Sin esto, una descripción larga se vería sin error mientras se pega.
+  const [levelsTouched, setLevelsTouched] = useState(false)
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>(isRegister ? 'idle' : 'loading')
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
@@ -227,21 +402,26 @@ export default function PlanForm() {
   const [partialResult, setPartialResult] = useState<PartialSaveResult | null>(null)
   const [socialServiceClearedHint, setSocialServiceClearedHint] = useState(false)
 
+  const {
+    values,
+    fieldError,
+    handleChange,
+    handleBlur,
+    setFieldValue,
+    setFieldError,
+    reset,
+    validate,
+    isValid,
+  } = useFieldValidation(PLAN_SCHEMA, PLAN_INITIAL_VALUES)
+
   useEffect(() => {
     setSubmitStatus('idle')
     setSubmitErrorMsg('')
-    setErrors({})
+    setLevelError(undefined)
     setPartialResult(null)
     setSocialServiceClearedHint(false)
     if (isRegister) {
-      setProgramId('')
-      setVersion('')
-      setValidityPeriod('')
-      setTitulationKey('')
-      setEffectiveFrom('')
-      setTotalLevels('')
-      setMinPassingGrade('')
-      setMaxExtraordinaryExamsPerPeriod('')
+      reset()
       setRequiresSocialService(false)
       setSocialServiceMinLevelId(null)
       setLevels([newLevelRow(1)])
@@ -249,7 +429,7 @@ export default function PlanForm() {
       setLoadStatus('idle')
       setLoadErrorMsg('')
     }
-  }, [mode, id])
+  }, [mode, id, reset])
 
   // ─── Load programs (dropdown) ──────────────────────────────────────────────
   useEffect(() => {
@@ -280,14 +460,15 @@ export default function PlanForm() {
   }, [id, mode])
 
   function applyPlanDetail(data: AcademicPlanDetail) {
-    setProgramId(data.programId)
-    setVersion(data.version)
-    setValidityPeriod(data.validityPeriod)
-    setTitulationKey(data.titulationKey)
-    setEffectiveFrom(data.effectiveFrom)
-    setTotalLevels(String(data.totalLevels))
-    setMinPassingGrade(String(data.minPassingGrade))
-    setMaxExtraordinaryExamsPerPeriod(String(data.maxExtraordinaryExamsPerPeriod))
+    setFieldValue('programId', data.programId)
+    setFieldValue('version', data.version)
+    setFieldValue('validityPeriod', data.validityPeriod)
+    setFieldValue('titulationKey', data.titulationKey)
+    // El DatePicker muestra dd/mm/yyyy: el estado guarda el formato de pantalla.
+    setFieldValue('effectiveFrom', isoToDisplay(data.effectiveFrom))
+    setFieldValue('totalLevels', String(data.totalLevels))
+    setFieldValue('minPassingGrade', String(data.minPassingGrade))
+    setFieldValue('maxExtraordinaryExamsPerPeriod', String(data.maxExtraordinaryExamsPerPeriod))
     setRequiresSocialService(data.requiresSocialService)
     setSocialServiceMinLevelId(data.socialServiceMinLevelId)
     const loadedLevels: LevelRow[] = data.levels
@@ -313,9 +494,14 @@ export default function PlanForm() {
     }))
 
   // ─── Level row helpers ─────────────────────────────────────────────────────
+  // Los errores de celda se derivan del estado en vez de guardarse, para que se
+  // recalculen en cada tecla una vez que las filas están tocadas — el mismo
+  // comportamiento que `fieldError` tiene en los campos del schema.
+  const levelCellErrors = useMemo(() => (levelsTouched ? levelDescriptionErrors(levels) : {}), [levelsTouched, levels])
+
   function updateLevel(key: string, patch: Partial<Pick<LevelRow, 'levelNumber' | 'type' | 'description'>>) {
     setLevels(prev => prev.map(r => r.key === key ? { ...r, ...patch } : r))
-    setErrors(prev => ({ ...prev, levels: undefined }))
+    setLevelError(undefined)
   }
   function removeLevel(key: string) {
     // If the level being removed is currently set as the plan's
@@ -358,87 +544,32 @@ export default function PlanForm() {
     setSocialServiceClearedHint(false)
   }
 
-  // ─── Validation ────────────────────────────────────────────────────────────
-  function validate(): FormErrors {
-    const e: FormErrors = {}
-    if (isRegister && !programId) e.programId = 'Selecciona la carrera.'
-    if (!version.trim()) e.version = 'La versión del plan es requerida.'
-    if (!validityPeriod.trim()) e.validityPeriod = 'El periodo de vigencia es requerido.'
-    if (!titulationKey.trim()) e.titulationKey = 'La clave de titulación es requerida.'
-    if (!effectiveFrom) e.effectiveFrom = 'La fecha de vigencia es requerida.'
-
-    const totalLevelsNum = Number(totalLevels)
-    if (!totalLevels.trim() || !Number.isInteger(totalLevelsNum) || totalLevelsNum < 1) {
-      e.totalLevels = 'Ingresa un número entero mayor o igual a 1.'
-    }
-
-    const minGradeNum = Number(minPassingGrade)
-    if (!minPassingGrade.trim() || Number.isNaN(minGradeNum) || minGradeNum < 0 || minGradeNum > 10) {
-      e.minPassingGrade = 'Ingresa un valor entre 0 y 10.'
-    }
-
-    const maxExamsNum = Number(maxExtraordinaryExamsPerPeriod)
-    if (!maxExtraordinaryExamsPerPeriod.trim() || !Number.isInteger(maxExamsNum) || maxExamsNum < 0) {
-      e.maxExtraordinaryExamsPerPeriod = 'Ingresa un número entero mayor o igual a 0.'
-    }
-
-    const seen = new Set<number>()
-    for (const row of levels) {
-      if (!Number.isInteger(row.levelNumber) || row.levelNumber < 1) {
-        e.levels = 'Todos los niveles deben tener un número entero mayor o igual a 1.'
-        break
-      }
-      if (seen.has(row.levelNumber)) {
-        e.levels = `El número de nivel ${row.levelNumber} está repetido.`
-        break
-      }
-      seen.add(row.levelNumber)
-      if (Number.isInteger(totalLevelsNum) && totalLevelsNum >= 1 && row.levelNumber > totalLevelsNum) {
-        e.levels = `El nivel ${row.levelNumber} excede el total de niveles definido (${totalLevelsNum}).`
-        break
-      }
-    }
-
-    // Edit mode only: the backend has no batch endpoint, so renumbered
-    // levels are PUT one at a time. A pure cycle (e.g. swapping levelNumber
-    // 1↔2 with no free slot in between) can never be ordered without a
-    // transient collision — detect it here instead of letting the user hit
-    // an unrecoverable 409 mid-save.
-    if (isEdit && !e.levels) {
-      const { removed, changed } = computeLevelDiff(levels, originalLevels)
-      const occupiedInitial = new Set(
-        originalLevels.filter(o => !removed.some(r => r.originalId === o.originalId)).map(o => o.levelNumber),
-      )
-      const { blocked } = orderLevelUpdates(changed, occupiedInitial, originalLevels)
-      if (blocked.length > 0) {
-        const nums = blocked.map(b => b.levelNumber).join(', ')
-        e.levels = `No es posible intercambiar números de nivel directamente (nivel${blocked.length !== 1 ? 'es' : ''} ${nums}). Asigna primero un número libre (puedes aumentar temporalmente el total de niveles) y guarda en dos pasos.`
-      }
-    }
-
-    return e
-  }
-
   // ─── Submit ────────────────────────────────────────────────────────────────
   async function handleSubmit() {
-    const validationErrors = validate()
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors)
+    // `validate()` marca todos los escalares como tocados y valida; si algo
+    // falla no sale ninguna petición. Las filas de niveles se validan aparte,
+    // porque no son campos del schema: la numeración por `validateLevels` y la
+    // descripción por `levelCellErrors`.
+    const invalidLevels = validateLevels(levels, values.totalLevels, isEdit, originalLevels)
+    const invalidCell = Object.keys(levelDescriptionErrors(levels)).length > 0
+    if (!validate() || invalidLevels || invalidCell) {
+      setLevelsTouched(true)
+      setLevelError(invalidLevels)
       return
     }
-    setErrors({})
+    setLevelError(undefined)
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
     setPartialResult(null)
 
     const scalars: PlanScalarsPayload = {
-      version: version.trim(),
-      validityPeriod: validityPeriod.trim(),
-      titulationKey: titulationKey.trim(),
-      effectiveFrom,
-      totalLevels: Number(totalLevels),
-      minPassingGrade: Number(minPassingGrade),
-      maxExtraordinaryExamsPerPeriod: Number(maxExtraordinaryExamsPerPeriod),
+      version: normalizeText(values.version),
+      validityPeriod: normalizeText(values.validityPeriod),
+      titulationKey: normalizeText(values.titulationKey),
+      effectiveFrom: displayToIso(values.effectiveFrom),
+      totalLevels: Number(values.totalLevels),
+      minPassingGrade: Number(values.minPassingGrade),
+      maxExtraordinaryExamsPerPeriod: Number(values.maxExtraordinaryExamsPerPeriod),
       requiresSocialService,
       socialServiceMinLevelId: null,
     }
@@ -450,6 +581,16 @@ export default function PlanForm() {
         await handleEditSave(scalars)
       }
     } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
+        // El backend ya dice exactamente qué campo se duplicó; se pinta tal
+        // cual junto al campo, no en el banner general.
+        if (apiErr.backendMessage.includes('versión')) {
+          setFieldError('version', apiErr.backendMessage)
+          setSubmitStatus('idle')
+          return
+        }
+      }
       setSubmitStatus('error')
       setSubmitErrorMsg(getApiErrorMessage(err))
     }
@@ -460,13 +601,13 @@ export default function PlanForm() {
   // rather than aborting the loop, so the user sees exactly which levels
   // saved and which didn't (design.md has no batch/transactional endpoint).
   async function handleRegister(scalars: PlanScalarsPayload) {
-    const payload: CreatePlanPayload = { ...scalars, programId }
+    const payload: CreatePlanPayload = { ...scalars, programId: values.programId }
     const created = await apiPost<AcademicPlanDetail>('/plans', payload)
 
     const failedLevels: LevelFailure[] = []
     for (const row of levels) {
       try {
-        const levelPayload: LevelPayload = { levelNumber: row.levelNumber, type: row.type, description: row.description.trim() || null }
+        const levelPayload: LevelPayload = { levelNumber: row.levelNumber, type: row.type, description: normalizeText(row.description) || null }
         await apiPost<PlanLevelDetail>(`/plans/${created.id}/levels`, levelPayload)
       } catch (err) {
         failedLevels.push({ levelNumber: row.levelNumber, message: levelErrorMessage(err) })
@@ -491,7 +632,7 @@ export default function PlanForm() {
   // transient level-number collisions: deletes free up numbers first, then
   // renumber PUTs are topologically ordered (orderLevelUpdates) so a swap
   // like 1↔2 only proceeds if the diff is actually resolvable one PUT at a
-  // time — validate() already blocks the submit otherwise.
+  // time — validateLevels() already blocks the submit otherwise.
   async function handleEditSave(scalars: PlanScalarsPayload) {
     if (!id) return
     const payload: PlanScalarsPayload = {
@@ -526,7 +667,7 @@ export default function PlanForm() {
     )
     const { ordered: orderedChanged, blocked } = orderLevelUpdates(changed, occupiedAfterDeletes, originalLevels)
 
-    // Should be empty in practice — validate() already blocks unorderable
+    // Should be empty in practice — validateLevels() already blocks unorderable
     // cycles pre-submit — but guard defensively in case the working set
     // drifted (e.g. a resync) between validation and this call.
     for (const row of blocked) {
@@ -540,7 +681,7 @@ export default function PlanForm() {
     for (const row of orderedChanged) {
       attempted++
       try {
-        const levelPayload: LevelPayload = { levelNumber: row.levelNumber, type: row.type, description: row.description.trim() || null }
+        const levelPayload: LevelPayload = { levelNumber: row.levelNumber, type: row.type, description: normalizeText(row.description) || null }
         await apiPut<PlanLevelDetail>(`/plans/${id}/levels/${row.originalId}`, levelPayload)
       } catch (err) {
         failedLevels.push({ levelNumber: row.levelNumber, message: levelErrorMessage(err) })
@@ -549,7 +690,7 @@ export default function PlanForm() {
     for (const row of added) {
       attempted++
       try {
-        const levelPayload: LevelPayload = { levelNumber: row.levelNumber, type: row.type, description: row.description.trim() || null }
+        const levelPayload: LevelPayload = { levelNumber: row.levelNumber, type: row.type, description: normalizeText(row.description) || null }
         await apiPost<PlanLevelDetail>(`/plans/${id}/levels`, levelPayload)
       } catch (err) {
         failedLevels.push({ levelNumber: row.levelNumber, message: levelErrorMessage(err) })
@@ -655,25 +796,27 @@ export default function PlanForm() {
                 <FieldLabel required={isRegister}>Carrera</FieldLabel>
                 <SearchSelectField
                   options={programs}
-                  value={programId}
-                  onChange={v => { setProgramId(v); setErrors(prev => ({ ...prev, programId: undefined })) }}
+                  value={values.programId}
+                  onChange={handleChange('programId')}
                   placeholder="Seleccionar carrera…"
                   disabled={programDisabled}
-                  hasError={!!errors.programId}
+                  hasError={!!fieldError('programId')}
                   searchPlaceholder="Buscar carrera…"
                 />
-                {errors.programId
-                  ? <FieldError>{errors.programId}</FieldError>
+                {fieldError('programId')
+                  ? <FieldError>{fieldError('programId')}</FieldError>
                   : <FieldHelp>{isEdit ? 'La carrera no se puede modificar una vez creado el plan.' : 'Carrera a la que pertenece este plan.'}</FieldHelp>}
               </div>
 
               <TextField
                 label="Versión"
                 required={!isView}
-                value={version}
-                onChange={v => { setVersion(v); setErrors(prev => ({ ...prev, version: undefined })) }}
+                value={values.version}
+                onChange={handleChange('version')}
+                onBlur={handleBlur('version')}
                 disabled={disabled}
-                error={errors.version}
+                error={fieldError('version')}
+                maxLength={50}
                 placeholder="Ej. 2024-1"
                 help="Identifica el plan dentro de la carrera (único por carrera)."
                 className="col-span-12 sm:col-span-4"
@@ -683,10 +826,12 @@ export default function PlanForm() {
               <TextField
                 label="Periodo de Vigencia"
                 required={!isView}
-                value={validityPeriod}
-                onChange={v => { setValidityPeriod(v); setErrors(prev => ({ ...prev, validityPeriod: undefined })) }}
+                value={values.validityPeriod}
+                onChange={handleChange('validityPeriod')}
+                onBlur={handleBlur('validityPeriod')}
                 disabled={disabled}
-                error={errors.validityPeriod}
+                error={fieldError('validityPeriod')}
+                maxLength={100}
                 placeholder="Ej. 2024-2028"
                 className="col-span-12 sm:col-span-6"
               />
@@ -695,10 +840,12 @@ export default function PlanForm() {
               <TextField
                 label="Clave de Titulación"
                 required={!isView}
-                value={titulationKey}
-                onChange={v => { setTitulationKey(v); setErrors(prev => ({ ...prev, titulationKey: undefined })) }}
+                value={values.titulationKey}
+                onChange={handleChange('titulationKey')}
+                onBlur={handleBlur('titulationKey')}
                 disabled={disabled}
-                error={errors.titulationKey}
+                error={fieldError('titulationKey')}
+                maxLength={100}
                 placeholder="Ej. IDGS-TIT-2024"
                 className="col-span-12 sm:col-span-6"
               />
@@ -707,11 +854,13 @@ export default function PlanForm() {
               <div className="col-span-12 sm:col-span-4">
                 <FieldLabel required={!isView}>Vigente Desde</FieldLabel>
                 <DatePicker
-                  value={isoToDisplay(effectiveFrom)}
-                  onChange={v => { setEffectiveFrom(displayToIso(v)); setErrors(prev => ({ ...prev, effectiveFrom: undefined })) }}
+                  value={values.effectiveFrom}
+                  onChange={handleChange('effectiveFrom')}
+                  onBlur={handleBlur('effectiveFrom')}
                   disabled={disabled}
+                  error={!!fieldError('effectiveFrom')}
                 />
-                {errors.effectiveFrom && <FieldError>{errors.effectiveFrom}</FieldError>}
+                {fieldError('effectiveFrom') && <FieldError>{fieldError('effectiveFrom')}</FieldError>}
               </div>
 
               {/* Total de niveles */}
@@ -720,15 +869,15 @@ export default function PlanForm() {
                 required={!isView}
                 type="number"
                 min={1}
-                value={totalLevels}
+                value={values.totalLevels}
                 onChange={v => {
-                  setTotalLevels(v)
-                  setErrors(prev => ({ ...prev, totalLevels: undefined }))
+                  handleChange('totalLevels')(v)
                   const num = Number(v)
                   if (Number.isInteger(num) && num >= 1) syncLevelsToTotal(num)
                 }}
+                onBlur={handleBlur('totalLevels')}
                 disabled={disabled}
-                error={errors.totalLevels}
+                error={fieldError('totalLevels')}
                 numeric
                 placeholder="Ej. 10"
                 help="Cantidad total de niveles que tendrá el plan."
@@ -751,10 +900,11 @@ export default function PlanForm() {
                 min={0}
                 max={10}
                 step="0.1"
-                value={minPassingGrade}
-                onChange={v => { setMinPassingGrade(v); setErrors(prev => ({ ...prev, minPassingGrade: undefined })) }}
+                value={values.minPassingGrade}
+                onChange={handleChange('minPassingGrade')}
+                onBlur={handleBlur('minPassingGrade')}
                 disabled={disabled}
-                error={errors.minPassingGrade}
+                error={fieldError('minPassingGrade')}
                 numeric
                 placeholder="Ej. 7.0"
                 help="Escala de 0 a 10."
@@ -767,10 +917,11 @@ export default function PlanForm() {
                 required={!isView}
                 type="number"
                 min={0}
-                value={maxExtraordinaryExamsPerPeriod}
-                onChange={v => { setMaxExtraordinaryExamsPerPeriod(v); setErrors(prev => ({ ...prev, maxExtraordinaryExamsPerPeriod: undefined })) }}
+                value={values.maxExtraordinaryExamsPerPeriod}
+                onChange={handleChange('maxExtraordinaryExamsPerPeriod')}
+                onBlur={handleBlur('maxExtraordinaryExamsPerPeriod')}
                 disabled={disabled}
-                error={errors.maxExtraordinaryExamsPerPeriod}
+                error={fieldError('maxExtraordinaryExamsPerPeriod')}
                 numeric
                 placeholder="Ej. 2"
                 help="Número máximo de exámenes extraordinarios por periodo."
@@ -823,7 +974,7 @@ export default function PlanForm() {
               <div className="flex-1 h-px bg-[#E5E7EB]" />
             </div>
 
-            {errors.levels && <FieldError>{errors.levels}</FieldError>}
+            {levelError && <FieldError>{levelError}</FieldError>}
 
             {/* Desktop table (md+) */}
             <div className="hidden md:block border border-[#E5E7EB] rounded-lg mt-2">
@@ -874,13 +1025,17 @@ export default function PlanForm() {
                           {isView ? (
                             <span className="text-[13px] text-[#333333]">{row.description || '—'}</span>
                           ) : (
-                            <input
-                              type="text"
-                              placeholder="Ej. Estadía I (opcional)"
-                              value={row.description}
-                              onChange={e => updateLevel(row.key, { description: e.target.value })}
-                              className="w-full px-3 py-2 text-[13px] bg-white border border-[#E5E7EB] rounded-md text-[#333333] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
-                            />
+                            <>
+                              <input
+                                type="text"
+                                placeholder="Ej. Estadía I (opcional)"
+                                maxLength={255}
+                                value={row.description}
+                                onChange={e => updateLevel(row.key, { description: e.target.value })}
+                                className={inputCls(false, !!levelCellErrors[row.key]) + ' placeholder-[#6B7280]'}
+                              />
+                              {levelCellErrors[row.key] && <FieldError>{levelCellErrors[row.key]}</FieldError>}
+                            </>
                           )}
                         </td>
                         {!isView && (
@@ -960,6 +1115,8 @@ export default function PlanForm() {
                           label="Descripción"
                           value={row.description}
                           onChange={v => updateLevel(row.key, { description: v })}
+                          maxLength={255}
+                          error={levelCellErrors[row.key]}
                           placeholder="Opcional"
                         />
                       </div>
@@ -988,6 +1145,7 @@ export default function PlanForm() {
           onPrimary={isView ? () => navigate(`/planes/form?mode=edit&id=${id}`) : handleSubmit}
           primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Plan' : 'Guardar Cambios'}
           isSubmitting={isSubmitting}
+          primaryDisabled={!isView && !isValid}
         />
       )}
     </FormPage>

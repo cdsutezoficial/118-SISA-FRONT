@@ -5,7 +5,18 @@ import { FormPage, FormHeader, FormCard, FormActions, TextField, TextAreaField, 
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
-import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { useFieldValidation } from '@app/core/validation/useFieldValidation'
+import {
+	required,
+	maxLength,
+	lengthBetween,
+	noControlChars,
+	lettersOnly,
+	lettersSpacesAndHyphens,
+	normalizeCode,
+	normalizeText,
+} from '@app/core/validation/fieldRules'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,6 +37,49 @@ interface DivisionFormPayload {
   description: string
   directorPersonId: string | null
 }
+
+// ─── Schema de validación ──────────────────────────────────────────────────────
+// Se declara fuera del componente para que su identidad sea estable: el hook lo
+// usa como dependencia de sus callbacks.
+//
+// Contenido permitido por campo (decisión de negocio 2026-10-04):
+//   name        → letras y acentos, separados por espacios o guiones
+//   code        → sólo letras, sin espacios, dígitos ni guiones
+//   description → letras, números, acentos y símbolos; sólo se rechazan los
+//                 caracteres de control (C0, DEL y C1)
+//
+// `name` y `description` son textos libres: NO llevan `normalize`, porque
+// recortar en cada pulsación impediría escribir un espacio entre palabras. Se
+// usa `validateOn: normalizeText`, que compacta los espacios de más y recorta
+// **sólo al evaluar las reglas**, sin escribir de vuelta en el input: el usuario
+// ve lo que escribió (y el cursor nunca le salta) mientras lo que se valida y lo
+// que se manda es el texto limpio. El payload se arma con el mismo
+// `normalizeText`.
+//
+// `code` sí lleva `normalize: normalizeCode` — recortar y pasar a mayúsculas
+// mientras se teclea es exactamente lo que se hacía antes a mano.
+
+const DIVISION_SCHEMA = {
+  name: {
+    validateOn: normalizeText,
+    rules: [
+      required('nombre de la división'),
+      maxLength(150, 'nombre'),
+      noControlChars('nombre'),
+      lettersSpacesAndHyphens('nombre'),
+    ],
+  },
+  code: {
+    normalize: normalizeCode,
+    rules: [required('clave', 'f'), lengthBetween(2, 12, 'clave', 'f'), lettersOnly('clave', 'f')],
+  },
+  description: {
+    validateOn: normalizeText,
+    rules: [maxLength(500, 'descripción', 'f'), noControlChars('descripción', 'f')],
+  },
+} as const
+
+const DIVISION_INITIAL_VALUES = { name: '', code: '', description: '' }
 
 // Only the users search needs — `GET /users?role=DIRECTOR_DIVISION&divisionId=`
 // (added 2026-07-28, plan `118-SISA-BACK/docs/plans/2026-07-28-director-division-role-filter.md`)
@@ -137,10 +191,19 @@ export default function DivisionesForm() {
   const isView = mode === 'view'
   const isRegister = mode === 'register'
 
-  const [nombre, setNombre] = useState('')
-  const [clave, setClave] = useState('')
-  const [descripcion, setDescripcion] = useState('')
   const [directorPersonId, setDirectorPersonId] = useState('')
+
+  const {
+    values,
+    fieldError,
+    handleChange,
+    handleBlur,
+    setFieldValue,
+    setFieldError,
+    reset,
+    validate,
+    isValid,
+  } = useFieldValidation(DIVISION_SCHEMA, DIVISION_INITIAL_VALUES)
 
   // `loadStatus` covers the edit/view GET-by-id fetch; `submitStatus` covers
   // the register/edit POST-PUT submit — separate so a slow initial fetch
@@ -154,14 +217,12 @@ export default function DivisionesForm() {
     setSubmitStatus('idle')
     setSubmitErrorMsg('')
     if (isRegister) {
-      setNombre('')
-      setClave('')
-      setDescripcion('')
+      reset()
       setDirectorPersonId('')
       setLoadStatus('idle')
       setLoadErrorMsg('')
     }
-  }, [mode, id])
+  }, [mode, id, reset])
 
   useEffect(() => {
     if (isRegister || !id) return
@@ -171,9 +232,9 @@ export default function DivisionesForm() {
     apiGet<DivisionResponse>(`/divisions/${id}`)
       .then(data => {
         if (cancelled) return
-        setNombre(data.name)
-        setClave(data.code)
-        setDescripcion(data.description)
+        setFieldValue('name', data.name)
+        setFieldValue('code', data.code)
+        setFieldValue('description', data.description)
         setDirectorPersonId(data.directorPersonId ?? '')
         setLoadStatus('idle')
       })
@@ -190,12 +251,15 @@ export default function DivisionesForm() {
   const isSubmitting = submitStatus === 'submitting'
 
   async function handleSubmit() {
+    // Marca todos los campos como tocados y valida. Si algo falla, no se
+    // dispara ninguna petición.
+    if (!validate()) return
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
     const payload: DivisionFormPayload = {
-      name: nombre,
-      code: clave,
-      description: descripcion,
+      name: normalizeText(values.name),
+      code: values.code,
+      description: normalizeText(values.description),
       directorPersonId: directorPersonId.trim() || null,
     }
     try {
@@ -207,6 +271,19 @@ export default function DivisionesForm() {
         navigate(`/divisiones/form?mode=view&id=${id}`, { state: { toast: 'División actualizada exitosamente.' } })
       }
     } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
+        if (apiErr.backendMessage.includes('nombre')) {
+          setFieldError('name', apiErr.backendMessage)
+          setSubmitStatus('idle')
+          return
+        }
+        if (apiErr.backendMessage.includes('clave')) {
+          setFieldError('code', apiErr.backendMessage)
+          setSubmitStatus('idle')
+          return
+        }
+      }
       setSubmitStatus('error')
       setSubmitErrorMsg(getApiErrorMessage(err))
     }
@@ -248,9 +325,12 @@ export default function DivisionesForm() {
             <TextField
               label="Nombre de la División"
               required={!isView}
-              value={nombre}
-              onChange={setNombre}
+              value={values.name}
+              onChange={handleChange('name')}
+              onBlur={handleBlur('name')}
               disabled={disabled}
+              error={fieldError('name')}
+              maxLength={150}
               placeholder="Ej. División de Tecnologías de la Información"
               help="Nombre completo y oficial de la división académica."
               className="col-span-12 sm:col-span-8"
@@ -258,20 +338,27 @@ export default function DivisionesForm() {
             <TextField
               label="Clave"
               required={!isView}
-              value={clave}
-              onChange={setClave}
+              value={values.code}
+              onChange={handleChange('code')}
+              onBlur={handleBlur('code')}
               disabled={disabled}
+              error={fieldError('code')}
+              maxLength={12}
               placeholder="Ej. DTI"
-              help="Identificador corto único."
+              help="Identificador corto único. Sólo letras."
               className="col-span-12 sm:col-span-4"
             />
             <TextAreaField
               label="Descripción"
-              value={descripcion}
-              onChange={setDescripcion}
+              value={values.description}
+              onChange={handleChange('description')}
+              onBlur={handleBlur('description')}
               disabled={disabled}
+              error={fieldError('description')}
+              maxLength={500}
               rows={4}
               placeholder="Descripción breve de la división y su enfoque académico."
+              help="Letras, números, acentos y símbolos. Hasta 500 caracteres."
               className="col-span-12"
             />
             {/* Director (persona) — only in Ver/Editar: the DIRECTOR_DIVISION role
@@ -299,6 +386,7 @@ export default function DivisionesForm() {
           onPrimary={isView ? () => navigate(`/divisiones/form?mode=edit&id=${id}`) : handleSubmit}
           primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar División' : 'Guardar Cambios'}
           isSubmitting={isSubmitting}
+          primaryDisabled={!isView && !isValid}
         />
       )}
     </FormPage>
