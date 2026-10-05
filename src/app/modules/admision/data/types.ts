@@ -513,3 +513,32 @@ export interface CandidateListPage {
   page: number
   size: number
 }
+
+/** One payment section of the staff candidate detail (`GET /candidates/{id}/detail`). */
+export interface CandidateDetailPaymentBackend {
+  concept: 'ADMISSION_FICHA' | 'INDUCTION_COURSE'
+  amount: number
+  referenceNumber: string
+  paymentStatus: 'PENDING' | 'PAID'
+  receiptNumber: string | null
+  paidAt: string | null
+  orderId: string | null
+}
+
+/** Staff-facing detail payload for the first two tabs of `CandidatoDetalle.tsx`. */
+export interface CandidateDetailBackend {
+  candidateId: string
+  folio: string
+  fullName: string
+  candidateStatus: CandidateStatus
+  registeredAt: string
+  programName: string | null
+  divisionName: string | null
+  curp: string
+  email: string | null
+  homePhone: string | null
+  mobilePhone: string | null
+  outreachChannelName: string | null
+  admissionPayment: CandidateDetailPaymentBackend
+  inductionPayment: CandidateDetailPaymentBackend | null
+}
