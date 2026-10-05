@@ -160,12 +160,17 @@ export function IconButton({ icon, onClick, danger = false, disabled, className 
 // Antes se escribía a mano con `inputCls(disabled, hasError)` en cada vista.
 
 // ─── TextField ────────────────────────────────────────────────────────────────
-export function TextField({ label, required, value, onChange, disabled, error, help, type = 'text', placeholder, placeholderHidden = false, mono, numeric, maxLength, min, max, step, readOnly, autoFocus, inputMode, prefix, className }: {
+export function TextField({ label, required, value, onChange, onBlur, disabled, error, help, type = 'text', placeholder, placeholderHidden = false, mono, numeric, maxLength, min, max, step, readOnly, autoFocus, inputMode, prefix, className }: {
   label?: string
   required?: boolean
   value: string
   /** Opcional cuando el campo es solo lectura (disabled/readOnly). */
   onChange?: (v: string) => void
+  /**
+   * Se dispara al salir del campo (blur). Es lo que activa la validación por
+   * primera vez en los formularios que usan `useFieldValidation`.
+   */
+  onBlur?: () => void
   disabled?: boolean
   /** Texto de error — se pinta en rojo reemplazando el help. */
   error?: string
@@ -204,6 +209,7 @@ export function TextField({ label, required, value, onChange, disabled, error, h
           inputMode={inputMode}
           value={value}
           onChange={e => onChange?.(e.target.value)}
+          onBlur={onBlur}
           disabled={isDisabled}
           readOnly={readOnly}
           autoFocus={autoFocus}
@@ -377,11 +383,13 @@ export function TimeField({ label, required, value, onChange, disabled, error, c
 }
 
 // ─── TextAreaField ────────────────────────────────────────────────────────────
-export function TextAreaField({ label, required, value, onChange, disabled, error, help, placeholder, rows = 4, maxLength, className }: {
+export function TextAreaField({ label, required, value, onChange, onBlur, disabled, error, help, placeholder, rows = 4, maxLength, className }: {
   label?: string
   required?: boolean
   value: string
   onChange?: (v: string) => void
+  /** Se dispara al salir del campo — activa la validación de `useFieldValidation`. */
+  onBlur?: () => void
   disabled?: boolean
   error?: string
   help?: string
@@ -396,6 +404,7 @@ export function TextAreaField({ label, required, value, onChange, disabled, erro
       <textarea
         value={value}
         onChange={e => onChange?.(e.target.value)}
+        onBlur={onBlur}
         disabled={disabled}
         rows={rows}
         maxLength={maxLength}

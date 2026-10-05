@@ -411,9 +411,17 @@ interface DatePickerProps {
   disabled?: boolean
   minDate?: Date
   placeholder?: string
+  /** true → borde rojo, para enlazarlo con `fieldError(...)` de useFieldValidation. */
+  error?: boolean
+  /**
+   * Se dispara después de commitear (o descartar) el texto tipeado, al salir
+   * del input. Es lo que activa la validación de `useFieldValidation` en los
+   * campos de fecha.
+   */
+  onBlur?: () => void
 }
 
-export function DatePicker({ value, onChange, disabled = false, minDate, placeholder = 'dd/mm/yyyy' }: DatePickerProps) {
+export function DatePicker({ value, onChange, disabled = false, minDate, placeholder = 'dd/mm/yyyy', error = false, onBlur }: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const today = new Date()
   const parsed = parseDate(value)
@@ -499,9 +507,14 @@ export function DatePicker({ value, onChange, disabled = false, minDate, placeho
           onBlur={() => {
             if (isValidDateString(draft)) onChange(draft)
             else setDraft(value)
+            onBlur?.()
           }}
           placeholder={placeholder}
-          className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-l-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
+          className={`w-full px-3 py-2 text-[13px] border rounded-l-md bg-white text-[#333333] focus:outline-none focus:ring-2 ${
+            error
+              ? 'border-red-400 focus:ring-red-300'
+              : 'border-[#E5E7EB] focus:ring-[#009574]/30 focus:border-[#009574]'
+          }`}
         />
         <button
           type="button"
