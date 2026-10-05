@@ -66,7 +66,7 @@ const DIVISION_SCHEMA = {
       required('nombre de la división'),
       maxLength(150, 'nombre'),
       noControlChars('nombre'),
-      lettersSpacesAndHyphens(),
+      lettersSpacesAndHyphens('nombre'),
     ],
   },
   code: {
