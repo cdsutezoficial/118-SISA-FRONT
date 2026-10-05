@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Info } from 'lucide-react'
-import { FieldLabel, FieldHelp, FieldError, SearchSelectField } from '@app/core/components/ui'
+import { FieldLabel, FieldHelp, FieldError, ModeSwitcher, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
