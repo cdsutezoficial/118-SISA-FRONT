@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Info } from 'lucide-react'
-import { FieldLabel, SearchSelectField } from '@app/core/components/ui'
+import { FieldLabel, FieldHelp, FieldError, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
-import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { useFieldValidation } from '@app/core/validation/useFieldValidation'
+import { required, selectionRequired, numeric } from '@app/core/validation/fieldRules'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // No "Ver Detalle" mode here — per the Figma spec (Pantalla 23), this screen
@@ -64,6 +66,46 @@ interface PeriodsPageResponse {
   items: PeriodSummary[]
 }
 
+// ─── Schema de validación ──────────────────────────────────────────────────────
+// Se declara fuera del componente para que su identidad sea estable: el hook lo
+// usa como dependencia de sus callbacks.
+//
+// A diferencia de las otras fases de este módulo, aquí NO hay ni una regla de
+// texto. `Generation` no tiene ningún campo de nombre: el único texto de la
+// entidad es `code`, que el backend calcula siempre desde el año del periodo de
+// inicio y el número, y que por diseño el cliente nunca manda
+// (`CreateGenerationRequest` ni siquiera lo declara). Por eso no hay
+// normalizador de texto ni aquí ni en el DTO: no hay nada que normalizar.
+//
+//   programId      → selección obligatoria. No viaja en el payload —el backend
+//                     lo deduce de `planId`— pero la cascada de selects depende
+//                     de él, así que se valida igual.
+//   planId         → selección obligatoria.
+//   startPeriodId  → selección obligatoria.
+//   number         → entero desde 1, sin tope. Es un contador consecutivo por
+//                     carrera que nunca reinicia (ver el javadoc de `Generation`),
+//                     así que un techo sería arbitrario. El `@Min(1)` nuevo del
+//                     backend es lo que hoy impedía que un 0 —el resultado de
+//                     `Number('')` al mandar el campo vacío— llegara a la base.
+//
+// No hay `crossRules`: nada en este formulario depende de dos campos a la vez.
+
+const GENERACION_INITIAL_VALUES = {
+  programId: '',
+  planId: '',
+  startPeriodId: '',
+  number: '',
+} as const
+
+const GENERACION_SCHEMA = {
+  programId: { rules: [selectionRequired('la carrera')] },
+  planId: { rules: [selectionRequired('el plan de estudios')] },
+  startPeriodId: { rules: [selectionRequired('el periodo de inicio')] },
+  number: {
+    rules: [required('el número de generación'), numeric({ label: 'número de generación', min: 1 })],
+  },
+} as const
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function GeneracionesForm() {
@@ -71,11 +113,22 @@ export default function GeneracionesForm() {
   const { mode, id } = useFormMode()
   const isRegister = mode === 'register'
 
-  const [programId, setProgramId] = useState('')
-  const [planId, setPlanId] = useState('')
-  const [startPeriodId, setStartPeriodId] = useState('')
-  const [number, setNumber] = useState('')
-  const [code, setCode] = useState('') // read-only, edit mode only — server-computed
+  const {
+    values,
+    fieldError,
+    handleChange,
+    handleBlur,
+    setFieldValue,
+    setFieldError,
+    clearErrors,
+    reset,
+    isValid,
+    validate,
+  } = useFieldValidation(GENERACION_SCHEMA, GENERACION_INITIAL_VALUES)
+
+  // `code` no es un campo validable: lo calcula el servidor y sólo se muestra en
+  // edición, de sólo lectura. Vive fuera del hook a propósito.
+  const [code, setCode] = useState('')
 
   const [programs, setPrograms] = useState<ProgramSummary[]>([])
   const [plans, setPlans] = useState<PlanSummary[]>([])
@@ -92,12 +145,9 @@ export default function GeneracionesForm() {
   useEffect(() => {
     setSubmitStatus('idle')
     setSubmitErrorMsg('')
+    setCode('')
     if (isRegister) {
-      setProgramId('')
-      setPlanId('')
-      setStartPeriodId('')
-      setNumber('')
-      setCode('')
+      reset(GENERACION_INITIAL_VALUES)
       setLoadStatus('idle')
       setLoadErrorMsg('')
     }
@@ -128,10 +178,10 @@ export default function GeneracionesForm() {
         if (cancelled) return
         // `programId` travels denormalized on the response — no need to
         // resolve it via `planId`/`AcademicPlan`.
-        setProgramId(data.programId)
-        setPlanId(data.planId)
-        setStartPeriodId(data.startPeriodId)
-        setNumber(String(data.number))
+        setFieldValue('programId', data.programId)
+        setFieldValue('planId', data.planId)
+        setFieldValue('startPeriodId', data.startPeriodId)
+        setFieldValue('number', String(data.number))
         setCode(data.code)
         setLoadStatus('idle')
       })
@@ -151,22 +201,29 @@ export default function GeneracionesForm() {
   // Plan options are scoped to the selected Programa — cascading select,
   // same interaction pattern as GruposForm.tsx's Programa → Nivel cascade.
   const planOptions: SelectOption[] = plans
-    .filter(p => p.programId === programId)
+    .filter(p => p.programId === values.programId)
     .map(p => ({ value: p.id, label: p.version }))
   const periodOptions: SelectOption[] = periods.map(p => ({ value: p.id, label: p.name }))
 
   function handleProgramChange(v: string) {
-    setProgramId(v)
-    setPlanId('') // reset dependent select — mirrors GruposForm's Programa → Nivel reset
+    // Si se vuelve a elegir la misma carrera no se toca el plan: el reset es
+    // sólo para el cambio real, que deja huérfano el plan filtrado anterior.
+    if (v === values.programId) return
+    setFieldValue('programId', v)
+    setFieldValue('planId', '')
   }
 
   async function handleSubmit() {
+    // `validate()` marca todos los campos como tocados, así que un error que
+    // hasta ahora estaba oculto sale a la pantalla en vez de ir al API.
+    if (!validate()) return
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
+    clearErrors()
     const payload: GenerationFormPayload = {
-      planId,
-      startPeriodId,
-      number: Number(number),
+      planId: values.planId,
+      startPeriodId: values.startPeriodId,
+      number: Number(values.number),
     }
     try {
       if (isRegister) {
@@ -177,6 +234,19 @@ export default function GeneracionesForm() {
         navigate('/generaciones', { state: { toast: 'Generación actualizada exitosamente.' } })
       }
     } catch (err) {
+      // Cualquier 409 de POST/PUT /generations es, sin excepción, el duplicado
+      // de (programId, number): es la única clave única de la tabla y el único
+      // handler que devuelve 409 aquí. Se atribuye a `number` —la carrera es el
+      // otro miembro de la clave, pero es un campo que el usuario no elige
+      // libremente, lo deduce el backend del plan—. No se busca el nombre del
+      // campo en el texto: `backendMessage` es el `message` de ErrorResponse, que
+      // el handler fija en copy en español, y nunca menciona "number".
+      const apiErr = err as ApiError
+      if (apiErr?.status === 409) {
+        setFieldError('number', getApiErrorMessage(err))
+        setSubmitStatus('idle')
+        return
+      }
       setSubmitStatus('error')
       setSubmitErrorMsg(getApiErrorMessage(err))
     }
@@ -214,36 +284,48 @@ export default function GeneracionesForm() {
             <FieldLabel required>Carrera</FieldLabel>
             <SearchSelectField
               options={programOptions}
-              value={programId}
+              value={values.programId}
               onChange={handleProgramChange}
               placeholder="Selecciona la carrera"
               disabled={disabled}
+              hasError={!!fieldError('programId')}
               searchPlaceholder="Buscar carrera…"
             />
+            {fieldError('programId')
+              ? <FieldError>{fieldError('programId')}</FieldError>
+              : <FieldHelp>Determina los planes de estudios disponibles.</FieldHelp>}
           </div>
           {/* Plan de Estudios */}
           <div className="col-span-12 sm:col-span-6">
             <FieldLabel required>Plan de Estudios</FieldLabel>
             <SearchSelectField
               options={planOptions}
-              value={planId}
-              onChange={setPlanId}
+              value={values.planId}
+              onChange={handleChange('planId')}
               placeholder="Selecciona el plan"
-              disabled={disabled || !programId}
+              disabled={disabled || !values.programId}
+              hasError={!!fieldError('planId')}
               searchPlaceholder="Buscar plan…"
             />
+            {fieldError('planId')
+              ? <FieldError>{fieldError('planId')}</FieldError>
+              : <FieldHelp>De aquí se deduce la carrera de la generación.</FieldHelp>}
           </div>
           {/* Periodo de Inicio */}
           <div className="col-span-12 sm:col-span-6">
             <FieldLabel required>Periodo de Inicio</FieldLabel>
             <SearchSelectField
               options={periodOptions}
-              value={startPeriodId}
-              onChange={setStartPeriodId}
+              value={values.startPeriodId}
+              onChange={handleChange('startPeriodId')}
               placeholder="Selecciona el periodo"
               disabled={disabled}
+              hasError={!!fieldError('startPeriodId')}
               searchPlaceholder="Buscar periodo…"
             />
+            {fieldError('startPeriodId')
+              ? <FieldError>{fieldError('startPeriodId')}</FieldError>
+              : <FieldHelp>Su año es la primera parte del código generado.</FieldHelp>}
           </div>
           {/* Número de Generación */}
           <TextField
@@ -251,10 +333,12 @@ export default function GeneracionesForm() {
             required
             type="number"
             min={1}
-            value={number}
-            onChange={setNumber}
+            value={values.number}
+            onChange={handleChange('number')}
+            onBlur={handleBlur('number')}
             disabled={disabled}
             numeric
+            error={fieldError('number')}
             placeholder="Ej. 7"
             help="Consecutivo dentro de la carrera — no reinicia por año."
             className="col-span-6 sm:col-span-3"
@@ -293,6 +377,7 @@ export default function GeneracionesForm() {
           onPrimary={handleSubmit}
           primaryLabel={isRegister ? 'Registrar Generación' : 'Guardar Cambios'}
           isSubmitting={isSubmitting}
+          primaryDisabled={disabled || !isValid}
         />
       )}
     </FormPage>

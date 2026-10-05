@@ -352,13 +352,22 @@ const router = createBrowserRouter([
       // `divisiones`/`clasificaciones`/`periodos` precedent — every
       // `/generations` verb is enforced server-side to ADMIN/SERVICIOS_
       // ESCOLARES, so wrapping the list gives a clean redirect instead of a
-      // raw 403/blank state for any other role. `generaciones/new`/
-      // `generaciones/form` are untouched — out of scope for this change.
+      // raw 403/blank state for any other role.
       {
         path: 'generaciones',
         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GENERATIONS_READ']} redirectTo="/dashboard"><GeneracionesList /></RequirePermission></RequireRole>,
       },
-      { path: 'generaciones/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><GeneracionesForm /></RequireRole> },
+      // `generaciones/new` y `generaciones/form` se protegen con
+      // `RequirePermission`, igual que `clasificaciones` y `planes`: sin esto un
+      // SERVICIOS_ESCOLARES con GENERATIONS_READ pero sin GENERATIONS_CREATE
+      // abría el formulario y se enteraba del 403 crudo en el API.
+      //
+      // `generaciones/form` no estaba registrada, y `GeneracionesList` navega
+      // exactamente ahí (`/generaciones/form?mode=edit&id=…`) desde el botón de
+      // editar de cada fila y de cada tarjeta. Sin esta ruta la edición caía en
+      // la 404 del router: el formulario de edición era inalcanzable.
+      { path: 'generaciones/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GENERATIONS_CREATE']} redirectTo="/dashboard"><GeneracionesForm /></RequirePermission></RequireRole> },
+      { path: 'generaciones/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GENERATIONS_UPDATE']} redirectTo="/dashboard"><GeneracionesForm /></RequirePermission></RequireRole> },
 
       // Grupos
       //

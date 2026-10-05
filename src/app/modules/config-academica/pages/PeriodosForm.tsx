@@ -273,19 +273,23 @@ export default function PeriodosForm() {
         navigate(`/periodos/form?mode=view&id=${id}`, { state: { toast: 'Periodo actualizado exitosamente.' } })
       }
     } catch (err) {
-      // El único 409 de este módulo es el de (year, periodNumber) duplicado, y su
-      // mensaje ("A period already exists for year … and periodNumber …") contiene
-      // "periodNumber". Se inyecta inline en el campo en vez de dejarlo sólo en el
-      // banner, que queda como fallback si el mensaje cambia y deja de identificar
-      // el campo. Va en `periodNumber` y no en `year` porque el mensaje nombra los dos
-      // campos y el número es el que se repite dentro del mismo año.
+      // Cualquier 409 de POST/PUT /periods es, sin excepción, el duplicado de
+      // (year, periodNumber): es la única clave única de la tabla y el único
+      // handler que devuelve 409 en este módulo. Se atribuye a `periodNumber` sin
+      // inspeccionar el texto del mensaje.
+      //
+      // Ojo con `backendMessage`: viene del campo `message` de ErrorResponse, y
+      // `GlobalExceptionHandler#handlePeriodConflict` lo fija en copy en español
+      // ("Ya existe un periodo académico con la información proporcionada."). El
+      // mensaje en inglés que menciona "periodNumber" es el de la excepción, y ese
+      // no viaja al cliente. Buscar el nombre del campo en el mensaje era, por
+      // tanto, código muerto: la condición nunca se cumplía y el error inline no
+      // se llegaba a pintar.
       const apiErr = err as ApiError
-      if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
-        if (apiErr.backendMessage.includes('periodNumber')) {
-          setFieldError('periodNumber', apiErr.backendMessage)
-          setSubmitStatus('idle')
-          return
-        }
+      if (apiErr?.status === 409) {
+        setFieldError('periodNumber', getApiErrorMessage(err))
+        setSubmitStatus('idle')
+        return
       }
       setSubmitStatus('error')
       setSubmitErrorMsg(getApiErrorMessage(err))
