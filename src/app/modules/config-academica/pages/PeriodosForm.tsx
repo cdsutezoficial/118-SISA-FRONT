@@ -5,7 +5,17 @@ import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } f
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
-import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { useFieldValidation } from '@app/core/validation/useFieldValidation'
+import {
+  required,
+  maxLength,
+  noControlChars,
+  numeric,
+  selectionRequired,
+  lettersNumbersSpacesAndHyphens,
+  normalizeText,
+} from '@app/core/validation/fieldRules'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -52,6 +62,96 @@ type FormErrors = Partial<Record<
   string
 >>
 
+// ─── Schema de validación ──────────────────────────────────────────────────────
+// Se declara fuera del componente para que su identidad sea estable: el hook lo
+// usa como dependencia de sus callbacks.
+//
+// Contrato de cada campo, alineado con `CreateAcademicPeriodRequest`:
+//   name    → letras, números, espacios y guiones. La misma regla que usan las
+//              clasificaciones de materia, y el mismo `@Pattern` en el backend:
+//              el guion acepta espacios a cada lado porque el ejemplo del propio
+//              dominio es "Enero – Abril 2026", con raya.
+//   year    → entero entre 1900 y 2100. No había rango antes: el 0 de un campo
+//              vacío o un 99999 llegaban hasta la base.
+//   periodNumber → entero desde 1 y SIN tope. El dominio dice "1, 2, 3 dentro del
+//              año", pero el mismo documento exige "100% configurable" y soporte para
+//              bimestrales: un bimestral necesita más de tres periodos al año, así
+//              que un tope de 3 contradiría al dominio.
+//   type    → selección obligatoria.
+//   Las 4 fechas → obligatorias. Esto cambia el requisito original de la fase 6,
+//              que pedía hacer opcionales las dos de inscripción; el usuario decidió
+//              el 2026-10-05 que las cuatro se llenan.
+//
+// `name` es texto libre y NO lleva `normalize`: recortar en cada pulsación
+// impediría escribir un espacio entre palabras. Se usa `validateOn: normalizeText`,
+// que compacta y recorta **sólo al evaluar las reglas**, sin escribir de vuelta en
+// el input: el usuario ve lo que escribió y el cursor nunca le salta, mientras lo
+// que se valida y lo que se manda es el texto limpio. El payload se arma con el
+// mismo `normalizeText`, igual que en el resto del módulo.
+//
+// Ojo con las fechas: el estado guarda **dd/mm/yyyy** (lo que muestra el
+// DatePicker) y la conversión a ISO ocurre al mandar. Por eso las comparaciones de
+// `crossRules` pueden hacerse sobre el texto de pantalla: son ordenables
+// lexicográficamente porque el formato es de ancho fijo y los separadores son fijos.
+
+const PERIODO_INITIAL_VALUES = {
+  name: '',
+  year: '',
+  periodNumber: '',
+  type: '',
+  startDate: '',
+  endDate: '',
+  enrollmentStart: '',
+  enrollmentEnd: '',
+} as const
+
+const PERIODO_SCHEMA = {
+  name: {
+    validateOn: normalizeText,
+    rules: [
+      required('el nombre del periodo'),
+      maxLength(150, 'nombre'),
+      noControlChars('nombre'),
+      lettersNumbersSpacesAndHyphens('nombre'),
+    ],
+  },
+  year: {
+    rules: [required('el año'), numeric({ label: 'año', min: 1900, max: 2100 })],
+  },
+  periodNumber: {
+    rules: [required('el número de periodo'), numeric({ label: 'número de periodo', min: 1 })],
+  },
+  type: {
+    rules: [selectionRequired('el tipo de periodo')],
+  },
+  startDate: { rules: [required('la fecha de inicio')] },
+  endDate: { rules: [required('la fecha de fin')] },
+  enrollmentStart: { rules: [required('la fecha de inicio de inscripciones')] },
+  enrollmentEnd: { rules: [required('la fecha de fin de inscripciones')] },
+} as const
+
+// Las tres reglas de orden de fechas no las puede expresar el schema, porque cada
+// una depende de dos campos a la vez. El backend las ve en
+// `AcademicPeriod.validateDateRanges`; aquí se declaran para que el error aparezca
+// sin el viaje de ida y vuelta, y para que `isValid` —y por lo tanto el botón de
+// guardar— las tenga en cuenta. La comparación de fechas va en el orden en que las
+// compara `validateDateRanges`: primero el rango del periodo, luego el rango de las
+// inscripciones, y por último que las inscripciones no cierren después del periodo.
+const PERIODO_CROSS_RULES = (values: typeof PERIODO_INITIAL_VALUES): FormErrors => {
+  const errors: FormErrors = {}
+
+  if (values.startDate && values.endDate && values.startDate >= values.endDate) {
+    errors.endDate = 'La fecha de fin debe ser posterior a la fecha de inicio.'
+  }
+  if (values.enrollmentStart && values.enrollmentEnd && values.enrollmentStart >= values.enrollmentEnd) {
+    errors.enrollmentEnd = 'El fin de inscripciones debe ser posterior al inicio de inscripciones.'
+  }
+  if (values.enrollmentEnd && values.endDate && values.enrollmentEnd > values.endDate) {
+    errors.enrollmentEnd = 'El fin de inscripciones no puede ser posterior a la fecha de fin del periodo.'
+  }
+  return errors
+}
+
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 // La API trabaja con ISO (YYYY-MM-DD); el DatePicker muestra dd/mm/yyyy.
 function isoToDisplay(iso: string): string {
@@ -75,20 +175,23 @@ export default function PeriodosForm() {
   const isRegister = mode === 'register'
 
   // ─── Field state ───────────────────────────────────────────────────────────
-  const [name, setName] = useState('')
-  const [year, setYear] = useState('')
-  const [periodNumber, setPeriodNumber] = useState('')
-  const [type, setType] = useState<PeriodType | ''>('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [enrollmentStart, setEnrollmentStart] = useState('')
-  const [enrollmentEnd, setEnrollmentEnd] = useState('')
+  const {
+    values,
+    fieldError,
+    handleChange,
+    handleBlur,
+    setFieldValue,
+    setFieldError,
+    reset,
+    validate,
+    isValid,
+  } = useFieldValidation(PERIODO_SCHEMA, PERIODO_INITIAL_VALUES, { crossRules: PERIODO_CROSS_RULES })
+
   // Status se lee en view/edit para replicar la regla de PeriodosList.tsx: un
   // periodo CLOSED es terminal y NO puede editarse (ni desde este form).
   const [status, setStatus] = useState<PeriodStatus | ''>('')
 
   // ─── Auxiliary state ───────────────────────────────────────────────────────
-  const [errors, setErrors] = useState<FormErrors>({})
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>(isRegister ? 'idle' : 'loading')
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
@@ -97,21 +200,13 @@ export default function PeriodosForm() {
   useEffect(() => {
     setSubmitStatus('idle')
     setSubmitErrorMsg('')
-    setErrors({})
     if (isRegister) {
-      setName('')
-      setYear('')
-      setPeriodNumber('')
-      setType('')
-      setStartDate('')
-      setEndDate('')
-      setEnrollmentStart('')
-      setEnrollmentEnd('')
+      reset()
       setStatus('')
       setLoadStatus('idle')
       setLoadErrorMsg('')
     }
-  }, [mode, id])
+  }, [mode, id, reset])
 
   // ─── Load period (view / edit) ─────────────────────────────────────────────
   useEffect(() => {
@@ -122,14 +217,14 @@ export default function PeriodosForm() {
     apiGet<AcademicPeriodDetail>(`/periods/${id}`)
       .then(data => {
         if (cancelled) return
-        setName(data.name)
-        setYear(String(data.year))
-        setPeriodNumber(String(data.periodNumber))
-        setType(data.type)
-        setStartDate(data.startDate)
-        setEndDate(data.endDate)
-        setEnrollmentStart(data.enrollmentStart)
-        setEnrollmentEnd(data.enrollmentEnd)
+        setFieldValue('name', data.name)
+        setFieldValue('year', String(data.year))
+        setFieldValue('periodNumber', String(data.periodNumber))
+        setFieldValue('type', data.type)
+        setFieldValue('startDate', isoToDisplay(data.startDate))
+        setFieldValue('endDate', isoToDisplay(data.endDate))
+        setFieldValue('enrollmentStart', isoToDisplay(data.enrollmentStart))
+        setFieldValue('enrollmentEnd', isoToDisplay(data.enrollmentEnd))
         setStatus(data.status)
         setLoadStatus('idle')
       })
@@ -147,56 +242,26 @@ export default function PeriodosForm() {
   const isSubmitting = submitStatus === 'submitting'
   const periodLabel = isRegister ? 'Registrar Periodo' : isView ? 'Ver Periodo' : 'Editar Periodo'
 
-  // ─── Validation ────────────────────────────────────────────────────────────
-  // Mirrors AcademicPeriod's server-side invariants (validateDateRanges in
-  // 118-SISA-BACK) so the user sees the problem before the 400 round-trip:
-  // startDate < endDate, enrollmentStart < enrollmentEnd, enrollmentEnd <= endDate.
-  function validate(): FormErrors {
-    const e: FormErrors = {}
-    if (!name.trim()) e.name = 'El nombre del periodo es requerido.'
-    if (!year.trim()) e.year = 'El año es requerido.'
-    if (!periodNumber.trim()) e.periodNumber = 'El número de periodo es requerido.'
-    if (!type) e.type = 'Selecciona el tipo de periodo.'
-    if (!startDate) e.startDate = 'La fecha de inicio es requerida.'
-    if (!endDate) e.endDate = 'La fecha de fin es requerida.'
-    if (!enrollmentStart) e.enrollmentStart = 'El inicio de inscripciones es requerido.'
-    if (!enrollmentEnd) e.enrollmentEnd = 'El fin de inscripciones es requerido.'
-
-    if (startDate && endDate && !(startDate < endDate)) {
-      e.endDate = 'La fecha de fin debe ser posterior a la fecha de inicio.'
-    }
-    if (enrollmentStart && enrollmentEnd && !(enrollmentStart < enrollmentEnd)) {
-      e.enrollmentEnd = 'El fin de inscripciones debe ser posterior al inicio de inscripciones.'
-    }
-    if (enrollmentEnd && endDate && enrollmentEnd > endDate) {
-      e.enrollmentEnd = 'El fin de inscripciones no puede ser posterior a la fecha de fin del periodo.'
-    }
-    return e
-  }
-
   // ─── Submit ────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     // Un periodo CLOSED es terminal: por si acaso alguien dispara el submit
     // (el botón ya queda disabled), no se envía nada.
     if (closed) return
-    const validationErrors = validate()
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors)
-      return
-    }
-    setErrors({})
+    // Marca todos los campos como tocados y valida, incluidas las reglas de orden
+    // de fechas. Si algo falla, no se dispara ninguna petición.
+    if (!validate()) return
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
 
     const payload: PeriodFormPayload = {
-      name: name.trim(),
-      year: Number(year),
-      periodNumber: Number(periodNumber),
-      type: type as PeriodType,
-      startDate,
-      endDate,
-      enrollmentStart,
-      enrollmentEnd,
+      name: normalizeText(values.name),
+      year: Number(values.year),
+      periodNumber: Number(values.periodNumber),
+      type: values.type as PeriodType,
+      startDate: displayToIso(values.startDate),
+      endDate: displayToIso(values.endDate),
+      enrollmentStart: displayToIso(values.enrollmentStart),
+      enrollmentEnd: displayToIso(values.enrollmentEnd),
     }
 
     try {
@@ -208,6 +273,24 @@ export default function PeriodosForm() {
         navigate(`/periodos/form?mode=view&id=${id}`, { state: { toast: 'Periodo actualizado exitosamente.' } })
       }
     } catch (err) {
+      // Cualquier 409 de POST/PUT /periods es, sin excepción, el duplicado de
+      // (year, periodNumber): es la única clave única de la tabla y el único
+      // handler que devuelve 409 en este módulo. Se atribuye a `periodNumber` sin
+      // inspeccionar el texto del mensaje.
+      //
+      // Ojo con `backendMessage`: viene del campo `message` de ErrorResponse, y
+      // `GlobalExceptionHandler#handlePeriodConflict` lo fija en copy en español
+      // ("Ya existe un periodo académico con la información proporcionada."). El
+      // mensaje en inglés que menciona "periodNumber" es el de la excepción, y ese
+      // no viaja al cliente. Buscar el nombre del campo en el mensaje era, por
+      // tanto, código muerto: la condición nunca se cumplía y el error inline no
+      // se llegaba a pintar.
+      const apiErr = err as ApiError
+      if (apiErr?.status === 409) {
+        setFieldError('periodNumber', getApiErrorMessage(err))
+        setSubmitStatus('idle')
+        return
+      }
       setSubmitStatus('error')
       setSubmitErrorMsg(getApiErrorMessage(err))
     }
@@ -264,46 +347,51 @@ export default function PeriodosForm() {
           <TextField
             label="Nombre del Periodo"
             required={!isView}
-            value={name}
-            onChange={v => { setName(v); setErrors(prev => ({ ...prev, name: undefined })) }}
+            value={values.name}
+            onChange={handleChange('name')}
+            onBlur={handleBlur('name')}
             disabled={disabled}
-            error={errors.name}
+            error={fieldError('name')}
+            maxLength={150}
             placeholder="Ej. Enero – Abril 2026"
-            help="Nombre descriptivo del periodo académico."
+            help="Letras, números, espacios y guiones. Hasta 150 caracteres."
             className="col-span-12"
           />
           <TextField
             label="Año"
             required={!isView}
             type="number"
-            value={year}
-            onChange={v => { setYear(v); setErrors(prev => ({ ...prev, year: undefined })) }}
+            value={values.year}
+            onChange={handleChange('year')}
+            onBlur={handleBlur('year')}
             disabled={disabled}
-            error={errors.year}
+            error={fieldError('year')}
             numeric
             placeholder="Ej. 2026"
+            help="No puede ser menos a 1900"
             className="col-span-6 sm:col-span-3"
           />
           <TextField
             label="Número de Periodo"
             required={!isView}
             type="number"
-            value={periodNumber}
-            onChange={v => { setPeriodNumber(v); setErrors(prev => ({ ...prev, periodNumber: undefined })) }}
+            value={values.periodNumber}
+            onChange={handleChange('periodNumber')}
+            onBlur={handleBlur('periodNumber')}
             disabled={disabled}
-            error={errors.periodNumber}
+            error={fieldError('periodNumber')}
             numeric
             placeholder="Ej. 1"
-            help="Normalmente 1, 2 o 3 dentro del año."
+            help="Normalmente 1, 2 o 3"
             className="col-span-6 sm:col-span-3"
           />
           <SelectField
             label="Tipo de Periodo"
             required={!isView}
-            value={type}
-            onChange={v => { setType(v as PeriodType); setErrors(prev => ({ ...prev, type: undefined })) }}
+            value={values.type}
+            onChange={handleChange('type')}
             disabled={disabled}
-            error={errors.type}
+            error={fieldError('type')}
             options={(Object.keys(TYPE_LABELS) as PeriodType[]).map(t => ({ value: t, label: TYPE_LABELS[t] }))}
             placeholder="Seleccionar tipo…"
             className="col-span-12 sm:col-span-6"
@@ -311,38 +399,46 @@ export default function PeriodosForm() {
           <div className="col-span-6 sm:col-span-3">
             <FieldLabel required={!isView}>Fecha de Inicio</FieldLabel>
             <DatePicker
-              value={isoToDisplay(startDate)}
-              onChange={v => { setStartDate(displayToIso(v)); setErrors(prev => ({ ...prev, startDate: undefined })) }}
+              value={values.startDate}
+              onChange={handleChange('startDate')}
+              onBlur={handleBlur('startDate')}
               disabled={disabled}
+              error={!!fieldError('startDate')}
             />
-            {errors.startDate && <FieldError>{errors.startDate}</FieldError>}
+            {fieldError('startDate') && <FieldError>{fieldError('startDate')}</FieldError>}
           </div>
           <div className="col-span-6 sm:col-span-3">
             <FieldLabel required={!isView}>Fecha de Fin</FieldLabel>
             <DatePicker
-              value={isoToDisplay(endDate)}
-              onChange={v => { setEndDate(displayToIso(v)); setErrors(prev => ({ ...prev, endDate: undefined })) }}
+              value={values.endDate}
+              onChange={handleChange('endDate')}
+              onBlur={handleBlur('endDate')}
               disabled={disabled}
+              error={!!fieldError('endDate')}
             />
-            {errors.endDate && <FieldError>{errors.endDate}</FieldError>}
+            {fieldError('endDate') && <FieldError>{fieldError('endDate')}</FieldError>}
           </div>
           <div className="col-span-6 sm:col-span-3">
             <FieldLabel required={!isView}>Inicio de Inscripciones</FieldLabel>
             <DatePicker
-              value={isoToDisplay(enrollmentStart)}
-              onChange={v => { setEnrollmentStart(displayToIso(v)); setErrors(prev => ({ ...prev, enrollmentStart: undefined })) }}
+              value={values.enrollmentStart}
+              onChange={handleChange('enrollmentStart')}
+              onBlur={handleBlur('enrollmentStart')}
               disabled={disabled}
+              error={!!fieldError('enrollmentStart')}
             />
-            {errors.enrollmentStart && <FieldError>{errors.enrollmentStart}</FieldError>}
+            {fieldError('enrollmentStart') && <FieldError>{fieldError('enrollmentStart')}</FieldError>}
           </div>
           <div className="col-span-6 sm:col-span-3">
             <FieldLabel required={!isView}>Fin de Inscripciones</FieldLabel>
             <DatePicker
-              value={isoToDisplay(enrollmentEnd)}
-              onChange={v => { setEnrollmentEnd(displayToIso(v)); setErrors(prev => ({ ...prev, enrollmentEnd: undefined })) }}
+              value={values.enrollmentEnd}
+              onChange={handleChange('enrollmentEnd')}
+              onBlur={handleBlur('enrollmentEnd')}
               disabled={disabled}
+              error={!!fieldError('enrollmentEnd')}
             />
-            {errors.enrollmentEnd && <FieldError>{errors.enrollmentEnd}</FieldError>}
+            {fieldError('enrollmentEnd') && <FieldError>{fieldError('enrollmentEnd')}</FieldError>}
           </div>
         </div>
       </FormCard>
@@ -355,7 +451,7 @@ export default function PeriodosForm() {
           onPrimary={isView ? () => navigate(`/periodos/form?mode=edit&id=${id}`) : handleSubmit}
           primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Periodo' : 'Guardar Cambios'}
           isSubmitting={isSubmitting}
-          primaryDisabled={closed}
+          primaryDisabled={closed || !isValid}
         />
       )}
     </FormPage>
