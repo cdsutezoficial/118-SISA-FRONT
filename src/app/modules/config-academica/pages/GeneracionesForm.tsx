@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Info } from 'lucide-react'
-import { FieldLabel, SearchSelectField } from '@app/core/components/ui'
+import { FieldLabel, SearchSelectField, ModeSwitcher } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
@@ -70,6 +70,7 @@ export default function GeneracionesForm() {
   const navigate = useNavigate()
   const { mode, id } = useFormMode()
   const isRegister = mode === 'register'
+  const isView = mode === 'view'
 
   const [programId, setProgramId] = useState('')
   const [planId, setPlanId] = useState('')
@@ -144,7 +145,7 @@ export default function GeneracionesForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, mode])
 
-  const disabled = loadStatus === 'loading'
+  const disabled = isView || loadStatus === 'loading'
   const isSubmitting = submitStatus === 'submitting'
 
   const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
@@ -161,6 +162,11 @@ export default function GeneracionesForm() {
   }
 
   async function handleSubmit() {
+    // View mode renders every field disabled, so the primary button navigates
+    // instead of submitting — but guard here too in case something fires the
+    // handler directly. Same belt-and-braces rule PeriodosForm uses for its
+    // terminal CLOSED state.
+    if (isView) return
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
     const payload: GenerationFormPayload = {
@@ -189,15 +195,25 @@ export default function GeneracionesForm() {
           { label: 'Inicio', to: '/dashboard' },
           { label: 'Configuración Académica' },
           { label: 'Generaciones', to: '/generaciones' },
-          { label: isRegister ? 'Registrar Generación' : 'Editar Generación' },
+          { label: isRegister ? 'Registrar Generación' : isView ? 'Ver Generación' : 'Editar Generación' },
         ]}
       />
 
       <FormHeader
-        title={isRegister ? 'Registrar Generación' : 'Editar Generación'}
+        title={isRegister ? 'Registrar Generación' : isView ? 'Ver Generación' : 'Editar Generación'}
         subtitle={isRegister
           ? 'Define una nueva cohorte de ingreso para un plan de estudios.'
+          : isView
+          ? 'Información de la generación.'
           : 'Modifica los datos de la generación.'}
+        right={
+          <ModeSwitcher
+            mode={mode}
+            id={id}
+            registerUrl="/generaciones/new"
+            formUrl={m => `/generaciones/form?mode=${m}&id=${id}`}
+          />
+        }
       />
 
       {/* Load error banner (edit fetch failed) */}
@@ -211,7 +227,7 @@ export default function GeneracionesForm() {
         <div className="grid grid-cols-12 gap-4">
           {/* Programa Educativo */}
           <div className="col-span-12 sm:col-span-6">
-            <FieldLabel required>Carrera</FieldLabel>
+            <FieldLabel required={!isView}>Carrera</FieldLabel>
             <SearchSelectField
               options={programOptions}
               value={programId}
@@ -223,7 +239,7 @@ export default function GeneracionesForm() {
           </div>
           {/* Plan de Estudios */}
           <div className="col-span-12 sm:col-span-6">
-            <FieldLabel required>Plan de Estudios</FieldLabel>
+            <FieldLabel required={!isView}>Plan de Estudios</FieldLabel>
             <SearchSelectField
               options={planOptions}
               value={planId}
@@ -235,7 +251,7 @@ export default function GeneracionesForm() {
           </div>
           {/* Periodo de Inicio */}
           <div className="col-span-12 sm:col-span-6">
-            <FieldLabel required>Periodo de Inicio</FieldLabel>
+            <FieldLabel required={!isView}>Periodo de Inicio</FieldLabel>
             <SearchSelectField
               options={periodOptions}
               value={startPeriodId}
@@ -248,7 +264,7 @@ export default function GeneracionesForm() {
           {/* Número de Generación */}
           <TextField
             label="Número de Generación"
-            required
+            required={!isView}
             type="number"
             min={1}
             value={number}
@@ -288,10 +304,10 @@ export default function GeneracionesForm() {
       {/* Actions */}
       {loadStatus !== 'loading' && (
         <FormActions
-          isView={false}
+          isView={isView}
           onBack={() => navigate('/generaciones')}
-          onPrimary={handleSubmit}
-          primaryLabel={isRegister ? 'Registrar Generación' : 'Guardar Cambios'}
+          onPrimary={isView ? () => navigate(`/generaciones/form?mode=edit&id=${id}`) : handleSubmit}
+          primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Generación' : 'Guardar Cambios'}
           isSubmitting={isSubmitting}
         />
       )}
