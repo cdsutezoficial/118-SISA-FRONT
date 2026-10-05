@@ -6,7 +6,7 @@ import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } f
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
-import { apiGet, apiPost, apiPut, apiDelete, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, apiDelete, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -458,6 +458,14 @@ export default function PlanForm() {
         await handleEditSave(scalars)
       }
     } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
+        if (apiErr.backendMessage.includes('versión')) {
+          setErrors(prev => ({ ...prev, version: apiErr.backendMessage }))
+          setSubmitStatus('idle')
+          return
+        }
+      }
       setSubmitStatus('error')
       setSubmitErrorMsg(getApiErrorMessage(err))
     }

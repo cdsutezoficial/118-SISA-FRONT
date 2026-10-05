@@ -5,7 +5,7 @@ import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate, useSearchParams } from 'react-router'
-import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // This screen registers/edits a Subject *inside a plan level* — there is no
@@ -212,6 +212,14 @@ export default function PlanMateriaForm() {
         navigate(`/planes/detalle?id=${planId}`, { state: { toast: 'Materia actualizada exitosamente.' } })
       }
     } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
+        if (apiErr.backendMessage.includes('código')) {
+          setErrors(prev => ({ ...prev, code: apiErr.backendMessage }))
+          setSubmitStatus('idle')
+          return
+        }
+      }
       setSubmitStatus('error')
       setSubmitErrorMsg(getApiErrorMessage(err))
     }

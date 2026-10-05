@@ -5,7 +5,7 @@ import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, Button, IconButton, TextField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate, useSearchParams } from 'react-router'
-import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // This screen registers/edits a GradeScale *inside a plan* — there is no
@@ -299,6 +299,14 @@ export default function PlanEscalaForm() {
         navigate(`/planes/detalle?id=${planId}&tab=escalas`, { state: { toast: 'Escala de calificación actualizada exitosamente.' } })
       }
     } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
+        if (apiErr.backendMessage.includes('clasificación')) {
+          setErrors(prev => ({ ...prev, classificationId: apiErr.backendMessage }))
+          setSubmitStatus('idle')
+          return
+        }
+      }
       setSubmitStatus('error')
       setSubmitErrorMsg(getApiErrorMessage(err))
     }
