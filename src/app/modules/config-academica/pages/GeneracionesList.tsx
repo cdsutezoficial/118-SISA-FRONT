@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Users2, Pencil, Plus as PlusIcon } from 'lucide-react'
+import { Users2, Eye, Pencil, Plus as PlusIcon } from 'lucide-react'
 import { Toast, Switch, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
@@ -258,7 +258,10 @@ export default function GeneracionesList() {
         emptyHint={emptyHint}
         emptyIcon={<Users2 size={36} className="text-[#E5E7EB]" />}
         footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
-        actions={{ edit: row => navigate(`/generaciones/form?mode=edit&id=${row.id}`) }}
+        actions={{
+          view: row => navigate(`/generaciones/form?mode=view&id=${row.id}`),
+          edit: row => navigate(`/generaciones/form?mode=edit&id=${row.id}`),
+        }}
         activeValue="ACTIVE"
         onToggleStatus={handleToggleStatus}
         togglingId={togglingId}
@@ -297,6 +300,12 @@ export default function GeneracionesList() {
             </p>
             {/* Actions */}
             <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+              <button
+                onClick={() => navigate(`/generaciones/form?mode=view&id=${row.id}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#333333] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
+              >
+                <Eye size={14} />Ver
+              </button>
               <button
                 onClick={() => navigate(`/generaciones/form?mode=edit&id=${row.id}`)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"

@@ -204,11 +204,11 @@ const router = createBrowserRouter([
           },
           {
             path: 'candidatos/pago-ficha',
-            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoFicha /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION', 'FINANZAS']}><ConfirmarPagoFicha /></RequireRole>,
           },
           {
             path: 'candidatos/pago-induccion',
-            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoInduccion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION', 'FINANZAS']}><ConfirmarPagoInduccion /></RequireRole>,
           },
           {
             path: 'candidatos/induccion',
@@ -338,13 +338,23 @@ const router = createBrowserRouter([
       // `divisiones`/`clasificaciones` precedent — every `/periods` verb is
       // enforced server-side to ADMIN/SERVICIOS_ESCOLARES, so wrapping the
       // list gives a clean redirect instead of a raw 403/blank state for any
-      // other role. `periodos/new`/`periodos/form` are untouched — out of
-      // scope for this change.
+      // other role.
+      //
+      // `periodos/form` is the ONE route here that reads `?mode=` instead of
+      // its own segment: `mode=view` renders the read-only panel and `mode=edit`
+      // the editable one, so a single route covers both (see `useFormMode`).
+      // It existed as a navigation target in PeriodosList.tsx all along but was
+      // never declared, so both those `navigate()` calls fell through to the
+      // catch-all and the form was unreachable. Same shape as
+      // `divisiones/form`/`clasificaciones/form`, hence bare `RequireRole`
+      // without a separate `RequirePermission` — the write verbs are enforced
+      // server-side.
       {
         path: 'periodos',
         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PERIODS_READ']} redirectTo="/dashboard"><PeriodosList /></RequirePermission></RequireRole>,
       },
       { path: 'periodos/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><PeriodosForm /></RequireRole> },
+      { path: 'periodos/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><PeriodosForm /></RequireRole> },
 
       // Generaciones
       //

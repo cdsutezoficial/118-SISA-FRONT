@@ -484,3 +484,61 @@ export function isAdmisionActionEnabled(candidate: Candidate, action: AdmisionAc
 
 /** Screen 13 payment-method choice — mirrors `CandidatoRegistro`'s `MetodoPago`. */
 export type MetodoPagoFicha = 'ONLINE' | 'VENTANILLA'
+
+// ── Screen 3 (Candidatos Listado) real-backend flow types ─────────────────────
+// Mirrors `GET /candidates` (`CandidateListItemResponse` / `CandidateListResponse`).
+// Deliberately leaner than the mock `Candidate` shape: the list renders exactly
+// these columns and row actions, so payments/induction flags/exam results stay on
+// `GET /candidates/{id}` instead of leaking onto the list.
+
+/** A single row of `GET /candidates` — `{id, folio, fullName, curp, programId, programName, status, registeredAt}`. */
+export interface CandidateListRow {
+  id: string
+  folio: string
+  fullName: string
+  curp: string
+  /** Id of the chosen `AcademicProgram` (NOT the admission-config id). */
+  programId: string
+  programName: string
+  status: CandidateStatus
+  /** ISO-8601 `Instant`. */
+  registeredAt: string
+}
+
+/** `GET /candidates` envelope — same `{items, totalElements, totalPages, page, size}` as every paginated list. */
+export interface CandidateListPage {
+  items: CandidateListRow[]
+  totalElements: number
+  totalPages: number
+  page: number
+  size: number
+}
+
+/** One payment section of the staff candidate detail (`GET /candidates/{id}/detail`). */
+export interface CandidateDetailPaymentBackend {
+  concept: 'ADMISSION_FICHA' | 'INDUCTION_COURSE'
+  amount: number
+  referenceNumber: string
+  paymentStatus: 'PENDING' | 'PAID'
+  receiptNumber: string | null
+  paidAt: string | null
+  orderId: string | null
+}
+
+/** Staff-facing detail payload for the first two tabs of `CandidatoDetalle.tsx`. */
+export interface CandidateDetailBackend {
+  candidateId: string
+  folio: string
+  fullName: string
+  candidateStatus: CandidateStatus
+  registeredAt: string
+  programName: string | null
+  divisionName: string | null
+  curp: string
+  email: string | null
+  homePhone: string | null
+  mobilePhone: string | null
+  outreachChannelName: string | null
+  admissionPayment: CandidateDetailPaymentBackend
+  inductionPayment: CandidateDetailPaymentBackend | null
+}
