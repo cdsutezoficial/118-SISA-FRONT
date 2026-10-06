@@ -70,6 +70,7 @@ import GeneracionesForm from '@app/modules/config-academica/pages/GeneracionesFo
 // Grupos
 import GruposList from '@app/modules/config-academica/pages/GruposList'
 import GruposForm from '@app/modules/config-academica/pages/GruposForm'
+import GruposMasivoForm from '@app/modules/config-academica/pages/GruposMasivoForm'
 
 // Configuración de Admisión
 import ConfiguracionAdmisionList from '@app/modules/config-academica/pages/ConfiguracionAdmisionList'
@@ -386,10 +387,24 @@ const router = createBrowserRouter([
       // precedent — every `/groups` verb is enforced server-side to
       // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
       // redirect to `/dashboard` instead of a raw 403/blank state for any
-      // other role. `grupos/new`/`grupos/form` are untouched — out of scope
-      // for this change.
+      // other role.
+      //
+      // `grupos/form` no estaba registrada, y `GruposList` navega a
+      // `/grupos/form?mode=…&id=…` desde ver y editar: ambas caían en la 404 del
+      // router. Es el mismo bug que se corrigió en `generaciones/form`.
+      //
+      // `grupos/new` y `grupos/form` se protegen con `RequirePermission`
+      // (GROUPS_CREATE / GROUPS_UPDATE), igual que `clasificaciones` y `planes`:
+      // antes sólo tenían RequireRole, así que un SERVICIOS_ESCOLARES con
+      // GROUPS_READ pero sin GROUPS_CREATE abría el formulario y se enteraba del
+      // 403 crudo en el API.
       { path: 'grupos', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_READ']} redirectTo="/dashboard"><GruposList /></RequirePermission></RequireRole> },
-      { path: 'grupos/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><GruposForm /></RequireRole> },
+      { path: 'grupos/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_CREATE']} redirectTo="/dashboard"><GruposForm /></RequirePermission></RequireRole> },
+      { path: 'grupos/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_UPDATE']} redirectTo="/dashboard"><GruposForm /></RequirePermission></RequireRole> },
+      // Creación masiva: escribe con el mismo permiso que el alta individual
+      // (GROUPS_CREATE), no con uno propio — es la misma operación de escritura
+      // sobre la misma tabla, sólo que en lote.
+      { path: 'grupos/masivo', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_CREATE']} redirectTo="/dashboard"><GruposMasivoForm /></RequirePermission></RequireRole> },
 
       // Configuración de Admisión
       //

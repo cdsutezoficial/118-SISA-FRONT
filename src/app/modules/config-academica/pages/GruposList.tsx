@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Users2, Eye, Pencil, Plus as PlusIcon } from 'lucide-react'
+import { Users2, Eye, Pencil, Plus as PlusIcon, Layers } from 'lucide-react'
 import { Toast, Switch, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
@@ -329,7 +329,15 @@ export default function GruposList() {
       <PageHeader
         title="Grupos"
         subtitle="Consulta y administra los grupos del periodo activo."
-        actions={[{ label: 'Registrar Grupo', icon: <PlusIcon />, onClick: () => navigate('/grupos/new') }]}
+        actions={[
+          // La creación en lote comparte GROUPS_CREATE con el alta individual, y
+          // la ruta `/grupos/masivo` ya lo exige. Va antes de "Registrar Grupo"
+          // porque es la acción que se usa más veces en la práctica
+          // académica: abrir veinte grupos de un nivel a mano es lo que motivó
+          // el endpoint.
+          { label: 'Crear en Lote', icon: <Layers />, onClick: () => navigate('/grupos/masivo') },
+          { label: 'Registrar Grupo', icon: <PlusIcon />, onClick: () => navigate('/grupos/new') },
+        ]}
       />
 
       {loadStatus === 'error' && errorMsg && <ErrorBanner message={errorMsg} />}
