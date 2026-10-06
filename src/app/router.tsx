@@ -191,9 +191,15 @@ const router = createBrowserRouter([
             path: 'canales',
             element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['OUTREACH_CHANNELS_READ']} redirectTo="/dashboard"><CanalesDifusion /></RequirePermission></RequireRole>,
           },
+          // Mismo cierre que `canales` en Fase 9: el `PermissionRegistry` ya
+          // exigía `HIGH_SCHOOL_TYPES_READ` en el backend, pero aquí sólo había
+          // `RequireRole`, así que un `SERVICIOS_ESCOLARES` sin el permiso veía la
+          // pantalla y se comía el 403 sólo al guardar. El alta y la edición son un
+          // modal en esta misma pantalla, así que los verbos de escritura los
+          // aplica el filtro del servidor.
           {
             path: 'tipos-bachillerato',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><TiposBachillerato /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['HIGH_SCHOOL_TYPES_READ']} redirectTo="/dashboard"><TiposBachillerato /></RequirePermission></RequireRole>,
           },
           {
             path: 'candidatos',
