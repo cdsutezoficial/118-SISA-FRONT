@@ -454,12 +454,23 @@ const router = createBrowserRouter([
 
       // Áreas de conceptos de pago
       //
-      // Catálogo compañero de `conceptos` — misma convención: la lista lleva
-      // RoleGuard (los verbos `/payment-areas` los exige ADMIN o
-      // PERSONAL_FINANZAS en el backend) y el form queda abierto.
+      // Catálogo compañero de `conceptos`. La lista y ahora también el form
+      // llevan `RequirePermission`, no sólo `RequireRole`: los permisos finos
+      // `PAYMENT_AREAS_CREATE` / `_UPDATE` / `_CHANGE_STATUS` ya estaban
+      // sembrados y asignados en el backend, pero (a) no había entradas para
+      // `/payment-areas` en `PermissionRegistry`, así que `PermissionFilter` no
+      // encontraba regla y dejaba pasar los verbos a cualquiera con el rol, y
+      // (b) el gate del lado del cliente sólo pedía el rol, que es más grueso.
+      //
+      // `areas/form` cubre los tres modos del mismo componente (register/view/
+      // edit), y el permiso de escritura depende de a cuál se llegue: no hay una
+      // ruta por modo. Se exige `_UPDATE` porque es el caso mayoritario (editar
+      // y ver), y es el mismo criterio que ya usa la lista para decidir si
+      // muestra el `Switch` de estatus. El alta tiene su propia ruta
+      // (`areas/new`) con `_CREATE`.
       { path: 'areas',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_AREAS_READ']} redirectTo="/dashboard"><AreasList /></RequirePermission></RequireRole> },
-      { path: 'areas/new',        element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><AreasForm /></RequireRole> },
-      { path: 'areas/form',       element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><AreasForm /></RequireRole> },
+      { path: 'areas/new',        element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><RequirePermission permissionKeys={['PAYMENT_AREAS_CREATE']} redirectToRoleMain><AreasForm /></RequirePermission></RequireRole> },
+      { path: 'areas/form',       element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><RequirePermission permissionKeys={['PAYMENT_AREAS_UPDATE']} redirectToRoleMain><AreasForm /></RequirePermission></RequireRole> },
 
       // Planes (includes extras: detalle + materia + escala)
       //
