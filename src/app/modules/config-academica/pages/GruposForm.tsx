@@ -462,6 +462,17 @@ export default function GruposForm() {
       }
     } catch (err) {
       const apiErr = err as ApiError
+      // 400 con código: la clave no describe al nivel elegido (Nivel 3 con
+      // `5A`). Es el único 400 con `code` que llega de POST/PUT /groups, así
+      // que basta el código para pegarlo al campo `code` sin mirar el texto,
+      // igual que el 409 del duplicado de abajo.
+      if (apiErr?.code === 'GROUP_CODE_LEVEL_MISMATCH') {
+        const msg = getApiErrorMessage(err)
+        setError('code', msg)
+        setSubmitStatus('error')
+        setSubmitErrorMsg(msg)
+        return
+      }
       // 409 en el alta individual: sin excepción es el duplicado de
       // (generationId, code), la única clave única de la tabla, así que va al
       // campo `code` sin mirar el texto, y también al banner con el mismo
