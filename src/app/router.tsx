@@ -178,13 +178,28 @@ const router = createBrowserRouter([
               </RequireRole>
             ),
           },
+          // Fase 9: el catálogo de canales se abría sólo con `RequireRole`, sin
+          // `RequirePermission` — el `PermissionRegistry` ya exigía
+          // `OUTREACH_CHANNELS_READ` en el backend (Fase 8), pero un
+          // `SERVICIOS_ESCOLARES` sin el permiso en su JWT veía la pantalla y
+          // se comía el 403 sólo al guardar. Se cierra el hueco igual que
+          // `divisiones`/`clasificaciones`/`periodos`. Los verbos de escritura
+          // no llevan ruta propia (el alta y la edición son un modal en la
+          // misma pantalla), así que `_CREATE`/`_UPDATE`/`_CHANGE_STATUS` los
+          // sigue aplicando el filtro del servidor, como en `periodos/form`.
           {
             path: 'canales',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CanalesDifusion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['OUTREACH_CHANNELS_READ']} redirectTo="/dashboard"><CanalesDifusion /></RequirePermission></RequireRole>,
           },
+          // Mismo cierre que `canales` en Fase 9: el `PermissionRegistry` ya
+          // exigía `HIGH_SCHOOL_TYPES_READ` en el backend, pero aquí sólo había
+          // `RequireRole`, así que un `SERVICIOS_ESCOLARES` sin el permiso veía la
+          // pantalla y se comía el 403 sólo al guardar. El alta y la edición son un
+          // modal en esta misma pantalla, así que los verbos de escritura los
+          // aplica el filtro del servidor.
           {
             path: 'tipos-bachillerato',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><TiposBachillerato /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['HIGH_SCHOOL_TYPES_READ']} redirectTo="/dashboard"><TiposBachillerato /></RequirePermission></RequireRole>,
           },
           {
             path: 'candidatos',
@@ -386,10 +401,23 @@ const router = createBrowserRouter([
       // precedent — every `/groups` verb is enforced server-side to
       // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
       // redirect to `/dashboard` instead of a raw 403/blank state for any
-      // other role. `grupos/new`/`grupos/form` are untouched — out of scope
-      // for this change.
+      // other role.
+      //
+      // `grupos/form` no estaba registrada, y `GruposList` navega a
+      // `/grupos/form?mode=…&id=…` desde ver y editar: ambas caían en la 404 del
+      // router. Es el mismo bug que se corrigió en `generaciones/form`.
+      //
+      // `grupos/new` y `grupos/form` se protegen con `RequirePermission`
+      // (GROUPS_CREATE / GROUPS_UPDATE), igual que `clasificaciones` y `planes`:
+      // antes sólo tenían RequireRole, así que un SERVICIOS_ESCOLARES con
+      // GROUPS_READ pero sin GROUPS_CREATE abría el formulario y se enteraba del
+      // 403 crudo en el API.
       { path: 'grupos', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_READ']} redirectTo="/dashboard"><GruposList /></RequirePermission></RequireRole> },
-      { path: 'grupos/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><GruposForm /></RequireRole> },
+      { path: 'grupos/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_CREATE']} redirectTo="/dashboard"><GruposForm /></RequirePermission></RequireRole> },
+      { path: 'grupos/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_UPDATE']} redirectTo="/dashboard"><GruposForm /></RequirePermission></RequireRole> },
+      // Creación masiva: escribe con el mismo permiso que el alta individual
+      // (GROUPS_CREATE), no con uno propio — es la misma operación de escritura
+      // sobre la misma tabla, sólo que en lote.
 
       // Configuración de Admisión
       //
@@ -426,12 +454,23 @@ const router = createBrowserRouter([
 
       // Áreas de conceptos de pago
       //
-      // Catálogo compañero de `conceptos` — misma convención: la lista lleva
-      // RoleGuard (los verbos `/payment-areas` los exige ADMIN o
-      // PERSONAL_FINANZAS en el backend) y el form queda abierto.
+      // Catálogo compañero de `conceptos`. La lista y ahora también el form
+      // llevan `RequirePermission`, no sólo `RequireRole`: los permisos finos
+      // `PAYMENT_AREAS_CREATE` / `_UPDATE` / `_CHANGE_STATUS` ya estaban
+      // sembrados y asignados en el backend, pero (a) no había entradas para
+      // `/payment-areas` en `PermissionRegistry`, así que `PermissionFilter` no
+      // encontraba regla y dejaba pasar los verbos a cualquiera con el rol, y
+      // (b) el gate del lado del cliente sólo pedía el rol, que es más grueso.
+      //
+      // `areas/form` cubre los tres modos del mismo componente (register/view/
+      // edit), y el permiso de escritura depende de a cuál se llegue: no hay una
+      // ruta por modo. Se exige `_UPDATE` porque es el caso mayoritario (editar
+      // y ver), y es el mismo criterio que ya usa la lista para decidir si
+      // muestra el `Switch` de estatus. El alta tiene su propia ruta
+      // (`areas/new`) con `_CREATE`.
       { path: 'areas',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_AREAS_READ']} redirectTo="/dashboard"><AreasList /></RequirePermission></RequireRole> },
-      { path: 'areas/new',        element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><AreasForm /></RequireRole> },
-      { path: 'areas/form',       element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><AreasForm /></RequireRole> },
+      { path: 'areas/new',        element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><RequirePermission permissionKeys={['PAYMENT_AREAS_CREATE']} redirectToRoleMain><AreasForm /></RequirePermission></RequireRole> },
+      { path: 'areas/form',       element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><RequirePermission permissionKeys={['PAYMENT_AREAS_UPDATE']} redirectToRoleMain><AreasForm /></RequirePermission></RequireRole> },
 
       // Planes (includes extras: detalle + materia + escala)
       //
