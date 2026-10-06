@@ -346,6 +346,44 @@ export function decimal({ label, gender = 'm', min, max, integer = false, fracti
   }
 }
 
+// ─── Fechas ──────────────────────────────────────────────────────────────────
+
+/** Opciones de las reglas de fecha. */
+export interface DateOptions {
+  label: string
+  gender?: Gender
+  /** Año mínimo inclusive. Por defecto 2000: descarta basura, no el futuro. */
+  minYear?: number
+}
+
+/**
+ * El campo es una fecha real en `dd/mm/yyyy` (sin overflow: `31/02/2020` no
+ * pasa) y su año no es anterior a `minYear`.
+ *
+ * **No** tope superior: un plan puede quedar vigente a partir del próximo
+ * cuatrimestre, así que el `DatePicker` deja navegar y teclear fechas
+ * futuras. La máscara y `required` son los que garantizan el formato; aquí se
+ * mide que la fecha exista de verdad.
+ *
+ * @example dateOnOrAfter({ label: 'fecha de vigencia', gender: 'f' })
+ *   // "La fecha de vigencia debe ser una fecha válida (dd/mm/yyyy)."
+ */
+export function dateOnOrAfter({ label, gender = 'm', minYear = 2000 }: DateOptions): FieldRule {
+  const invalid = `${article(gender)} ${label} ${must(gender)} ser una fecha válida (dd/mm/yyyy).`
+  const tooOld = `${article(gender)} ${label} ${cannot(gender)} ser anterior al 01/01/${minYear}.`
+  return value => {
+    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)
+    if (!match) return invalid
+    const day = Number(match[1])
+    const month = Number(match[2])
+    const year = Number(match[3])
+    const date = new Date(year, month - 1, day)
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return invalid
+    if (year < minYear) return tooOld
+    return undefined
+  }
+}
+
 // ─── Genéricas ──────────────────────────────────────────────────────────────
 
 /** Regla con expresión regular y mensaje propios. */

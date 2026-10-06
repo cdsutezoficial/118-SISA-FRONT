@@ -16,6 +16,7 @@ import {
   noControlChars,
   numeric,
   decimal,
+  dateOnOrAfter,
   applyRules,
   normalizeText,
   type FieldRule,
@@ -162,7 +163,11 @@ const PLAN_SCHEMA = {
   // El DatePicker trabaja en dd/mm/yyyy; la conversión a ISO ocurre al mandar
   // el payload (displayToIso). Guardar el formato de pantalla en el hook evita
   // tener dos estados para el mismo campo.
-  effectiveFrom: { rules: [required('fecha de vigencia', 'f')] },
+  // Sin tope superior: el plan puede quedar vigente desde el próximo
+  // cuatrimestre; sólo se descartan fechas imposibles y años anteriores a 2000.
+  effectiveFrom: {
+    rules: [required('fecha de vigencia', 'f'), dateOnOrAfter({ label: 'fecha de vigencia', gender: 'f' })],
+  },
   totalLevels: {
     rules: [required('total de niveles'), numeric({ label: 'total de niveles', min: 1, max: 15 })],
   },
