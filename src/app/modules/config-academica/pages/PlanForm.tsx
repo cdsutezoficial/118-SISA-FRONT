@@ -164,7 +164,7 @@ const PLAN_SCHEMA = {
   // tener dos estados para el mismo campo.
   effectiveFrom: { rules: [required('fecha de vigencia', 'f')] },
   totalLevels: {
-    rules: [required('total de niveles'), numeric({ label: 'total de niveles', min: 1 })],
+    rules: [required('total de niveles'), numeric({ label: 'total de niveles', min: 1, max: 15 })],
   },
   minPassingGrade: {
     rules: [
@@ -175,7 +175,7 @@ const PLAN_SCHEMA = {
   maxExtraordinaryExamsPerPeriod: {
     rules: [
       required('exámenes extraordinarios por periodo', 'mp'),
-      numeric({ label: 'exámenes extraordinarios por periodo', gender: 'mp', min: 0 }),
+      numeric({ label: 'exámenes extraordinarios por periodo', gender: 'mp', min: 0, max: 5 }),
     ],
   },
 } as const
@@ -872,6 +872,7 @@ export default function PlanForm() {
                 required={!isView}
                 type="number"
                 min={1}
+                max={15}
                 value={values.totalLevels}
                 onChange={v => {
                   handleChange('totalLevels')(v)
@@ -883,7 +884,7 @@ export default function PlanForm() {
                 error={fieldError('totalLevels')}
                 numeric
                 placeholder="Ej. 10"
-                help="Cantidad total de niveles que tendrá el plan."
+                help="Cantidad total de niveles que tendrá el plan (de 1 a 15)."
                 className="col-span-12 sm:col-span-4"
               />
             </div>
@@ -920,6 +921,7 @@ export default function PlanForm() {
                 required={!isView}
                 type="number"
                 min={0}
+                max={5}
                 value={values.maxExtraordinaryExamsPerPeriod}
                 onChange={handleChange('maxExtraordinaryExamsPerPeriod')}
                 onBlur={handleBlur('maxExtraordinaryExamsPerPeriod')}
@@ -927,7 +929,7 @@ export default function PlanForm() {
                 error={fieldError('maxExtraordinaryExamsPerPeriod')}
                 numeric
                 placeholder="Ej. 2"
-                help="Número máximo de exámenes extraordinarios por periodo."
+                help="Número máximo de exámenes extraordinarios por periodo (de 0 a 5)."
                 className="col-span-12 sm:col-span-4"
               />
 
