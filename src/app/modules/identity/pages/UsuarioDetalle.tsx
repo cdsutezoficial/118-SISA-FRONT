@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ShieldCheck, X, Plus, Check, ChevronDown, LockKeyholeOpen, Clock, CalendarPlus, ArrowLeft, Loader2,
+  ShieldCheck, X, Plus, Check, ChevronDown, LockKeyholeOpen, Clock, CalendarPlus, ArrowLeft, Loader2, Link2,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { apiGet, apiDelete, apiPatch, apiPost } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
+import { consumeLlaveMxCallback, fetchLlaveMxAvailability, startLlaveMxLink } from '@app/core/infra/llaveMx'
 import { ConfirmModal, Toast, ActionBtn, FieldLabel, FieldError, FieldHelp, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, Button, MiniTable } from '@app/core/components/form'
@@ -37,6 +38,7 @@ interface UserDetail {
   username: string
   status: BackendUserStatus
   mustChangePassword: boolean
+  llaveMxLinked: boolean
   lastLoginAt: string | null
   createdAt: string
   roles: UserRoleDetailItem[]
@@ -93,6 +95,13 @@ export default function UsuarioDetalle() {
   const [actionErrorMsg, setActionErrorMsg] = useState('')
   const [toast, setToast] = useState(pendingToast ?? '')
 
+  // Vinculación LlaveMX (RF-AUTH-002 "vinculacion posterior desde el perfil").
+  // `llaveAvailable` hides the button outright when the backend has no client
+  // id/secret yet — same rule as the login screen: never offer an affordance
+  // that cannot finish.
+  const [llaveAvailable, setLlaveAvailable] = useState(false)
+  const [linking, setLinking] = useState(false)
+
   // Multi-assign de roles (selección múltiple inline).
   const addRef = useRef<HTMLDivElement>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -131,9 +140,27 @@ export default function UsuarioDetalle() {
       })
   }
 
+  /**
+   * The link round comes back to this exact URL with the outcome in the
+   * fragment, so it is consumed here and scrubbed before anything else can
+   * read it. A forge buys nothing: the badge below is re-read from
+   * GET /users/{id}, which the marker never influences.
+   */
+  useEffect(() => {
+    const outcome = consumeLlaveMxCallback()
+    if (outcome.kind === 'linked') {
+      setToast('Cuenta vinculada con LlaveMX exitosamente.')
+      setTimeout(() => setToast(''), 4000)
+    } else if (outcome.kind === 'error') {
+      setActionErrorMsg(outcome.message)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     if (!id) return
     loadUser()
+    fetchLlaveMxAvailability().then(setLlaveAvailable).catch(() => {/* non-critical — button just won't render */})
     apiGet<DivisionsPageResponse>('/divisions', { size: 100 })
       .then(data => setDivisions(data.items))
       .catch(() => {/* non-critical — division names just won't resolve */})
@@ -187,6 +214,28 @@ export default function UsuarioDetalle() {
       else setActionErrorMsg('No se pudo desbloquear la cuenta. Intenta de nuevo.')
     } finally {
       setUnlocking(false)
+    }
+  }
+
+  /**
+   * Leaves the tab for the provider's consent screen. On success there is no
+   * return value to handle — the backend redirects back to this same URL with
+   * `#llaveLinked=ok`, and the mount effect above reports it. The catch is the
+   * only place the button comes back.
+   */
+  async function handleLink() {
+    if (!user) return
+    setLinking(true)
+    setActionErrorMsg('')
+    try {
+      await startLlaveMxLink(user.userId)
+    } catch (err) {
+      const apiErr = err as Partial<ApiError>
+      if (apiErr.status === 401) setActionErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
+      else if (apiErr.status === 403) setActionErrorMsg('No tienes permiso para vincular cuentas.')
+      else if (apiErr.status === 503) setActionErrorMsg('La integración con LlaveMX no está configurada en este ambiente.')
+      else setActionErrorMsg('No se pudo iniciar la vinculación. Intenta de nuevo.')
+      setLinking(false)
     }
   }
 
@@ -302,6 +351,17 @@ export default function UsuarioDetalle() {
                       Debe cambiar su contraseña
                     </span>
                   )}
+                  {/* figma 02-identidad — el badge manda el estado real de la
+                      columna, no el fragmento que el browser pudo inventar */}
+                  {user.llaveMxLinked ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <Link2 size={11} />LlaveMX vinculada
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
+                      <Link2 size={11} />LlaveMX no vinculada
+                    </span>
+                  )}
                 </div>
                 <p className="font-mono text-[13px] text-[#6B7280]">{user.username}</p>
                 <div className="flex items-center gap-4 mt-1.5 flex-wrap">
@@ -316,16 +376,29 @@ export default function UsuarioDetalle() {
                 </div>
               </div>
 
-              {user.status === 'LOCKED' && (
-                <button
-                  onClick={handleUnlock}
-                  disabled={unlocking}
-                  className="flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-[#009574] border border-[#009574]/30 bg-[#e6f5f1] hover:bg-[#d0ede6] rounded-md transition-colors flex-shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {unlocking ? <Loader2 size={13} className="animate-spin" /> : <LockKeyholeOpen size={13} />}
-                  Desbloquear cuenta
-                </button>
-              )}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {llaveAvailable && (
+                  <button
+                    onClick={handleLink}
+                    disabled={linking}
+                    className="flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-white bg-[#009574] hover:bg-[#007a5f] rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {linking ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
+                    {linking ? 'Abriendo LlaveMX…' : user.llaveMxLinked ? 'Re-vincular con LlaveMX' : 'Vincular con LlaveMX'}
+                  </button>
+                )}
+
+                {user.status === 'LOCKED' && (
+                  <button
+                    onClick={handleUnlock}
+                    disabled={unlocking}
+                    className="flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-[#009574] border border-[#009574]/30 bg-[#e6f5f1] hover:bg-[#d0ede6] rounded-md transition-colors flex-shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {unlocking ? <Loader2 size={13} className="animate-spin" /> : <LockKeyholeOpen size={13} />}
+                    Desbloquear cuenta
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

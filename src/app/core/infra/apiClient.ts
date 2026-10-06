@@ -163,6 +163,20 @@ function buildUrl(path: string, params?: Record<string, string | number | undefi
   return qs ? `${url}?${qs}` : url
 }
 
+/**
+ * Every request is sent with credentials so the browser carries the API's
+ * cookies — in particular the HttpOnly `sisa.llave.flow.<state>` cookie that
+ * holds the PKCE verifier, and `sisa.llave.verified` (the candidate identity
+ * ticket) that `POST /candidates` reads. The backend's `CorsConfig` pairs this
+ * with `allowCredentials(true)` and an explicit origin list (never `*`), which
+ * is what makes the credentialed CORS exchange legal.
+ *
+ * Note this is about the *cookie*, not the bearer token: the token still rides
+ * the `Authorization` header. Nothing here weakens that — a cross-origin
+ * `fetch` simply refuses to store or send cookies unless asked.
+ */
+const CREDENTIALS: RequestCredentials = 'include'
+
 function buildHeaders(extra?: Record<string, string>): HeadersInit {
   const token = getAccessToken()
   return {
@@ -186,14 +200,25 @@ export async function apiGet<T>(
   params?: Record<string, string | number | undefined>
 ): Promise<T> {
   const res = await fetch(buildUrl(path, params), {
+    credentials: CREDENTIALS,
     headers: buildHeaders(),
   })
   return handleResponse<T>(res)
 }
 
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(buildUrl(path), {
+/**
+ * `params` is here for endpoints that take their arguments as request params on
+ * a POST rather than in the body — e.g. `POST /auth/llave-mx/start?flavor=…`,
+ * which has no body at all. Omit it for the normal body-carrying calls.
+ */
+export async function apiPost<T>(
+  path: string,
+  body?: unknown,
+  params?: Record<string, string | number | undefined>
+): Promise<T> {
+  const res = await fetch(buildUrl(path, params), {
     method: 'POST',
+    credentials: CREDENTIALS,
     headers: buildHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
@@ -203,6 +228,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'PUT',
+    credentials: CREDENTIALS,
     headers: buildHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
@@ -212,6 +238,7 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
 export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'PATCH',
+    credentials: CREDENTIALS,
     headers: buildHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
@@ -221,6 +248,7 @@ export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
 export async function apiDelete<T>(path: string): Promise<T> {
   const res = await fetch(buildUrl(path), {
     method: 'DELETE',
+    credentials: CREDENTIALS,
     headers: buildHeaders(),
   })
   return handleResponse<T>(res)
@@ -234,6 +262,7 @@ export async function apiDelete<T>(path: string): Promise<T> {
  */
 export async function apiDownload(path: string): Promise<Blob> {
   const res = await fetch(buildUrl(path), {
+    credentials: CREDENTIALS,
     headers: buildHeaders(),
   })
   if (!res.ok) {
