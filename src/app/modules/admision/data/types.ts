@@ -16,6 +16,7 @@
  */
 export type CandidateStatus =
   | 'REGISTERED'
+  | 'PAYMENT_EXPIRED'
   | 'PAID'
   | 'EXAM_TAKEN'
   | 'ACCEPTED'
@@ -39,14 +40,17 @@ export interface PaymentRecord {
 // language (`referenceNumber`/`amount`/`registrationDeadline`/`PENDING|PAID`).
 
 /**
- * The two window dates, and why they are two fields.
+ * The dates the ficha carries, and why they are separate fields.
  *
  * `registrationDeadline` is the sales window's closing day, snapshotted onto the
  * ticket at registration — the same boundary that stops new fichas from being
  * issued. `paymentClosesOn` is the tuition concept's `available_until`, read
- * live on every request, and it is the only one that still constrains anything:
- * extending a period means editing Conceptos de Pago, which must move the date
- * on fichas that were issued weeks earlier.
+ * live on every request; it is an engine-side boundary the catalog moves by
+ * editing Conceptos de Pago, and it is NOT the date shown to the applicant.
+ *
+ * The date the screen promises as "Fecha límite de pago" is `paymentDeadline`:
+ * the earlier of `registrationDeadline` and the ficha's own `registeredAt` +
+ * N-day plazo. It is the only one the applicant can act on.
  *
  * Never merge these into one field again. The single `deadline` they replaced was
  * the registration snapshot labelled "Fecha límite de pago", so the number under
@@ -57,11 +61,16 @@ export interface VentanaFechas {
   /** `yyyy-MM-dd` — snapshot of `program_admission_config.closes_at`. */
   registrationDeadline: string | null
   /**
-   * `yyyy-MM-dd` — live `payment_concept.available_until`, the date that really
-   * gates the payment. `null` when the concept has no closing date configured;
-   * callers omit the row rather than printing a placeholder.
+   * `yyyy-MM-dd` — live `payment_concept.available_until`, the engine boundary.
+   * `null` when the concept has no closing date configured.
    */
   paymentClosesOn: string | null
+  /**
+   * `yyyy-MM-dd` — the date shown as "Fecha límite de pago": the earlier of the
+   * sales window and the ficha's own plazo. `null` only when neither is known;
+   * callers omit the row rather than printing a placeholder.
+   */
+  paymentDeadline: string | null
 }
 
 /** `RegisterCandidateUseCase.FichaPayment` — the ticket the POST generates. */
@@ -99,6 +108,30 @@ export interface CheckoutInitiationBackend {
 }
 
 /**
+ * What `POST /candidates/{id}/payments/release` reports — the quota slot the
+ * browser gave up on, settled against the gateway rather than against the
+ * browser's word.
+ *
+ * The two fields are separate because they answer different questions, and the
+ * applicant needs to hear something different about each: a freed slot invites
+ * a retry, while `PAYMENT_CAPTURED` means the money already arrived and the
+ * timeout was cosmetic. One boolean would collapse those into the same
+ * message.
+ */
+export type PaymentReleaseOutcome =
+  | 'SLOT_RELEASED'
+  | 'PAYMENT_IN_PROGRESS'
+  | 'PAYMENT_CAPTURED'
+  | 'RETAINED_UNEXPLAINED'
+
+export interface PaymentReleaseBackend {
+  candidateId: string
+  orderId: string
+  outcome: PaymentReleaseOutcome
+  slotReleased: boolean
+}
+
+/**
  * `POST /candidates/payment-access` — the "vuelve a pagar mi ficha" lookup.
  *
  * Reached with a sequential folio plus the last 3 characters of the CURP, so
@@ -119,6 +152,24 @@ export interface FichaPaymentAccessBackend extends VentanaFechas {
   /** ISO instant, present only when `alreadyPaid`. */
   paidAt: string | null
   alreadyPaid: boolean
+  /** The candidate's lifecycle state, so the screen can label it. */
+  candidateStatus: CandidateStatus
+  /**
+   * Whether the ficha can still be paid **right now**.
+   *
+   * Not the same question as `candidateStatus`. The status is what the nightly
+   * VENCEN_FICHAS sweep wrote down; this flag is what the backend computes live
+   * from the window (the earlier of the ficha's own plazo and the closing day of
+   * its admission process). Between a deadline passing and the sweep running they
+   * disagree, and this is the one to obey when deciding whether to show "Pagar":
+   * the checkout refuses an expired ficha with a 409, so a button offered during
+   * that window is a button that cannot work.
+   *
+   * Do not re-derive it here from `paymentDeadline`. The screen has no access to
+   * `registeredAt` on this endpoint, and a second copy of the window rule in
+   * TypeScript is exactly how the portal and the engine start disagreeing.
+   */
+  paymentExpired: boolean
 }
 
 /** `GET /candidates/{id}` — ficha projection for route-refresh fallback. */
@@ -376,6 +427,10 @@ export interface StatusMeta {
  */
 export const STATUS_META: Record<CandidateStatus, StatusMeta> = {
   REGISTERED: { label: 'Registrado', badgeClass: 'bg-gray-100 text-gray-600 border border-gray-200' },
+  // Not a rejection: the ficha lapsed unpaid and the CURP is free again, which is
+  // a different thing to say to the office than "Rechazado" (that one belongs to
+  // the academic evaluation and would corrupt the admission reports).
+  PAYMENT_EXPIRED: { label: 'Pago Vencido', badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200' },
   PAID: { label: 'Ficha Pagada', badgeClass: 'bg-blue-50 text-blue-700 border border-blue-200' },
   EXAM_TAKEN: { label: 'Examen Aplicado', badgeClass: 'bg-violet-50 text-violet-700 border border-violet-200' },
   ACCEPTED: { label: 'Admitido', badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
@@ -400,9 +455,15 @@ export type AdmisionAction =
  *   payment confirmed at the candidate-instance level; use `canRegistrarInduccion`
  *   below rather than this map alone for that action.
  * - Cambiar Programa only if status is not ACCEPTED/REJECTED/ENROLLED
+ *
+ * `PAYMENT_EXPIRED` gets nothing: the window closed unpaid, so there is no
+ * payment left to confirm and the CURP is free again. It is also not terminal the
+ * way ACCEPTED/REJECTED are — the person may register a new ficha, which is a
+ * different folio rather than a new row action here.
  */
 export const STATUS_ACTIONS: Record<CandidateStatus, AdmisionAction[]> = {
   REGISTERED: ['CONFIRMAR_PAGO_FICHA', 'CAMBIAR_PROGRAMA'],
+  PAYMENT_EXPIRED: [],
   PAID: ['CONFIRMAR_PAGO_INDUCCION', 'REGISTRAR_EXAMEN', 'REGISTRAR_INDUCCION', 'CAMBIAR_PROGRAMA'],
   EXAM_TAKEN: ['CONFIRMAR_PAGO_INDUCCION', 'REGISTRAR_INDUCCION', 'CAMBIAR_PROGRAMA'],
   ACCEPTED: [],
@@ -423,3 +484,61 @@ export function isAdmisionActionEnabled(candidate: Candidate, action: AdmisionAc
 
 /** Screen 13 payment-method choice — mirrors `CandidatoRegistro`'s `MetodoPago`. */
 export type MetodoPagoFicha = 'ONLINE' | 'VENTANILLA'
+
+// ── Screen 3 (Candidatos Listado) real-backend flow types ─────────────────────
+// Mirrors `GET /candidates` (`CandidateListItemResponse` / `CandidateListResponse`).
+// Deliberately leaner than the mock `Candidate` shape: the list renders exactly
+// these columns and row actions, so payments/induction flags/exam results stay on
+// `GET /candidates/{id}` instead of leaking onto the list.
+
+/** A single row of `GET /candidates` — `{id, folio, fullName, curp, programId, programName, status, registeredAt}`. */
+export interface CandidateListRow {
+  id: string
+  folio: string
+  fullName: string
+  curp: string
+  /** Id of the chosen `AcademicProgram` (NOT the admission-config id). */
+  programId: string
+  programName: string
+  status: CandidateStatus
+  /** ISO-8601 `Instant`. */
+  registeredAt: string
+}
+
+/** `GET /candidates` envelope — same `{items, totalElements, totalPages, page, size}` as every paginated list. */
+export interface CandidateListPage {
+  items: CandidateListRow[]
+  totalElements: number
+  totalPages: number
+  page: number
+  size: number
+}
+
+/** One payment section of the staff candidate detail (`GET /candidates/{id}/detail`). */
+export interface CandidateDetailPaymentBackend {
+  concept: 'ADMISSION_FICHA' | 'INDUCTION_COURSE'
+  amount: number
+  referenceNumber: string
+  paymentStatus: 'PENDING' | 'PAID'
+  receiptNumber: string | null
+  paidAt: string | null
+  orderId: string | null
+}
+
+/** Staff-facing detail payload for the first two tabs of `CandidatoDetalle.tsx`. */
+export interface CandidateDetailBackend {
+  candidateId: string
+  folio: string
+  fullName: string
+  candidateStatus: CandidateStatus
+  registeredAt: string
+  programName: string | null
+  divisionName: string | null
+  curp: string
+  email: string | null
+  homePhone: string | null
+  mobilePhone: string | null
+  outreachChannelName: string | null
+  admissionPayment: CandidateDetailPaymentBackend
+  inductionPayment: CandidateDetailPaymentBackend | null
+}

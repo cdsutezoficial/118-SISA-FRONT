@@ -18,6 +18,8 @@ import {
 } from '@app/core/components/list'
 import { apiGet, apiPost, apiPut, apiPatch } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
+import { useFieldValidation } from '@app/core/validation/useFieldValidation'
+import { required, maxLength, noControlChars, normalizeText } from '@app/core/validation/fieldRules'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 // `OutreachChannel` (bounded context `admission`, backend closed 2026-07-28 —
@@ -44,6 +46,40 @@ interface ChannelsPageResponse {
   size: number
 }
 
+// ─── Validación (Fase 9) ─────────────────────────────────────────────────────
+// El `code` del 409 de nombre duplicado. Se ramifica sobre el código y no sobre
+// el texto del mensaje a propósito: el javadoc de `ErrorResponse` lo dice
+// explícitamente, porque el copy se reescribe sin aviso. Espejo de
+// `GlobalExceptionHandler#CODE_OUTREACH_CHANNEL_NAME_DUPLICATE`.
+const CHANNEL_NAME_DUPLICATE = 'OUTREACH_CHANNEL_NAME_DUPLICATE'
+
+// `name` es un texto libre: NO lleva `normalize`, porque recortar en cada
+// pulsación impediría escribir el espacio entre palabras. Se usa
+// `validateOn: normalizeText`, que sólo limpia el valor al evaluar las reglas —
+// el input conserva lo que el usuario teclea y el cursor no salta — y el
+// payload se arma con el mismo `normalizeText`.
+//
+// Sin regla de letras ni de signos, a diferencia de `DivisionesForm.name`: aquí
+// el nombre es de libre elección de la institución ("Radio UTEZ 102.5",
+// "TikTok", "1a opción"), y el backend tampoco las aplica. Lo único que se
+// rechaza son los caracteres de control, que no se leen en pantalla y rompen la
+// búsqueda del listado.
+const CHANNEL_SCHEMA = {
+  name: {
+    validateOn: normalizeText,
+    rules: [required('nombre del canal'), maxLength(150, 'nombre del canal'), noControlChars('nombre del canal')],
+  },
+} as const
+
+const CHANNEL_INITIAL_VALUES = { name: '' }
+
+/**
+ * Resultado de `onSave`: el modal decide a qué campo pegar el error, así que el
+ * padre sólo lo reporta y no guarda estado de error de campo. `null` = guardado
+ * bien (el padre ya cerró el modal).
+ */
+type SaveOutcome = { field: 'name'; message: string } | null
+
 // ─── Inline registro/edición modal ──────────────────────────────────────────
 // Kept as an inline modal (not a separate route) — the mock already used this
 // pattern and the catalog is simple enough (one field) that a full-page form
@@ -52,12 +88,32 @@ interface ChannelsPageResponse {
 function CanalModal({ mode, initialName, onSave, onCancel, saving, errorMsg }: {
   mode: 'create' | 'edit'
   initialName: string
-  onSave: (name: string) => void
+  onSave: (name: string) => Promise<SaveOutcome>
   onCancel: () => void
   saving: boolean
   errorMsg: string
 }) {
-  const [name, setName] = useState(initialName)
+  const { values, fieldError, handleChange, handleBlur, setFieldValue, setFieldError, validate, isValid } =
+    useFieldValidation(CHANNEL_SCHEMA, CHANNEL_INITIAL_VALUES)
+
+  // El modal se monta de cero cada vez que se abre, así que `initialName` sólo
+  // hay que sembrarlo una vez. Va por `setFieldValue` y no por `handleChange` a
+  // propósito: sembrar no debe marcar el campo como tocado, o el modal abriría
+  // en rojo cuando se edita un canal con un nombre que ya es válido.
+  useEffect(() => {
+    setFieldValue('name', initialName)
+  }, [initialName, setFieldValue])
+
+  async function handleSubmit() {
+    // Valida antes de pedir nada: un 400 por nombre vacío o con caracteres de
+    // control es un viaje de ida y vuelta que el formulario ya puede evitar.
+    if (!validate()) return
+    const outcome = await onSave(normalizeText(values.name))
+    // El 409 lo inyecta el hook, que además lo borra solo en cuanto el usuario
+    // vuelve a teclear, y marca el campo como tocado para que se vea sin que el
+    // usuario haya tocado el input.
+    if (outcome) setFieldError(outcome.field, outcome.message)
+  }
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center">
@@ -71,9 +127,12 @@ function CanalModal({ mode, initialName, onSave, onCancel, saving, errorMsg }: {
           label="Nombre del Canal"
           required
           autoFocus
-          value={name}
-          onChange={setName}
+          value={values.name}
+          onChange={handleChange('name')}
+          onBlur={handleBlur('name')}
           disabled={saving}
+          error={fieldError('name')}
+          maxLength={150}
           placeholder="ej. Redes Sociales"
           className="mb-4"
         />
@@ -89,7 +148,10 @@ function CanalModal({ mode, initialName, onSave, onCancel, saving, errorMsg }: {
           <Button variant="secondary" onClick={onCancel} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={() => name.trim() && onSave(name.trim())} disabled={!name.trim() || saving} loading={saving}>
+          {/* `isValid` sin tocar nada: vacío el modal abre con el botón apagado,
+              como antes, y los errores de las reglas salen al teclear o al
+              pulsar, ya inyectados en el campo. */}
+          <Button onClick={handleSubmit} disabled={!isValid || saving} loading={saving}>
             Guardar
           </Button>
         </div>
@@ -149,7 +211,12 @@ export default function CanalesDifusion() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, page])
 
-  async function handleSave(name: string) {
+  // Devuelve el error de campo en vez de ponerlo en el banner: un nombre
+  // duplicado es un error de ese campo, y el modal lo muestra bajo el input
+  // dejando lo tecleado a la vista. Todo lo demás sigue siendo banner, porque no
+  // pertenece a ningún campo en concreto. El modal se queda abierto en ambos
+  // casos — sólo se cierra en el `try`.
+  async function handleSave(name: string): Promise<SaveOutcome> {
     setModalSaving(true)
     setModalErrorMsg('')
     try {
@@ -162,12 +229,20 @@ export default function CanalesDifusion() {
       }
       setModalTarget(null)
       await fetchChannels()
+      return null
     } catch (err) {
       const apiErr = err as Partial<ApiError>
+      if (apiErr.status === 409 && apiErr.code === CHANNEL_NAME_DUPLICATE) {
+        // El error va al campo y al banner del modal, con el mismo mensaje.
+        const message = apiErr.message ?? 'El nombre del canal ya está en uso.'
+        setModalErrorMsg(message)
+        return { field: 'name', message }
+      }
       if (apiErr.status === 400) setModalErrorMsg(apiErr.message ?? 'Revisa los datos capturados.')
       else if (apiErr.status === 401) setModalErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
       else if (apiErr.status === 403) setModalErrorMsg('No tienes permiso para realizar esta acción.')
       else setModalErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
+      return null
     } finally {
       setModalSaving(false)
     }

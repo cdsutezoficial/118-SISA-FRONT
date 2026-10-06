@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { Plus as PlusIcon, CreditCard, Receipt, ClipboardCheck, GraduationCap, ArrowLeftRight, Eye as EyeIcon } from 'lucide-react'
+import { Plus as PlusIcon, CreditCard, Eye as EyeIcon } from 'lucide-react'
 import { Toast, ActionBtn } from '@app/core/components/ui'
 import {
   PageContainer,
@@ -10,6 +10,7 @@ import {
   FilterBar,
   FilterSelect,
   ResultCount,
+  ErrorBanner,
   Pagination,
   MobilePagination,
   DataTable,
@@ -18,22 +19,69 @@ import {
   type ColumnDef,
   type BadgeStyle,
 } from '@app/core/components/list'
+import { apiGet, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { programLabel } from '@app/core/infra/programLabel'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { CambiarProgramaModal } from '../components/CambiarProgramaModal'
-import { mockCandidates } from '../data/mockData'
-import { STATUS_META, isAdmisionActionEnabled, type Candidate, type CandidateStatus } from '../data/types'
+import {
+  STATUS_META,
+  type CandidateStatus,
+  type CandidateListPage,
+  type CandidateListRow,
+} from '../data/types'
 
 // ─── Estado filter (corrected per `03-admision.md` — Corrección Pantalla 3) ───
 // Uses the same 6 domain statuses + "Todos"; option labels/badges are sourced
 // from STATUS_META so the filter and the row badges never drift out of sync.
 
-const STATUS_ORDER: CandidateStatus[] = ['REGISTERED', 'PAID', 'EXAM_TAKEN', 'ACCEPTED', 'REJECTED', 'ENROLLED']
+// `PAYMENT_EXPIRED` sits right after `REGISTERED`, which is where it belongs in
+// time: it is the same ficha, lapsed unpaid. Before it, an expired ficha looked
+// identical to a live one and could be filtered into the same "Registrado"
+// bucket; after it, it would be misfiled with the academic rejections.
+const STATUS_ORDER: CandidateStatus[] = [
+  'REGISTERED',
+  'PAYMENT_EXPIRED',
+  'PAID',
+  'EXAM_TAKEN',
+  'ACCEPTED',
+  'REJECTED',
+  'ENROLLED',
+]
 const estadoOptions = STATUS_ORDER.map(s => ({ value: s, label: STATUS_META[s].label }))
 const statusBadgeMap: Record<string, BadgeStyle> = Object.fromEntries(
   STATUS_ORDER.map(s => [s, { label: STATUS_META[s].label, className: STATUS_META[s].badgeClass }]),
 )
 
-const perPage = 10
+const perPage = 20
+
+// ─── Reference-catalog shapes (mirror `GET /programs` + `GET /periods`) ───────
+
+interface ProgramSummary {
+  id: string
+  name: string
+  code: string
+  modality?: string
+}
+
+interface ProgramsPageResponse {
+  items: ProgramSummary[]
+}
+
+interface PeriodSummary {
+  id: string
+  name: string
+}
+
+interface PeriodsPageResponse {
+  items: PeriodSummary[]
+}
+
+/** ISO-8601 `Instant` → `dd/MM/yyyy` (browser-local). */
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
+}
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
@@ -52,60 +100,94 @@ function CardActionButton({ icon, label, onClick }: { icon: ReactNode; label: st
 export default function CandidatosList() {
   const navigate = useNavigate()
   const pendingToast = usePendingToast()
-  const [candidates, setCandidates] = useState<Candidate[]>(mockCandidates)
   const [toast, setToast] = useState(pendingToast ?? '')
+  const [candidates, setCandidates] = useState<CandidateListRow[]>([])
+  const [programs, setPrograms] = useState<ProgramSummary[]>([])
+  const [periods, setPeriods] = useState<PeriodSummary[]>([])
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [programaFilter, setProgramaFilter] = useState('')
+  const [periodoFilter, setPeriodoFilter] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('')
   const [page, setPage] = useState(1)
-  const [cambiarProgramaTarget, setCambiarProgramaTarget] = useState<Candidate | null>(null)
+  const [totalElements, setTotalElements] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
+  const [errorMsg, setErrorMsg] = useState('')
 
-  const programas = Array.from(new Set(mockCandidates.map(c => c.programa)))
+  const programaOptions = programs.map(p => ({ value: p.id, label: programLabel(p) }))
+  const periodoOptions = periods.map(p => ({ value: p.id, label: p.name }))
 
-  const filtered = candidates.filter(c => {
-    const matchPrograma = !programaFilter || c.programa === programaFilter
-    const matchEstado = !estadoFilter || c.status === estadoFilter
-    const q = search.trim().toLowerCase()
-    const matchSearch =
-      !q ||
-      c.nombre.toLowerCase().includes(q) ||
-      c.curp.toLowerCase().includes(q) ||
-      c.folio.toLowerCase().includes(q)
-    return matchPrograma && matchEstado && matchSearch
-  })
+  // Load programs/periods once — programs/periods populate the filter dropdowns.
+  useEffect(() => {
+    apiGet<ProgramsPageResponse>('/programs', { size: 100 })
+      .then(data => setPrograms(data.items))
+      .catch(() => {/* non-critical — filter just won't populate */})
+    apiGet<PeriodsPageResponse>('/periods', { size: 100 })
+      .then(data => setPeriods(data.items))
+      .catch(() => {/* non-critical — filter just won't populate */})
+  }, [])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage))
-  const pageItems = filtered.slice((page - 1) * perPage, page * perPage)
+  // Preselect the active period (per Pantalla 3: the list follows the active
+  // admission process). Runs once; doesn't fight a manual clear afterwards.
+  useEffect(() => {
+    let cancelled = false
+    apiGet<PeriodsPageResponse>('/periods', { status: 'ACTIVE', size: 1 })
+      .then(data => {
+        if (cancelled || !data.items[0]) return
+        setPeriodoFilter(data.items[0].id)
+        setPage(1)
+      })
+      .catch(() => {/* non-critical — filter simply starts empty */})
+    return () => { cancelled = true }
+  }, [])
 
-  function handleCambiarPrograma(nuevoPrograma: string) {
-    if (!cambiarProgramaTarget) return
-    const targetId = cambiarProgramaTarget.id
-    const nombre = cambiarProgramaTarget.nombre
-    setCandidates(prev => prev.map(c => (c.id === targetId ? { ...c, programa: nuevoPrograma } : c)))
-    setCambiarProgramaTarget(null)
-    setToast(`Carrera actualizada para ${nombre}.`)
-  }
+  // Debounce free-text search.
+  useEffect(() => {
+    const timer = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
-  const columns: ColumnDef<Candidate>[] = [
+  useEffect(() => {
+    let cancelled = false
+    setLoadStatus('loading')
+    setErrorMsg('')
+    apiGet<CandidateListPage>('/candidates', {
+      status: estadoFilter || undefined,
+      programId: programaFilter || undefined,
+      periodId: periodoFilter || undefined,
+      search: debouncedSearch.trim() || undefined,
+      page: page - 1,
+      size: perPage,
+    })
+      .then(data => {
+        if (cancelled) return
+        setCandidates(data.items)
+        setTotalElements(data.totalElements)
+        setTotalPages(data.totalPages)
+        setLoadStatus('idle')
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setLoadStatus('error')
+        setErrorMsg(getApiErrorMessage(err, 'No tienes permiso para consultar los candidatos.'))
+      })
+    return () => { cancelled = true }
+  }, [estadoFilter, programaFilter, periodoFilter, debouncedSearch, page])
+
+  const emptyHint = loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'
+
+  const columns: ColumnDef<CandidateListRow>[] = [
     { key: 'folio', header: 'Folio', type: 'code', className: 'w-32' },
-    { key: 'nombre', header: 'Nombre Completo', type: 'name' },
-    { key: 'programa', header: 'Carrera Solicitada', type: 'text' },
+    { key: 'fullName', header: 'Nombre Completo', type: 'name' },
+    { key: 'programName', header: 'Carrera Solicitada', type: 'text' },
     { key: 'status', header: 'Estado', type: 'badge', badge: statusBadgeMap, className: 'w-28' },
-    { key: 'fechaRegistro', header: 'Fecha de Registro', type: 'muted', className: 'w-24' },
+    { key: 'registeredAt', header: 'Fecha de Registro', type: 'muted', value: row => formatDate(row.registeredAt), className: 'w-24' },
   ]
 
   return (
     <PageContainer>
       {toast && <Toast message={toast} onClose={() => setToast('')} />}
-
-      {cambiarProgramaTarget && (
-        <CambiarProgramaModal
-          candidate={cambiarProgramaTarget}
-          programas={programas}
-          onSave={handleCambiarPrograma}
-          onCancel={() => setCambiarProgramaTarget(null)}
-        />
-      )}
 
       <Breadcrumb
         items={[
@@ -121,13 +203,15 @@ export default function CandidatosList() {
         actions={[{ label: 'Registrar Candidato', icon: <PlusIcon />, onClick: () => navigate('/admision/candidatos/registrar') }]}
       />
 
+      {loadStatus === 'error' && errorMsg && <ErrorBanner message={errorMsg} />}
+
       <FilterBar>
         <FilterSelect
           value={programaFilter}
           onChange={v => { setProgramaFilter(v); setPage(1) }}
           allLabel="Todas las carreras"
           className="w-full sm:w-64"
-          options={programas.map(p => ({ value: p, label: p }))}
+          options={programaOptions}
         />
         <FilterSelect
           value={estadoFilter}
@@ -135,63 +219,42 @@ export default function CandidatosList() {
           allLabel="Todos los estados"
           options={estadoOptions}
         />
+        <FilterSelect
+          value={periodoFilter}
+          onChange={v => { setPeriodoFilter(v); setPage(1) }}
+          allLabel="Todos los periodos"
+          options={periodoOptions}
+        />
         <SearchInput
           value={search}
-          onChange={v => { setSearch(v); setPage(1) }}
+          onChange={setSearch}
           placeholder="Buscar por nombre, CURP o folio..."
         />
-        <ResultCount count={filtered.length} />
+        <ResultCount count={totalElements} />
       </FilterBar>
 
       {/* Tabla desktop (md+) */}
       <DataTable
         columns={columns}
-        status="idle"
-        items={pageItems}
+        status={loadStatus}
+        items={candidates}
         keyFor={row => row.id}
         numbered
+        rowNumberOffset={(page - 1) * perPage}
         loadingLabel="Cargando candidatos..."
         emptyTitle="No se encontraron candidatos"
-        emptyHint="Intenta ajustar los filtros de búsqueda"
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={filtered.length} perPage={perPage} onPageChange={setPage} />}
+        emptyHint={emptyHint}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
         actions={{
           view: row => navigate(`/admision/candidatos/detalle?id=${row.id}`),
           viewTooltip: 'Ver detalle',
           extra: row => (
             <>
-              {isAdmisionActionEnabled(row, 'CONFIRMAR_PAGO_FICHA') && (
+              {row.status === 'REGISTERED' && (
                 <ActionBtn
                   icon={<CreditCard size={15} />}
                   tooltip="Confirmar Pago Ficha"
                   onClick={() => navigate(`/admision/candidatos/pago-ficha?id=${row.id}`)}
-                />
-              )}
-              {isAdmisionActionEnabled(row, 'CONFIRMAR_PAGO_INDUCCION') && (
-                <ActionBtn
-                  icon={<Receipt size={15} />}
-                  tooltip="Confirmar Pago Inducción"
-                  onClick={() => navigate(`/admision/candidatos/pago-induccion?id=${row.id}`)}
-                />
-              )}
-              {isAdmisionActionEnabled(row, 'REGISTRAR_EXAMEN') && (
-                <ActionBtn
-                  icon={<ClipboardCheck size={15} />}
-                  tooltip="Registrar Examen"
-                  onClick={() => navigate(`/admision/candidatos/examen?id=${row.id}`)}
-                />
-              )}
-              {isAdmisionActionEnabled(row, 'REGISTRAR_INDUCCION') && (
-                <ActionBtn
-                  icon={<GraduationCap size={15} />}
-                  tooltip="Registrar Inducción"
-                  onClick={() => navigate(`/admision/candidatos/induccion?id=${row.id}`)}
-                />
-              )}
-              {isAdmisionActionEnabled(row, 'CAMBIAR_PROGRAMA') && (
-                <ActionBtn
-                  icon={<ArrowLeftRight size={15} />}
-                  tooltip="Cambiar Carrera"
-                  onClick={() => setCambiarProgramaTarget(row)}
                 />
               )}
             </>
@@ -201,46 +264,34 @@ export default function CandidatosList() {
 
       {/* ── Mobile cards (< md) ─────────────────────────────────────────────── */}
       <MobileCards
-        status="idle"
-        items={pageItems}
+        status={loadStatus}
+        items={candidates}
         keyFor={row => row.id}
         renderItem={row => (
           <>
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="font-medium text-[13px] text-[#333333]">{row.nombre}</span>
+              <span className="font-medium text-[13px] text-[#333333]">{row.fullName}</span>
               <BadgePill value={row.status} map={statusBadgeMap} />
             </div>
             <p className="font-mono text-[11px] text-[#6B7280] mb-1">Folio: {row.folio}</p>
-            <p className="text-[12px] text-[#6B7280] mb-1">{row.programa}</p>
-            <p className="text-[12px] text-[#6B7280] mb-3">{row.fechaRegistro}</p>
+            <p className="text-[12px] text-[#6B7280] mb-1">{row.programName}</p>
+            <p className="text-[12px] text-[#6B7280] mb-3">{formatDate(row.registeredAt)}</p>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#E5E7EB]">
               <CardActionButton
                 icon={<EyeIcon size={13} />}
                 label="Ver detalle"
                 onClick={() => navigate(`/admision/candidatos/detalle?id=${row.id}`)}
               />
-              {isAdmisionActionEnabled(row, 'CONFIRMAR_PAGO_FICHA') && (
+              {row.status === 'REGISTERED' && (
                 <CardActionButton icon={<CreditCard size={13} />} label="Pago Ficha" onClick={() => navigate(`/admision/candidatos/pago-ficha?id=${row.id}`)} />
-              )}
-              {isAdmisionActionEnabled(row, 'CONFIRMAR_PAGO_INDUCCION') && (
-                <CardActionButton icon={<Receipt size={13} />} label="Pago Inducción" onClick={() => navigate(`/admision/candidatos/pago-induccion?id=${row.id}`)} />
-              )}
-              {isAdmisionActionEnabled(row, 'REGISTRAR_EXAMEN') && (
-                <CardActionButton icon={<ClipboardCheck size={13} />} label="Registrar Examen" onClick={() => navigate(`/admision/candidatos/examen?id=${row.id}`)} />
-              )}
-              {isAdmisionActionEnabled(row, 'REGISTRAR_INDUCCION') && (
-                <CardActionButton icon={<GraduationCap size={13} />} label="Registrar Inducción" onClick={() => navigate(`/admision/candidatos/induccion?id=${row.id}`)} />
-              )}
-              {isAdmisionActionEnabled(row, 'CAMBIAR_PROGRAMA') && (
-                <CardActionButton icon={<ArrowLeftRight size={13} />} label="Cambiar Carrera" onClick={() => setCambiarProgramaTarget(row)} />
               )}
             </div>
           </>
         )}
         loadingLabel="Cargando candidatos..."
         emptyTitle="No se encontraron candidatos"
-        emptyHint="Intenta ajustar los filtros de búsqueda"
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={filtered.length} perPage={perPage} onPageChange={setPage} />}
+        emptyHint={emptyHint}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
       />
     </PageContainer>
   )

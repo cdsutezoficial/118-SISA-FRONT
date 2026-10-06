@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { CreditCard, Download, GraduationCap, Loader2 } from 'lucide-react'
+import { Clock, CreditCard, Download, GraduationCap, Info, Loader2 } from 'lucide-react'
 import { Button } from '@app/core/components/form'
 import { Toast } from '@app/core/components/ui'
 import { useRole } from '@app/core/infra/RoleContext'
 import { apiDownload, saveBlobDownload } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
-import { useFichaPayment, fichaAccessStorageKey } from '@app/modules/admision/hooks/useFichaPayment'
+import {
+  clearEvoCheckoutSessionStorage,
+  useFichaPayment,
+  fichaAccessStorageKey,
+} from '@app/modules/admision/hooks/useFichaPayment'
 import { FichaPagoConfirmado } from '@app/modules/admision/components/FichaPagoConfirmado'
 import { FichaPagoPendiente } from '@app/modules/admision/components/FichaPagoPendiente'
 import { EvoPaymentPanel } from '@app/modules/admision/components/EvoPaymentPanel'
@@ -83,6 +87,7 @@ export default function PortalFichaPago() {
     evoCheckout,
     evoLoading,
     processing,
+    pagoEnCurso,
     confirmData,
     alreadyPaid,
     pagoNoDisponible,
@@ -118,8 +123,10 @@ export default function PortalFichaPago() {
   }, [acceso, candidateIdFromUrl, navigate])
 
   function handleCerrarSesion() {
+    cancelCheckout()
+    clearEvoCheckoutSessionStorage()
     setRole(null)
-    navigate('/portal/ficha')
+    navigate('/portal/ficha', { replace: true })
   }
 
   async function handleDescargarPdf() {
@@ -223,7 +230,9 @@ export default function PortalFichaPago() {
             <FichaPagoPendiente
               folio={folio}
               monto={monto}
-              fechaLimitePago={acceso?.paymentClosesOn ? formatDate(new Date(`${acceso.paymentClosesOn}T00:00:00`)) : null}
+              fechaLimitePago={
+                acceso?.paymentDeadline ? formatDate(new Date(`${acceso.paymentDeadline}T00:00:00`)) : null
+              }
               fechaLimiteInscripcion={
                 acceso?.registrationDeadline ? formatDate(new Date(`${acceso.registrationDeadline}T00:00:00`)) : null
               }
@@ -245,22 +254,68 @@ export default function PortalFichaPago() {
                     Volver a buscar mi ficha
                   </Button>
                 </div>
+              ) : acceso.paymentExpired ? (
+                // Ventana cerrada. Sin botón: el checkout responde 409 y una
+                // pantalla que ofrece un pago imposible es peor que una que
+                // explica que ya no hay plazo. Se decide con `paymentExpired`
+                // —lo que el backend calcula hoy— y no con `candidateStatus`,
+                // que el barrido de las 00:10 todavía no ha escrito.
+                <div className="text-center">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-3">
+                    <Clock size={20} className="text-amber-600" />
+                  </div>
+                  <p className="text-[13px] font-semibold text-[#333333] mb-1">Tu plazo de pago venció</p>
+                  <p className="text-[12px] leading-relaxed text-[#6B7280]">
+                    {acceso.candidateStatus === 'PAYMENT_EXPIRED'
+                      ? 'Tu ficha venció sin pago y el cupo quedó libre.'
+                      : 'El proceso de admisión de tu carrera ya cerró, así que tu ficha ya no admite pago.'}{' '}
+                    Si aún te interesa participar, puedes registrar una nueva ficha.
+                  </p>
+                  <Button variant="secondary" onClick={() => navigate('/portal/ficha')} className="mt-4">
+                    Buscar mi ficha
+                  </Button>
+                </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
                   {/* Aviso persistente, arriba del botón: quien ya intentó y le
                       rechazaron el pago vuelve a caer aquí, y el motivo tiene que
                       estar en su línea de lectura antes de volver a pulsar. */}
                   {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
-                  <Button onClick={startCheckout} loading={processing} disabled={processing}>
+                  {/* El aviso y el botón no pueden contradecirse. Con
+                      `pagoNoDisponible` puesto, el backend ya dijo que esta ficha
+                      no entra al cobro y que insistir devuelve el mismo 409: un
+                      botón "Pagar en línea" habilitado al lado de "no se puede
+                      pagar" es una pantalla que se contradice sola, y empujaba a
+                      repetir el intento sin ninguna posibilidad de que cambiara el
+                      resultado. Se deshabilita y se relabela con el mismo hecho que
+                      el aviso; el motivo sigue siendo el del backend, no uno
+                      escrito aquí. */}
+                  <Button
+                    onClick={startCheckout}
+                    loading={processing}
+                    disabled={pagoEnCurso || pagoNoDisponible !== null}
+                    variant={pagoNoDisponible ? 'secondary' : 'primary'}
+                  >
                     <span className="inline-flex items-center gap-2">
-                      <CreditCard size={14} />
-                      Pagar en línea — ${monto.toFixed(2)}
+                      {pagoNoDisponible ? (
+                        <>
+                          <Info size={14} />
+                          Pago en línea no disponible
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard size={14} />
+                          Pagar en línea — ${monto.toFixed(2)}
+                        </>
+                      )}
                     </span>
                   </Button>
-                  <p className="text-center text-[12px] leading-relaxed text-[#6B7280]">
-                    El pago se realiza en esta misma página. Al confirmarse la operación con tu banco te
-                    enviaremos el comprobante al correo con el que te registraste.
-                  </p>
+                  {!pagoNoDisponible && (
+                    <p className="text-center text-[12px] leading-relaxed text-[#6B7280]">
+                      El pago se realiza en esta misma página. Al confirmarse la operación con tu banco te
+                      enviaremos el comprobante al correo con el que te registraste.
+                    </p>
+                  )}
 
                   {/* Descarga del PDF como acción SECUNDARIA, debajo de pagar. Disponible
                       también antes de pagar: la copia sirve para tener la ficha a la

@@ -3,7 +3,7 @@ import type { Role } from '../infra/RoleContext'
 /**
  * Role catalog for the global shell (Navbar + Sidebar).
  *
- * Covers the `Role` enum from `RoleContext` (mock staff tiers + `CANDIDATO`).
+ * Covers the `Role` enum from `RoleContext` (staff tiers + `CANDIDATO`).
  * Deliberately separate from `shared/identity/roles.ts`, whose `ROLE_LABELS`
  * covers the backend `RoleType` enum — a different value set. Merging them
  * would silently mislabel roles.

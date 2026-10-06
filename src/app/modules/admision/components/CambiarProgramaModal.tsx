@@ -1,15 +1,22 @@
 import { useState } from 'react'
 import { SearchSelect } from '@app/core/components/ui'
-import type { Candidate } from '../data/types'
+
+interface CandidateProgramSnapshot {
+  nombre: string
+  programa: string
+}
 
 /**
- * Cambiar Programa — modal inline compartido por `CandidatosList.tsx` (row
- * action) y `CandidatoDetalle.tsx` (action zone). Per el nav-supplement prompt:
- * "FLUJO: Cambio de Programa ... Modal inline con Select del nuevo programa +
- * advertencia de cupo (no navega a otra pantalla)."
+ * Cambiar Programa — modal inline de la action zone de `CandidatoDetalle.tsx`.
+ * Per el nav-supplement prompt: "FLUJO: Cambio de Programa ... Modal inline con
+ * Select del nuevo programa + advertencia de cupo (no navega a otra pantalla)."
+ *
+ * Toma un snapshot de dos strings en vez del `Candidate` completo porque el
+ * detalle ya no usa el tipo mock: recibe el payload de
+ * `GET /candidates/{id}/detail`, que no trae la coleccion de pagos.
  */
 export function CambiarProgramaModal({ candidate, programas, onSave, onCancel }: {
-  candidate: Candidate
+  candidate: CandidateProgramSnapshot
   programas: string[]
   onSave: (nuevoPrograma: string) => void
   onCancel: () => void

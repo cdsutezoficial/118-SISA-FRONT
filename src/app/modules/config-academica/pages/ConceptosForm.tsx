@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Loader2, Plus, Search, Trash2, X, Check, ChevronDown } from 'lucide-react'
+import { Loader2, Plus, Search, Trash2, X, Check, ChevronDown, Pencil, Info } from 'lucide-react'
 import { FieldLabel, FieldHelp, FieldError, Switch, ModeSwitcher, DatePicker } from '@app/core/components/ui'
-import { FormPage, FormHeader, FormCard, FormActions, Button, TextField, SelectField, MiniTable } from '@app/core/components/form'
+import { FormPage, FormHeader, FormCard, FormActions, Button, TextField, SelectField } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import RichTextEditor from '@app/core/components/RichTextEditor'
 import { sanitizeHtml } from '@app/core/components/richText'
@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router'
 import { useFormMode, useOpenDirection } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
+import { programLabel as buildProgramLabel } from '@app/core/infra/programLabel'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // `PaymentConcept` (academic_config bounded context). El formulario sigue el
@@ -20,8 +21,16 @@ import type { ApiError } from '@app/core/infra/apiClient'
 // `PaymentRate` y la tarifa de alcance `GENERAL` se refleja además en
 // `PaymentConcept.cost` (fallback para todo lo que aún lea esa columna).
 
-type PaymentConceptType = 'ADMISSION' | 'ENROLLMENT' | 'REINSCRIPTION' | 'EXTRAORDINARY' | 'DOCUMENT' | 'OTHER'
+type PaymentConceptType =
+  | 'ADMISSION'
+  | 'ENROLLMENT'
+  | 'REINSCRIPTION'
+  | 'PERIODIC_QUOTA'
+  | 'EXTRAORDINARY'
+  | 'DOCUMENT'
+  | 'OTHER'
 type PaymentConceptStatus = 'ACTIVE' | 'INACTIVE'
+type PaymentRateStatus = 'ACTIVE' | 'INACTIVE'
 
 // `AcademicLevel` — shared-kernel enum, mismo set de labels que
 // `CarrerasForm.tsx` (usado por el selector de nivel en Tarifas y por la
@@ -40,10 +49,17 @@ const TYPE_LABELS: Record<PaymentConceptType, string> = {
   ADMISSION: 'Admisión',
   ENROLLMENT: 'Inscripción',
   REINSCRIPTION: 'Reinscripción',
+  PERIODIC_QUOTA: 'Cuota cuatrimestral',
   EXTRAORDINARY: 'Extraordinario',
   DOCUMENT: 'Documento',
   OTHER: 'Otro',
 }
+
+// `code` — clave corta y única del concepto. No es el `id`: es la referencia que
+// el usuario escribe al momento de capturar una cuota, así que se muestra siempre
+// y se manda en mayúsculas para que dos personas que lo escriban a mano coincidan
+// sin depender de la collation de MySQL.
+const CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{0,29}$/
 
 // ─── Tarifas (alcance + monto) ────────────────────────────────────────────────
 // El ALCANCE es de la sección, no de la fila: se elige una vez y todas las
@@ -84,23 +100,80 @@ interface TarifaDraft {
   programIds: string[]
   /** String para el `TextField` numérico, igual que el resto del form. */
   amount: string
+  /**
+   * Id de la tarifa `ACTIVE` que esta fila representa, si ya existe en el
+   * servidor. La marca como fila guardada: su destino no se elige —es parte de la
+   * identidad de la fila en `payment_rate`— y lo único que se edita es el monto.
+   * Sin este flag la fila es nueva: se agregó en esta sesión y todavía no existe.
+   */
+  rateId?: string
+  /**
+   * Marca la fila que el usuario está reescribiendo: las que ya tienen monto y
+   * no son nuevas se muestran como dato y se abren con el lápiz. Una fila sin
+   * monto, o nueva, se edita siempre, así que para ellas el flag no dice nada.
+   */
+  editing?: boolean
+}
+
+/**
+ * Identidad de una combinación destino de `payment_rate`: (programa, nivel).
+ * El backend no lleva un id de combo, pero la reconciliación empareja el
+ * conjunto enviado contra la tarifa vigente que comparta esta tupla, así que es
+ * la clave con la que el front tiene que razonar para saber si una fila agrega
+ * un precio o lo cambia.
+ */
+function comboKey(programId: string | null | undefined, level: string | null | undefined): string {
+  return `${programId ?? ''}|${level ?? ''}`
 }
 
 /** Campos editables de una tarifa — para ubicar el error en su control. */
 type TarifaField = 'amount' | 'level' | 'programIds'
 
-// Fila de `payment_rate` tal y como la acepta
-// `POST /payment-concepts/{conceptId}/rates` (ver `CreatePaymentRateRequest`).
-// `periodId` nunca se manda desde aquí: el registro no captura periodo.
-// `validFrom` tampoco se captura — la tarifa no tiene vigencia propia, se
-// deriva de la ventana del concepto (ver `rateValidFrom()`).
-// Los `undefined` desaparecen en `JSON.stringify` y el backend los recibe
-// como `null` real.
+/**
+ * Alcance ya decidido por las tarifas guardadas de un concepto, deducido de su
+ * forma en lugar de haberlo guardado aparte: `payment_rate` no tiene columna de
+ * alcance, solo la tupla destino (`program_id`, `level`).
+ *
+ * Devuelve `null` cuando no se puede deducir — sin tarifas, o con tarifas de
+ * destinos mezclados. En ese caso el editor tiene que preguntar el alcance, que
+ * es exactamente lo que hace el registro. El destino decide y no el periodo:
+ * una tarifa por periodo sigue siendo general, por nivel o por carrera según
+ * su `program_id`/`level`.
+ *
+ * Solo miran las tarifas `ACTIVE`: una fila retirada por un guardado anterior
+ * sigue en el historial pero ya no dice nada del alcance vigente, y contarla
+ * hacía que un concepto con un solo destino cobrado pareciera "de destinos
+ * mezclados" y bloquease el editor.
+ */
+function inferScopeFromRates(items: PaymentRateItem[]): TarifaScope | null {
+  const active = items.filter(r => r.status === 'ACTIVE')
+  if (active.length === 0) return null
+  // Por truthiness y no por `!== null`: el destino ausente llega como `null`
+  // pero una clave omitida llegaría como `undefined`, y comparar contra `null`
+  // la tomaría por una tarifa de carrera.
+  const counts = {
+    PROGRAMS: active.filter(r => !!r.programId).length,
+    LEVEL: active.filter(r => !r.programId && !!r.level).length,
+    GENERAL: active.filter(r => !r.programId && !r.level).length,
+  }
+  const match = (['GENERAL', 'LEVEL', 'PROGRAMS'] as TarifaScope[]).filter(
+    scope => counts[scope] === active.length
+  )
+  return match.length === 1 ? match[0] : null
+}
+
+// Fila de `payment_rate` tal y como la aceptan `POST /payment-concepts` (dentro
+// de `rates`) y `PUT /payment-concepts/{conceptId}/rates` (ver
+// `ReconcilePaymentRatesRequest.PaymentRateDraftRequest`).
+//
+// No lleva vigencia: la tarifa no tiene fechas propias, se rige por la ventana
+// del concepto y su estado (`ACTIVE`/`INACTIVE`) lo administra el backend al
+// reconciliar. Los `undefined` desaparecen en `JSON.stringify` y el backend los
+// recibe como `null` real.
 interface PaymentRatePayload {
   programId?: string
   level?: AcademicLevel
   amount: number
-  validFrom: string
 }
 
 let tarifaSeq = 0
@@ -131,26 +204,29 @@ interface ConceptsPageResponse {
   items: ConceptSummary[]
 }
 
-interface ProgramSummary {
+// Catálogo de referencia (`GET /programs/options`), no la vista de gestión:
+// este endpoint devuelve solo carreras `ACTIVE` y es `authenticated()`, mientras
+// que `GET /programs` exige ADMIN o SERVICIOS_ESCOLARES. Como
+// `/payment-concepts` lo abre ADMIN o PERSONAL_FINANZAS, usar el catálogo de
+// gestión dejaba el selector de carreras vacío —con un 403 silencioso en
+// consola— justo para el rol que administra las cuotas.
+interface ProgramOption {
   id: string
-  name: string
+  /** Nombre de la carrera; la opción se muestra como `code — label (modalidad)`. */
+  label: string
   code: string
+  /** `PRESENCIAL` | `MIXTA` — sólo lo trae `GET /programs/options`. */
+  modality?: string
 }
 
-interface ProgramsPageResponse {
-  items: ProgramSummary[]
+function programOptionLabel(p: ProgramOption): string {
+  return buildProgramLabel({ code: p.code, name: p.label, modality: p.modality })
 }
 
-interface PeriodSummary {
-  id: string
-  name: string
-}
-
-interface PeriodsPageResponse {
-  items: PeriodSummary[]
-}
-
-// `PaymentRate` — append-only history (sección Tarifas, view/edit).
+// `PaymentRate` — historial de precios. `status` y `createdAt` los administra el
+// servidor (no viajan en ningún request) y sustituyen a las fechas de vigencia
+// que este módulo ya no captura: `GET` devuelve todas las filas, no solo la
+// vigente, para poder mostrar qué costaba antes y cuándo cambió.
 interface PaymentRateItem {
   id: string
   conceptId: string
@@ -158,8 +234,9 @@ interface PaymentRateItem {
   level: AcademicLevel | null
   amount: number
   periodId: string | null
-  validFrom: string
-  validTo: string | null
+  status: PaymentRateStatus
+  /** ISO-8601 con hora; la tabla muestra solo la fecha. */
+  createdAt: string
 }
 
 interface PaymentRateListResponse {
@@ -191,31 +268,20 @@ function displayToIso(display: string): string {
   return y && m && d ? `${y}-${m}-${d}` : ''
 }
 
-/**
- * Hoy en ISO local (`YYYY-MM-DD`).
- *
- * <p>Se construye con `new Date(y, m, d)` a partir de las partes locales en
- * lugar de `toISOString()`, que convierte a UTC: cerca de medianoche en
- * México (−06:00) `toISOString()` devuelve el día siguiente y la fecha mandada
- * al backend sería incorrecta.
- */
-function todayIso(): string {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-// `PaymentConceptResponse` / `PaymentConceptFormPayload` — espejo exacto de los
-// DTOs del backend, incluidos los campos de la extensión 2026-09-19.
+// `PaymentConceptResponse` / `CreatePaymentConceptRequest` /
+// `UpdatePaymentConceptRequest` — espejo de los DTOs del backend.
+//
+// Sin `isTuition`: lo que era "cuota cuatrimestral" es ahora el tipo
+// `PERIODIC_QUOTA`, que además exige `levelNumber`. Sin `programIds`: el alcance
+// lo dicen las tarifas, que es de donde se cobra.
 interface PaymentConceptResponse {
   id: string
   name: string
+  code: string
   description: string | null
   policies: string | null
   type: PaymentConceptType
-  isTuition: boolean
+  levelNumber: number | null
   isStandalone: boolean
   maxPerStudent: number | null
   maxPerPeriod: number | null
@@ -231,15 +297,16 @@ interface PaymentConceptResponse {
   isMulticoncept: boolean
   quotaLimit: number | null
   linkedConceptIds: string[]
-  programIds: string[]
 }
 
+/** Campos comunes a `POST` y `PUT /payment-concepts`. */
 interface PaymentConceptFormPayload {
   name: string
+  code: string
   description: string | null
   policies: string | null
   type: PaymentConceptType
-  isTuition: boolean
+  levelNumber: number | null
   isStandalone: boolean
   maxPerStudent: number | null
   maxPerPeriod: number | null
@@ -254,11 +321,22 @@ interface PaymentConceptFormPayload {
   isMulticoncept: boolean
   quotaLimit: number | null
   linkedConceptIds: string[]
-  programIds: string[]
+}
+
+/**
+ * Alta. `rates` viaja con el concepto para que una cuota periódica nunca quede
+ * persistida existiendo pero sin cotizar: el backend valida el conjunto
+ * completo y, si algo falla, revierte el concepto con él.
+ */
+interface CreatePaymentConceptPayload extends PaymentConceptFormPayload {
+  rates: PaymentRatePayload[]
 }
 
 interface FormErrors {
   nombre?: string
+  codigo?: string
+  tipo?: string
+  nivel?: string
   areaId?: string
   costoExterno?: string
   limiteCuotas?: string
@@ -267,6 +345,8 @@ interface FormErrors {
   alcance?: string
   /** Lista de tarifas vacía. */
   tarifas?: string
+  /** Carreras activas que la cuota periódica aún no cotiza. */
+  cobertura?: string
   /** Error por fila del editor, indexado por `TarifaDraft.key`, con el campo
    *  al que pertenece para pintarlo junto al control que lo produjo. */
   tarifasByKey?: Record<string, { field: TarifaField; message: string }>
@@ -325,7 +405,8 @@ function MultiSelectField({
   error,
   help,
 }: {
-  label: string
+  /** Opcional: dentro de la tabla de tarifas el encabezado ya dice de qué va. */
+  label?: string
   options: { id: string; label: string }[]
   selected: string[]
   onChange: (ids: string[]) => void
@@ -356,7 +437,7 @@ function MultiSelectField({
 
   return (
     <div ref={ref} className="relative">
-      <FieldLabel>{label}</FieldLabel>
+      {label && <FieldLabel>{label}</FieldLabel>}
       <button
         type="button"
         disabled={disabled}
@@ -480,91 +561,220 @@ function ScopePicker({
   )
 }
 
-// Una fila del editor de Tarifas. El alcance es el de la sección, así que solo
-// muestra el destino que corresponde: General no muestra nada (programId y
-// level quedan null), Por nivel el select de nivel, Por carreras el multiselect
-// con buscador.
-function TarifaRow({
-  index,
+// ─── TarifasLista ─────────────────────────────────────────────────────────────
+
+/**
+ * La lista de precios del concepto. Es la misma para la cuota periódica y para
+ * los demás tipos, y también en los tres modos: lo que cambia es qué se puede
+ * hacer en cada fila, no la pantalla.
+ *
+ * Las filas llegan de dos maneras, y por eso la fila tiene tres formas:
+ *
+ * - **Tarifa ya guardada** (`rateId`): su destino no se toca. El destino es parte
+ *   de la identidad de la fila en `payment_rate` —cambiarlo no es editar un
+ *   precio sino cotizar otro—, así que se muestra como texto y lo único editable
+ *   es el monto, con el lápiz.
+ * - **Tarifa nueva**: la agrega el botón "Agregar tarifa". Aquí sí se elige el
+ *   destino, el monto se captura siempre, y se puede quitar mientras haya otra.
+ * - **Fila de cuota sin precio**: la generó el catálogo, no la persona, así que su
+ *   input está siempre visible: no hay nada que "abrir".
+ *
+ * `readOnly` es el modo Ver: los mismos datos sin input ni lápiz, porque el pie de
+ * la página ahí dice "Editar" y no "Guardar", y lo capturado ahí se perdería sin
+ * aviso.
+ */
+function TarifasLista({
+  filas,
   scope,
-  canRemove,
-  draft,
+  readOnly,
+  disabled,
+  errores,
+  destinoFijo,
+  puedeQuitar,
+  labelCarrera,
+  labelNivel,
+  formatMonto,
   nivelOptions,
   carreraOptions,
-  error,
   onChange,
+  onToggleEdicion,
   onRemove,
 }: {
-  index: number
-  scope: TarifaScope
-  canRemove: boolean
-  draft: TarifaDraft
-  /** Niveles todavía libres: los que ya tomó otra fila se retiran de la lista. */
-  nivelOptions: AcademicLevel[]
-  /** Carreras todavía libres, con la selección propia de la fila incluida. */
-  carreraOptions: { id: string; label: string }[]
-  error?: { field: TarifaField; message: string }
-  onChange: (patch: Partial<TarifaDraft>) => void
-  onRemove: () => void
+  filas: TarifaDraft[]
+  scope: TarifaScope | ''
+  readOnly: boolean
+  disabled: boolean
+  errores: Record<string, { field: TarifaField; message: string } | undefined>
+  /** El destino lo fija el tipo (cuota) o ya está guardado: no se elige. */
+  destinoFijo: boolean
+  /** Una fila nueva se puede quitar mientras haya alguna más que capturar. */
+  puedeQuitar: boolean
+  labelCarrera: (programId: string | null) => string
+  labelNivel: (level: AcademicLevel | null) => string
+  formatMonto: (amount: string) => string
+  /** Niveles libres para esa fila: los que ya tomó otra no se ofrecen. */
+  nivelOptions: (key: string) => AcademicLevel[]
+  /** Carreras libres para esa fila, más su propia selección. */
+  carreraOptions: (key: string) => { id: string; label: string }[]
+  onChange: (key: string, patch: Partial<TarifaDraft>) => void
+  onToggleEdicion: (key: string) => void
+  onRemove: (key: string) => void
 }) {
-  const errFor = (field: TarifaField) => (error?.field === field ? error.message : undefined)
+  const esNueva = (t: TarifaDraft) => !t.rateId
+  const conPrecio = (t: TarifaDraft) => !!t.amount.trim()
+  /** Fila que ya está en modo captura, sin necesidad de abrirla con el lápiz. */
+  const abierta = (t: TarifaDraft) => esNueva(t) || (!conPrecio(t) && destinoFijo)
 
-  return (
-    <div className="rounded-lg border border-[#E5E7EB] bg-white p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-[#6B7280]">
-          Tarifa {index + 1}
-        </span>
-        {canRemove && (
-          <Button variant="danger" size="sm" onClick={onRemove}>
-            <Trash2 size={13} />Quitar
-          </Button>
-        )}
-      </div>
+  const errFor = (t: TarifaDraft, field: TarifaField) =>
+    errores[t.key]?.field === field ? errores[t.key]?.message : undefined
 
-      <div className="grid grid-cols-12 gap-4">
-        {scope === 'LEVEL' && (
+  function destino(t: TarifaDraft) {
+    if (esNueva(t) && !destinoFijo && scope !== 'GENERAL') {
+      if (scope === 'LEVEL') {
+        const libres = nivelOptions(t.key)
+        return (
           <SelectField
-            label="Nivel"
-            required
-            value={draft.level}
-            onChange={v => onChange({ level: v as AcademicLevel | '' })}
-            error={errFor('level')}
-            options={nivelOptions.map(l => ({ value: l, label: LEVEL_LABELS[l] }))}
-            placeholder={
-              nivelOptions.length === 0 ? 'No hay niveles disponibles' : 'Seleccionar nivel…'
-            }
-            className="col-span-12"
+            value={t.level}
+            onChange={v => onChange(t.key, { level: v as AcademicLevel | '' })}
+            error={errFor(t, 'level')}
+            options={libres.map(l => ({ value: l, label: LEVEL_LABELS[l] }))}
+            placeholder={libres.length === 0 ? 'No hay niveles disponibles' : 'Seleccionar nivel…'}
           />
-        )}
-        {scope === 'PROGRAMS' && (
-          <div className="col-span-12">
-            <MultiSelectField
-              label="Carreras"
-              options={carreraOptions}
-              selected={draft.programIds}
-              onChange={ids => onChange({ programIds: ids })}
-              error={errFor('programIds')}
-              placeholder="Seleccionar carreras…"
-            />
-          </div>
-        )}
+        )
+      }
+      return (
+        <MultiSelectField
+          options={carreraOptions(t.key)}
+          selected={t.programIds}
+          onChange={ids => onChange(t.key, { programIds: ids })}
+          error={errFor(t, 'programIds')}
+          placeholder="Seleccionar carreras…"
+        />
+      )
+    }
+    // En general no hay destino que nombrar: la fila aplica a todos. Sin este
+    // caso caía en `labelNivel(null)` y se leía "Todos los niveles", que es el
+    // alcance por nivel, no el general.
+    if (scope === 'GENERAL') {
+      return <span className="text-[#333333]">Todas las carreras y niveles</span>
+    }
+    if (t.programIds.length === 1) {
+      return <span className="text-[#333333]">{labelCarrera(t.programIds[0])}</span>
+    }
+    if (t.programIds.length > 1) {
+      return <span className="text-[#333333]">{t.programIds.length} carreras</span>
+    }
+    return <span className="text-[#333333]">{labelNivel(t.level || null)}</span>
+  }
+
+  function monto(t: TarifaDraft) {
+    const precio = conPrecio(t)
+    if (!readOnly && !disabled && (abierta(t) || t.editing)) {
+      return (
         <TextField
-          label="Monto"
-          required
-          value={draft.amount}
-          onChange={v => onChange({ amount: v })}
-          error={errFor('amount')}
+          value={t.amount}
+          onChange={v => onChange(t.key, { amount: v })}
+          error={errFor(t, 'amount')}
           type="number"
           min={0}
           step="0.01"
           numeric
           prefix="$"
           placeholder="0.00"
-          className="col-span-12"
+          className="w-full"
         />
+      )
+    }
+    if (readOnly || disabled) {
+      return (
+        <span className={`tabular-nums ${precio ? 'font-medium text-[#333333]' : 'text-[#9CA3AF]'}`}>
+          {precio ? formatMonto(t.amount) : 'Sin cotizar'}
+        </span>
+      )
+    }
+    return <span className="tabular-nums font-medium text-[#333333]">{formatMonto(t.amount)}</span>
+  }
+
+  function acciones(t: TarifaDraft) {
+    return (
+      <div className="flex items-center justify-end gap-2">
+        {/* Solo las filas nuevas se quitan: una tarifa guardada no se borra desde
+            aquí, se cambia su monto o se cotiza otro destino. */}
+        {esNueva(t) && puedeQuitar && (
+          <button
+            type="button"
+            onClick={() => onRemove(t.key)}
+            disabled={disabled}
+            title="Quitar esta tarifa"
+            className="text-[#9CA3AF] hover:text-red-600 disabled:opacity-50"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
+        {!readOnly && !esNueva(t) && (
+          <button
+            type="button"
+            onClick={() => onToggleEdicion(t.key)}
+            disabled={disabled || (!conPrecio(t) && !abierta(t))}
+            title={
+              !conPrecio(t)
+                ? 'Esta fila todavía no tiene precio'
+                : t.editing
+                  ? 'Terminar de editar'
+                  : 'Cambiar el monto'
+            }
+            className="text-[#009574] hover:text-[#007a60] disabled:text-[#D1D5DB] disabled:cursor-not-allowed"
+          >
+            {t.editing ? <Check size={14} /> : <Pencil size={13} />}
+          </button>
+        )}
       </div>
-    </div>
+    )
+  }
+
+  return (
+    <>
+      {/* Escritorio: la lista densa es lo que hace falta cuando hay muchas
+          carreras. */}
+      <div className="hidden border border-[#E5E7EB] rounded-lg overflow-hidden md:block">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="bg-[#F8F9FA] border-b border-[#E5E7EB]">
+              <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider">
+                {scope === 'LEVEL' ? 'Nivel' : 'Destino'}
+              </th>
+              <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider w-52">
+                Monto
+              </th>
+              <th className="w-16" />
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map(t => (
+              <tr key={t.key} className="border-b border-[#E5E7EB] last:border-0 align-top">
+                <td className="px-3 py-2">{destino(t)}</td>
+                <td className="px-3 py-2">{monto(t)}</td>
+                <td className="px-2 py-2">{acciones(t)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Móvil: una tarjeta por fila, porque una tabla de tres columnas en un
+          teléfono obliga a hacer scroll horizontal para leer el monto. */}
+      <div className="md:hidden space-y-2">
+        {filas.map(t => (
+          <div key={t.key} className="border border-[#E5E7EB] rounded-lg p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">{destino(t)}</div>
+              {acciones(t)}
+            </div>
+            <div className="mt-2">{monto(t)}</div>
+          </div>
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -578,33 +788,41 @@ export default function ConceptosForm() {
 
   // ─── Datos Generales ───────────────────────────────────────────────────────
   const [nombre, setNombre] = useState('')
+  const [codigo, setCodigo] = useState('')
   const [tipo, setTipo] = useState<PaymentConceptType | ''>('')
+  // Nivel de la cuota periódica. Solo tiene sentido (y el backend solo lo exige)
+  // cuando el tipo es `PERIODIC_QUOTA`; en los demás tipos se manda `null`.
+  const [nivelNum, setNivelNum] = useState('')
   const [areaId, setAreaId] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [politicas, setPoliticas] = useState('')
 
   // Costo que ya tiene el concepto guardado. En Registrar se deriva de la
-  // tarifa GENERAL; en Ver/Editar no hay drafts que editar (el historial de
-  // tarifas es append-only), así que el valor cargado se reenvía tal cual:
-  // mandarlo en `null` borraría el precio de todo lo que aún lee
-  // `PaymentConcept.cost`.
+  // tarifa GENERAL; en Ver se reenvía tal cual, y en Editar solo lo sustituye
+  // la fila general si su monto cambió: mandarlo en `null` borraría el precio de
+  // todo lo que aún lee `PaymentConcept.cost`.
   const [conceptCost, setConceptCost] = useState<number | null>(null)
 
-  // ─── Tarifas ──────────────────────────────────────────────────────────────
-  // Solo se editan en Registrar: en Ver/Editar el bloque es el historial
-  // append-only de `GET /payment-concepts/{id}/rates`.
+  // ─── Tarifas ────────────────────────────────────────────────────────────────
+  // En Registrar la lista es la única forma de capturar el precio, y viaja con
+  // el concepto en un solo POST: el backend valida el conjunto completo y
+  // revierte el concepto si algo no cuadra, así que aquí no hace falta reintentar
+  // un lote a medias. En Ver y Editar la misma lista se arma con las tarifas
+  // `ACTIVE` que devuelve `GET /payment-concepts/{id}/rates`: en Ver de solo
+  // lectura, y en Editar con el monto editable mediante el lápiz.
   //
-  // `tarifaScope` es el paso 1 y es de la sección: todas las filas lo
-  // comparten. `tarifas` (el paso 2) arranca vacío hasta que hay alcance.
+  // `tarifaScope` es el paso 1 y es de la sección: todas las filas lo comparten.
+  // `tarifas` (el paso 2) arranca vacío hasta que hay alcance. Para
+  // `PERIODIC_QUOTA` el alcance no se pregunta: lo fija el tipo y es "por
+  // carreras".
   const [tarifaScope, setTarifaScope] = useState<TarifaScope | ''>('')
   const [tarifas, setTarifas] = useState<TarifaDraft[]>([])
-  // Concepto ya creado durante un submit fallido a medias: permite reintentar
-  // SOLO las tarifas faltantes sin duplicar el concepto. `pendingRates` guarda
-  // el lote exacto que quedó en el aire, para que el reintento no vuelva a
-  // expandir los drafts (que ya could've cambiado) ni a duplicar filas.
-  const [createdConceptId, setCreatedConceptId] = useState<string | null>(null)
-  const [pendingRates, setPendingRates] = useState<PaymentRatePayload[]>([])
-  const [ratesProgress, setRatesProgress] = useState<{ done: number; total: number } | null>(null)
+  // Carrera a la que pertenece la última siembra de filas de cuota, para poder
+  // re-sembrar solo cuando el catálogo cambia de verdad.
+  const cuotaSeedRef = useRef('')
+  // Firma de las tarifas guardadas que ya se vertieron a filas, por el mismo
+  // motivo que el de arriba: re-sembrar en cada render borraría lo capturado.
+  const savedRowsRef = useRef('')
 
   // ─── Configuración del Concepto ───────────────────────────────────────────
   const [esExterno, setEsExterno] = useState(false)
@@ -614,9 +832,6 @@ export default function ConceptosForm() {
   const [isStandalone, setIsStandalone] = useState(false)
   const [esVinculados, setEsVinculados] = useState(false)
   const [vinculados, setVinculados] = useState<string[]>([])
-  const [esCuotaCuatrimestral, setEsCuotaCuatrimestral] = useState(false)
-  const [aplicaCarrera, setAplicaCarrera] = useState(false)
-  const [carreras, setCarreras] = useState<string[]>([])
   const [limiteCuotasOn, setLimiteCuotasOn] = useState(false)
   const [limiteCuotas, setLimiteCuotas] = useState('')
   const [maxPerStudent, setMaxPerStudent] = useState('')
@@ -629,8 +844,7 @@ export default function ConceptosForm() {
   // ─── Catálogos para los selectores ────────────────────────────────────────
   const [areas, setAreas] = useState<PaymentAreaSummary[]>([])
   const [concepts, setConcepts] = useState<ConceptSummary[]>([])
-  const [programs, setPrograms] = useState<ProgramSummary[]>([])
-  const [periods, setPeriods] = useState<PeriodSummary[]>([])
+  const [programs, setPrograms] = useState<ProgramOption[]>([])
 
   // ─── Tarifas (view/edit) ──────────────────────────────────────────────────
   const [rates, setRates] = useState<PaymentRateItem[]>([])
@@ -645,6 +859,40 @@ export default function ConceptosForm() {
 
   const disabled = isView || loadStatus === 'loading'
   const isSubmitting = submitStatus === 'submitting'
+
+  // `PERIODIC_QUOTA` no es "un concepto más": su alcance lo fija el tipo, así
+  // que varias decisiones del editor dejan de ser preguntas. Se deriva de `tipo`
+  // y no de un switch propio para que no pueda quedar desalineado del campo que
+  // se manda al backend.
+  const isQuota = tipo === 'PERIODIC_QUOTA'
+  //
+  // La lista de tarifas está visible en Registrar y en Editar, siempre. Antes
+  // se colapsaba detrás de un botón en Editar y el lápiz abría un editor aparte:
+  // eso obligaba a leer los precios dos veces (la tabla de arriba y las tarjetas
+  // de abajo) y a decidir en qué bloque se editaba, cuando en realidad es la
+  // misma lista con un lápiz por fila.
+  //
+  // `isView` se excluye a propósito, y no solo para esconder los controles: el
+  // pie de la página en Ver dice "Editar" (navega al modo de edición) en vez de
+  // guardar. Un input abierto ahí deja capturar montos que después no hay dónde
+  // guardar — se pierde lo capturado sin aviso.
+  //
+  // El precio de que Editar mande siempre el `PUT` del conjunto es que también
+  // manda las tarifas que nadie tocó. Es lo correcto: el `PUT` reconcilia contra
+  // lo guardado y desactiva lo que no venga, así que omitir las intactas las
+  // borraría. `expandTarifas()` las mezcla por eso. Cuando los montos no cambian,
+  // la reconciliación conserva los mismos ids y no crea filas.
+  const rateEditorVisible = !isView
+  //
+  // Antes de que terminen de cargar las tarifas no se manda el conjunto: en
+  // Editar el `PUT` se arma sobre lo guardado, y mandar solo las filas nuevas
+  // con las viejas todavía en el aire las retiraría.
+  const ratesReady = isRegister || ratesLoadStatus === 'idle'
+  const shouldSendRates = rateEditorVisible && ratesReady
+  /** Carreras `ACTIVE` que aún no tienen monto capturado en la cuota. */
+  const cuotaFaltantes = isQuota
+    ? tarifas.filter(t => !(Number(t.amount) > 0)).length
+    : 0
 
   function clearErr(field: keyof FormErrors) {
     setErrors((prev) => ({ ...prev, [field]: undefined }))
@@ -684,11 +932,16 @@ export default function ConceptosForm() {
    * y elige General, se queda el primer monto capturado y el resto se descarta,
    * porque varias filas generales generarían combinaciones idénticas
    * (programId = null, level = null) que el backend cerraría como solapadas.
+   *
+   * En `PERIODIC_QUOTA` el alcance no se elige: es siempre "por carreras", una
+   * fila por carrera `ACTIVE`. Por eso el `ScopePicker` no se renderiza en ese
+   * modo y `selectScope()` no es un camino alcanzable desde la interfaz.
    */
   function selectScope(scope: TarifaScope) {
     if (scope === tarifaScope) return
     setTarifaScope(scope)
     setTarifas(prev => {
+      if (scope === 'PROGRAMS' && isQuota) return seedCuotaRows(prev)
       if (prev.length === 0) return [newTarifaDraft()]
       if (scope === 'GENERAL') return [{ ...newTarifaDraft(), amount: prev[0].amount }]
       return prev.map(t => ({ ...t, level: '' as AcademicLevel | '', programIds: [] as string[] }))
@@ -696,6 +949,204 @@ export default function ConceptosForm() {
     // Los errores de fila son del alcance anterior: se descartan enteros, no
     // se reasignan (el destino puede no existir ya en la fila que falló).
     setErrors(prev => ({ ...prev, alcance: undefined, tarifas: undefined, tarifasByKey: undefined }))
+  }
+
+  /**
+   * Una fila por carrera `ACTIVE`, que es lo que el backend exige para una
+   * cuota periódica (`PaymentQuotaCoverageChecker`).
+   *
+   * Se siembra desde el catálogo de carreras, no desde lo que el usuario eligió:
+   * las filas se generan, no se capturan. Por eso `addTarifa`/`removeTarifa` no
+   * tienen sentido aquí —agregar una fila sin carrera y quitar una fila con
+   * precio son las dos formas de romper la cobertura— y la UI no ofrece ninguno
+   * de los dos.
+   *
+   * Los montos ya capturados sobreviven a una re-siembra (que ocurre cuando el
+   * catálogo llega después de abrir el editor, o cuando cambia), y los que no
+   * tienen fila propia caen al precio vigente guardado: recargar la página no
+   * obliga a reescribir a mano lo que ya estaba cotizado.
+   */
+  function seedCuotaRows(prev: TarifaDraft[]): TarifaDraft[] {
+    const captured = new Map<string, string>()
+    const editingKeys = new Set(prev.filter(t => t.editing).map(t => t.key))
+    for (const t of prev) {
+      if (t.programIds.length === 1) captured.set(t.programIds[0], t.amount)
+    }
+    return programs.map(p => {
+      const key = `cuota-${p.id}`
+      // Si el backend ya tiene una tarifa `ACTIVE` para esta carrera, la fila
+      // cuenta como guardada: su monto se muestra como dato y se abre con el
+      // lápiz, igual que en los demás tipos. Sin esto, toda fila de cuota
+      // parecería nueva y quedaría siempre en edición.
+      const guardada = rates.find(r => r.status === 'ACTIVE' && r.programId === p.id)
+      return {
+        key,
+        level: '' as AcademicLevel | '',
+        programIds: [p.id],
+        amount: captured.get(p.id) ?? vigenteAmountFor(p.id),
+        ...(guardada ? { rateId: guardada.id } : {}),
+        // Una fila que el usuario tiene abierta se reabre: la re-siembra cambia
+        // el arreglo, no lo que la persona estaba haciendo.
+        ...(editingKeys.has(key) ? { editing: true } : {}),
+      }
+    })
+  }
+
+  /** Monto de la tarifa `ACTIVE` que el backend tiene guardada para una carrera. */
+  function vigenteAmountFor(programId: string): string {
+    const current = rates.find(r => r.status === 'ACTIVE' && r.programId === programId)
+    return current ? String(current.amount) : ''
+  }
+
+  /**
+   * Siembra las filas con las tarifas `ACTIVE` del concepto, para los tipos que no
+   * son cuota. Es el mismo criterio que sigue la cuota —las filas las define lo
+   * guardado, no el usuario—, pero aquí una fila por tarifa que ya existe, y no
+   * una por cada carrera: lo que todavía no está cotizado no aparece, y lo que se
+   * quiera agregar se agrega con el botón.
+   *
+   * Cada fila guarda el `id` de su tarifa (`rateId`), que es lo que la marca como
+   * fila guardada: su destino se muestra en vez de elegirse y de su monto solo se
+   * puede cambiar el número.
+   *
+   * Lo capturado sobrevive a una re-siembra (que ocurre cuando las tarifas llegan
+   * después de abrir el concepto, o cuando cambian): una fila abierta sigue
+   * abierta y una fila nueva sigue en la lista. La re-siembra cambia el arreglo,
+   * no lo que la persona estaba haciendo.
+   */
+  function seedSavedRows(prev: TarifaDraft[]): TarifaDraft[] {
+    const mine = new Map(prev.map(t => [t.key, t]))
+    const guardadas = ratesVigentes.map(r => {
+      const key = `rate-${r.id}`
+      const previa = mine.get(key)
+      return {
+        key,
+        level: (r.level ?? '') as AcademicLevel | '',
+        programIds: r.programId ? [r.programId] : [],
+        amount: previa?.amount ?? String(r.amount),
+        rateId: r.id,
+        ...(previa?.editing ? { editing: true } : {}),
+      }
+    })
+    // Las filas nuevas van detrás: son las que el usuario acaba de agregar y no
+    // tienen equivalente guardado que las sustituyan.
+    return [...guardadas, ...prev.filter(t => !t.rateId)]
+  }
+
+  /**
+   * Si el backend ya tiene un precio guardado para esta fila, sea del tipo que
+   * sea: por `rateId` cuando viene de la lista de tarifas (que es el caso de los
+   * alcances por nivel y general, donde no hay carrera) o por carrera en cuota,
+   * cuyas filas las arma el catálogo y todavía no tienen `rateId`.
+   */
+  function filaTienePrecio(t: TarifaDraft): boolean {
+    const porRate = t.rateId ? rates.some(r => r.id === t.rateId && r.status === 'ACTIVE') : false
+    return porRate || (!!t.programIds[0] && vigenteAmountFor(t.programIds[0]) !== '')
+  }
+
+  /**
+   * Abre o cierra la edición de una fila de la lista.
+   *
+   * Solo aplica a las filas guardadas: una fila nueva se edita siempre, y una de
+   * cuota sin precio también, así que para esas no hay nada que abrir.
+   */
+  function toggleEdicionTarifa(key: string) {
+    setTarifas(prev => prev.map(t => (t.key === key ? { ...t, editing: !t.editing } : t)))
+  }
+
+  /**
+   * Cierra la edición de una fila. Solo se cierra si el monto quedó válido, o si
+   * el backend ya tenía un precio al que volver. Una fila que nunca tuvo precio
+   * se queda en edición aunque quede vacía: volverla al modo tabla la haría
+   * parecer cotizada cuando no lo está, que es justo lo que la cobertura de la
+   * cuota va a rechazar después.
+   */
+  function cerrarEdicionTarifa(key: string) {
+    setTarifas(prev => prev.map(t => {
+      if (t.key !== key) return t
+      const invalido = !(Number(t.amount) > 0)
+      if (invalido && !filaTienePrecio(t)) return t
+      return { ...t, editing: false }
+    }))
+  }
+
+  /**
+   * Re-siembra las filas de cuota cuando el catálogo de carreras cambia de
+   * verdad, y también cuando llegan los precios del backend. La firma compara
+   * ids de carrera *y* montos: con solo los ids, una lista sembrada antes de que
+   * terminara la petición nunca volvería a correrse y las filas saldrían vacías
+   * aunque el backend ya tuviera los precios.
+   *
+   * Re-siembrar varias veces es inofensivo porque `seedCuotaRows()` conserva lo
+   * capturado, así que una llegada tardía de precios rellena huecos sin pisar lo
+   * que la persona está escribiendo.
+   */
+  useEffect(() => {
+    // Sin el filtro por `rateEditorVisible`: en Ver la lista también se dibuja,
+    // solo que de lectura, y las filas salen del mismo catálogo. Sembrarlas
+    // igual evita que la pantalla de consulta dependa de un form que ahí no se
+    // puede abrir. No hay riesgo de mandar nada porque Ver no envía.
+    if (!isQuota || tarifaScope !== 'PROGRAMS') return
+    const signature = [
+      programs.map(p => p.id).join(','),
+      rates.map(r => `${r.programId}=${r.amount}${r.status}`).sort().join(','),
+    ].join('|')
+    if (cuotaSeedRef.current === signature) return
+    cuotaSeedRef.current = signature
+    setTarifas(prev => seedCuotaRows(prev))
+    // Solo interesa el cambio del catálogo y del modo; `seedCuotaRows` se
+    // recrea en cada render y meterlo en la dependencia lo dispararía siempre.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [programs, isQuota, tarifaScope, rates])
+
+  /**
+   * Siembra las filas con las tarifas guardadas, para los tipos que no son cuota.
+   * Es la contraparte del efecto anterior: allá las filas las da el catálogo de
+   * carreras, y acá las da lo que ya está guardado. Corre en Ver también, con la
+   * lista en solo lectura, para que consultar y editar muestren los mismos datos.
+   *
+   * El alcance también se deduce aquí y no al abrir un editor que ya no existe: si
+   * el concepto tiene tarifas, su alcance está decidido, así que se informa en
+   * vez de preguntarse (ver `lockedScope`).
+   */
+  useEffect(() => {
+    if (isRegister || isQuota || ratesLoadStatus !== 'idle') return
+    const signature = rates.map(r => `${r.id}:${r.status}:${r.amount}`).sort().join(',')
+    if (savedRowsRef.current === signature) return
+    savedRowsRef.current = signature
+    const deduced = inferScopeFromRates(rates)
+    if (deduced) setTarifaScope(deduced)
+    setTarifas(prev => seedSavedRows(prev))
+    // `seedSavedRows` se recrea en cada render y meterlo en la dependencia lo
+    // dispararía en cada uno.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRegister, isQuota, rates, ratesLoadStatus])
+
+  /**
+   * Cambio de tipo: al entrar o salir de `PERIODIC_QUOTA` el alcance de las
+   * tarifas se define solo. Salir de cuota descarta los drafts porque sus filas
+   * (una por carrera, con la carrera fija) no significan nada en un alcance
+   * general o por nivel, y mandarlas sería un `programId` con nivel o periodo
+   * que el servidor rechaza.
+   */
+  function changeTipo(next: PaymentConceptType | '') {
+    const wasQuota = tipo === 'PERIODIC_QUOTA'
+    setTipo(next)
+    setErrors(prev => ({ ...prev, nivel: undefined, alcance: undefined, tarifas: undefined, tarifasByKey: undefined }))
+    if (next !== 'PERIODIC_QUOTA') {
+      setNivelNum('')
+      if (wasQuota) {
+        setTarifaScope('')
+        setTarifas([])
+        cuotaSeedRef.current = ''
+        savedRowsRef.current = ''
+      }
+      return
+    }
+    setTarifaScope('PROGRAMS')
+    // Se entra a cuota desde otro tipo: los drafts anteriores no son de cuota,
+    // así que se descartan en vez de intentar heredarles un monto.
+    setTarifas(seedCuotaRows([]))
   }
 
   /** Limpia el error de una fila concreta al tocar cualquiera de sus campos. */
@@ -712,12 +1163,11 @@ export default function ConceptosForm() {
    * Niveles que ya tienen dueño en OTRA fila.
    *
    * Un nivel repetido produce dos filas de `payment_rate` para la misma
-   * combinación (concepto + programId + level) y `SetPaymentRateUseCase`
-   * cierra la anterior con `validTo = validFrom - 1`: un rango vacío, es decir
-   * una tarifa muerta que el usuario cree vigente. Es un fallo silencioso —
-   * el guardado responde 201 — así que el editor lo evita en lugar de dejar que
-   * `validate()` lo descubra al pulsar Registrar. La fila se excluye a sí
-   * misma para que su propia selección siga disponible.
+   * combinación (concepto + programId + level), que la reconciliación rechaza
+   * con `DuplicatePaymentRateException`. Es un fallo que solo se ve al guardar,
+   * así que el editor lo evita en lugar de dejar que `validate()` lo descubra al
+   * pulsar Registrar. La fila se excluye a sí misma para que su propia selección
+   * siga disponible.
    */
   function takenLevelsBy(key: string): Set<AcademicLevel> {
     return new Set(
@@ -734,10 +1184,11 @@ export default function ConceptosForm() {
    * Monto del concepto cuando el alcance es GENERAL: ese monto no liga a
    * nivel ni a carrera, así que es exactamente `PaymentConcept.cost`. Con
    * alcance LEVEL o PROGRAMS el precio depende del destino y no hay un costo
-   * único que defender — se deja en `null`.
+   * único que defender — se deja en `null`. Una cuota periódica siempre es
+   * "por carreras", así que nunca tiene costo único.
    *
-   * En Ver/Editar esto no aplica: no hay drafts (el historial de tarifas es
-   * append-only) y el costo se reenvía tal cual lo_trajo `data.cost`.
+   * En Ver esto no aplica: ahí no hay nada que capturar y el costo se reenvía tal
+   * cual lo trajo `data.cost`.
    */
   function generalAmount(): number | null {
     if (tarifaScope !== 'GENERAL') return null
@@ -746,31 +1197,48 @@ export default function ConceptosForm() {
   }
 
   /**
-   * Las tarifas no tienen vigencia propia: se rigen por la ventana del
-   * concepto, así que `validFrom` se deriva de ella. Sin "¿Tiene vigencia?" la
-   * tarifa aplica desde hoy, que es lo único que `CreatePaymentRateRequest`
-   * admite (el campo es `@NotNull`) sin inventar una fecha que nadie eligió.
-   */
-  function rateValidFrom(): string {
-    if (tieneVigencia && availableFrom) return availableFrom
-    return todayIso()
-  }
-
-  /**
-   * Aplana los drafts del editor a filas de `payment_rate`: una fila por
-   * combinación exacta (concepto, programId, level) que el backend entiende.
-   * Todas las filas usan el alcance de la sección, así que aquí no hay decisión
-   * por fila. `undefined` en `programId`/`level` es la combinación "no liga a
-   * ninguno" y desaparece del JSON al enviarse.
+   * Aplana la lista a filas de `payment_rate`: una fila por combinación exacta
+   * (concepto, programId, level) que el backend entiende. Todas las filas usan el
+   * alcance de la sección, así que aquí no hay decisión por fila.
+   * `undefined` en `programId`/`level` es la combinación "no liga a ninguno" y
+   * desaparece del JSON al enviarse. Sin fechas: la vigencia es del concepto, y el
+   * estado de cada fila lo decide el backend al comparar este conjunto contra lo
+   * guardado.
+   *
+   * En Editar se mezclan dos cosas por destino: lo que ya está guardado y no se
+   * tocó, y lo que capturó la lista. El backend reconcilia contra lo guardado y
+   * **retira lo que no venga**, así que mandar solo las filas editadas dejaría sin
+   * precio a todas las demás —que es justo lo que la lista muestra como si
+   * siguieran vigentes—. Con la mezcla, el `PUT` llega completo: lo intacto vuelve
+   * con el mismo monto y el backend conserva su id, y lo editado se registra como
+   * tarifa nueva dejando la anterior como historial.
+   *
+   * En Registrar no hay nada guardado, así que la mezcla no aporta nada y solo
+   * quedan las filas capturadas.
    */
   function expandTarifas(): PaymentRatePayload[] {
-    const validFrom = rateValidFrom()
-    return tarifas.flatMap(t => {
-      const amount = Number(t.amount)
-      if (tarifaScope === 'LEVEL') return [{ level: t.level as AcademicLevel, amount, validFrom }]
-      if (tarifaScope === 'PROGRAMS') return t.programIds.map(pid => ({ programId: pid, amount, validFrom }))
-      return [{ amount, validFrom }]
+    const destinoDe = (programId: string | null | undefined, level: string | null | undefined, amount: number): PaymentRatePayload => ({
+      ...(programId ? { programId } : {}),
+      ...(level ? { level: level as AcademicLevel } : {}),
+      amount,
     })
+    // La clave es la identidad del destino en `payment_rate`: una fila por
+    // combinación, no una por fila del editor.
+    const porDestino = new Map<string, PaymentRatePayload>()
+    for (const r of ratesVigentes) {
+      porDestino.set(comboKey(r.programId, r.level), destinoDe(r.programId, r.level, r.amount))
+    }
+    for (const t of tarifas) {
+      const amount = Number(t.amount)
+      if (tarifaScope === 'LEVEL') {
+        porDestino.set(comboKey(null, t.level), destinoDe(null, t.level, amount))
+      } else if (tarifaScope === 'PROGRAMS') {
+        for (const pid of t.programIds) porDestino.set(comboKey(pid, null), destinoDe(pid, null, amount))
+      } else {
+        porDestino.set(comboKey(null, null), destinoDe(null, null, amount))
+      }
+    }
+    return [...porDestino.values()]
   }
 
   // Resetea el formulario al cambiar de modo/registro (mismo patrón que el
@@ -780,15 +1248,16 @@ export default function ConceptosForm() {
     setSubmitErrorMsg('')
     setErrors({})
     setNombre('')
+    setCodigo('')
     setTipo('')
+    setNivelNum('')
     setAreaId('')
     setDescripcion('')
     setPoliticas('')
     setTarifaScope('')
     setTarifas([])
-    setCreatedConceptId(null)
-    setPendingRates([])
-    setRatesProgress(null)
+    cuotaSeedRef.current = ''
+    savedRowsRef.current = ''
     setConceptCost(null)
     setEsExterno(false)
     setCostoExterno('')
@@ -797,9 +1266,6 @@ export default function ConceptosForm() {
     setIsStandalone(false)
     setEsVinculados(false)
     setVinculados([])
-    setEsCuotaCuatrimestral(false)
-    setAplicaCarrera(false)
-    setCarreras([])
     setLimiteCuotasOn(false)
     setLimiteCuotas('')
     setMaxPerStudent('')
@@ -815,8 +1281,13 @@ export default function ConceptosForm() {
     }
   }, [mode, id, isRegister])
 
-  // Catálogos base: áreas (dropdown), conceptos (vinculados), programas
-  // (carreras / tarifas). No críticos — si fallan, el selector queda vacío.
+  // Catálogos base: áreas (dropdown), conceptos (vinculados) y carreras
+  // (tarifas). No críticos — si fallan, el selector queda vacío.
+  //
+  // Las carreras van por `/programs/options`, no por `/programs`: el catálogo de
+  // gestión exige ADMIN o SERVICIOS_ESCOLARES y este formulario lo abre
+  // PERSONAL_FINANZAS, que es justamente quien registra las cuotas. Con
+  // `/programs` el selector llegaba vacío sin avisar.
   useEffect(() => {
     apiGet<PaymentAreasPageResponse>('/payment-areas', { status: 'ACTIVE', size: 100 })
       .then(data => setAreas(data.items))
@@ -824,20 +1295,21 @@ export default function ConceptosForm() {
     apiGet<ConceptsPageResponse>('/payment-concepts', { status: 'ACTIVE', size: 100 })
       .then(data => setConcepts(data.items))
       .catch(() => {/* no crítico */})
-    apiGet<ProgramsPageResponse>('/programs', { size: 100 })
-      .then(data => setPrograms(data.items))
+    apiGet<ProgramOption[]>('/programs/options')
+      .then(data => setPrograms(data))
       .catch(() => {/* no crítico */})
   }, [])
 
-  // Periodos — solo se usan para etiquetar las tarifas (view/edit).
-  useEffect(() => {
-    if (isRegister) return
-    apiGet<PeriodsPageResponse>('/periods', { size: 100 })
-      .then(data => setPeriods(data.items))
-      .catch(() => {/* no crítico — periodLabel() cae a '—' */})
-  }, [isRegister])
-
-  // Tarifas: historial append-only, solo lectura, nunca en Registrar.
+  // Tarifas: historial de precios, solo lectura, nunca en Registrar. Trae
+  // tanto las `ACTIVE` como las que se retiraron en un guardado anterior, y el
+  // editor de abajo se siembra con las vigentes.
+  //
+  // `mode` va en las dependencias a propósito, aunque no se use en el cuerpo. El
+  // reset de arriba depende de él y vacía `rates`, así que si este efecto no
+  // reacciona al mismo cambio, Ver → Editar dejaba el historial en "Sin tarifas
+  // registradas todavía" sin volver a pedirlo: el concepto se recargaba (su
+  // efecto sí depende de `mode`) y las tarifas no. Las dos cargas cambian
+  // juntas o la pantalla queda a medias.
   useEffect(() => {
     if (isRegister || !id) return
     let cancelled = false
@@ -850,23 +1322,17 @@ export default function ConceptosForm() {
       })
       .catch(() => { if (!cancelled) setRatesLoadStatus('error') })
     return () => { cancelled = true }
-  }, [id, isRegister])
+  }, [id, isRegister, mode])
 
   function programLabel(programId: string | null): string {
     if (!programId) return 'Todas las carreras'
     const p = programs.find(p => p.id === programId)
-    return p ? `${p.code} — ${p.name}` : '—'
+    return p ? programOptionLabel(p) : '—'
   }
 
   function levelLabel(level: AcademicLevel | null): string {
     if (!level) return 'Todos los niveles'
     return LEVEL_LABELS[level]
-  }
-
-  function periodLabel(periodId: string | null): string {
-    if (!periodId) return 'General — sin periodo'
-    const per = periods.find(per => per.id === periodId)
-    return per ? per.name : '—'
   }
 
   // Carga del concepto en view/edit.
@@ -879,11 +1345,12 @@ export default function ConceptosForm() {
       .then(data => {
         if (cancelled) return
         setNombre(data.name)
+        setCodigo(data.code ?? '')
         setTipo(data.type)
+        setNivelNum(data.levelNumber != null ? String(data.levelNumber) : '')
         setDescripcion(data.description ?? '')
         setPoliticas(data.policies ?? '')
         setConceptCost(data.cost)
-        setEsCuotaCuatrimestral(data.isTuition)
         setIsStandalone(data.isStandalone)
         setRequiereValidacion(data.requiresValidation)
         setMaxPerStudent(data.maxPerStudent != null ? String(data.maxPerStudent) : '')
@@ -899,11 +1366,18 @@ export default function ConceptosForm() {
         setLimiteCuotasOn(data.quotaLimit != null)
         setLimiteCuotas(data.quotaLimit != null ? String(data.quotaLimit) : '')
         const linked = data.linkedConceptIds ?? []
-        const carrerasSeleccionadas = data.programIds ?? []
         setEsVinculados(linked.length > 0)
         setVinculados(linked)
-        setAplicaCarrera(carrerasSeleccionadas.length > 0)
-        setCarreras(carrerasSeleccionadas)
+        // Una cuota periódica guardada ya tiene su alcance decidido ("por
+        // carreras") y su nivel. Se deja fijado aquí para que abrir el editor
+        // no tenga que deducirlo de un historial que puede no haber cargado, y
+        // para que `generalAmount()` no interprete esas filas como un alcance
+        // general y derive un costo único que no existe.
+        if (data.type === 'PERIODIC_QUOTA') {
+          setTarifaScope('PROGRAMS')
+          setTarifas([])
+          cuotaSeedRef.current = ''
+        }
         setLoadStatus('idle')
       })
       .catch((err: unknown) => {
@@ -927,6 +1401,23 @@ export default function ConceptosForm() {
   function validate(): FormErrors {
     const e: FormErrors = {}
     if (!nombre.trim()) e.nombre = 'El nombre es obligatorio.'
+    // El código se compara en mayúsculas y el backend lo guarda único por
+    // collation, así que la misma clave escrita de dos formas tiene que
+    // rechazarse aquí y no dos pasos más tarde como un 409 sin explicación.
+    const code = codigo.trim().toUpperCase()
+    if (!code) e.codigo = 'El código es obligatorio.'
+    else if (!CODE_PATTERN.test(code)) {
+      e.codigo = 'Usa hasta 30 caracteres: letras, números, guion o guion bajo.'
+    }
+    if (!tipo) e.tipo = 'Selecciona un tipo.'
+    // El nivel solo existe para cuota periódica; el backend lo exige ahí y lo
+    // ignora en los demás tipos, así que se manda `null` fuera de ese caso.
+    if (tipo === 'PERIODIC_QUOTA') {
+      if (!nivelNum.trim()) e.nivel = 'El nivel es obligatorio para una cuota periódica.'
+      else if (!Number.isInteger(Number(nivelNum)) || Number(nivelNum) < 1) {
+        e.nivel = 'Ingresa un número entero mayor o igual a 1.'
+      }
+    }
     if (!areaId) e.areaId = 'Selecciona un área.'
 
     // ── Tarifas ──
@@ -936,11 +1427,19 @@ export default function ConceptosForm() {
     // general" y de destinos duplicados ya no viven aquí — el alcance único
     // hace imposible la primera, y el destino es ahora el mismo tipo en todas
     // las filas, lo que hace la segunda verificable fila a fila.
-    if (isRegister) {
+    //
+    // En Registrar las tarifas son obligatorias: un concepto sin precio no
+    // sirve para cotizar nada. En Editar son OPCIONALES —editar el nombre de un
+    // concepto no debe exigir meterse a tocar precios— así que basta con que las
+    // filas que haya sean válidas. Lo que no se puede es guardar con una fila a
+    // medio capturar: eso sí es un error de quien está capturando.
+    if (rateEditorVisible) {
       if (!tarifaScope) {
-        e.alcance = 'Selecciona el alcance de las tarifas.'
-      } else if (tarifas.length === 0) {
-        e.tarifas = 'Agrega al menos una tarifa para poder registrar el concepto.'
+        if (isRegister) e.alcance = 'Selecciona el alcance de las tarifas.'
+      } else if (tarifas.length === 0 && (isRegister || isQuota)) {
+        e.tarifas = isQuota
+          ? 'No hay carreras activas para cotizar. Registra una carrera o cambia el tipo de concepto.'
+          : 'Agrega al menos una tarifa para poder registrar el concepto.'
       }
 
       const byKey: Record<string, { field: TarifaField; message: string }> = {}
@@ -958,10 +1457,8 @@ export default function ConceptosForm() {
       // Red de seguridad, no camino normal: el editor ya retira de cada fila
       // los destinos que otra fila tomó (ver `takenLevelsBy`/`takenProgramsBy`),
       // así que aquí no se puede llegar por interacción normal. Se conserva
-      // porque la consecuencia del fallo es silenciosa — `SetPaymentRateUseCase`
-      // responde 201 y guarda la primera tarifa con `validTo = validFrom - 1`,
-      // un rango vacío que el usuario cree vigente — y `validate()` no depende
-      // de que el editor se haya comportado bien.
+      // porque la consecuencia es un 409 en el mejor caso, y `validate()` no
+      // depende de que el editor se haya comportado bien.
       const owner = new Map<string, number>()
       tarifas.forEach((t, i) => {
         if (tarifaScope === 'PROGRAMS') t.programIds.forEach(pid => { if (!owner.has(pid)) owner.set(pid, i) })
@@ -977,6 +1474,15 @@ export default function ConceptosForm() {
       })
 
       if (Object.keys(byKey).length > 0) e.tarifasByKey = byKey
+
+      // Cobertura de la cuota periódica: el backend exige exactamente una tarifa
+      // por cada carrera `ACTIVE` y ninguna para las que ya no lo están
+      // (`PaymentQuotaCoverageChecker`). Las filas se siembran con el catálogo
+      // completo, así que lo único que puede faltar son los montos — y el error
+      // dice cuántos, no "algo está mal".
+      if (isQuota && cuotaFaltantes > 0) {
+        e.cobertura = `Faltan ${cuotaFaltantes} de ${programs.length} carreras por cotizar. Una cuota periódica necesita un monto para cada carrera activa.`
+      }
     }
 
     if (esExterno) {
@@ -1002,29 +1508,39 @@ export default function ConceptosForm() {
     setErrors({})
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
-    setRatesProgress(null)
 
-    // Mapeo completo al backend (extensión 2026-09-19): los switches que
-    // agrupan un valor secundario (externo, límite de cuotas, vinculados,
-    // carreras) lo mandan solo cuando están encendidos; apagados van a
-    // null / [].
+    // Mapeo completo al backend: los switches que agrupan un valor secundario
+    // (externo, límite de cuotas, vinculados) lo mandan solo cuando están
+    // encendidos; apagados van a null / [].
     //
     // `cost` ya no se captura: se deriva de la tarifa de alcance GENERAL
     // (la única que aplica a todos los niveles y carreras). Con alcance
-    // POR NIVEL o POR CARRERAS el precio depende del destino, así que no hay
-    // un costo único que defender y queda null: el precio vive solo en
-    // `payment_rate`.
+    // POR NIVEL o POR CARRERAS —y siempre en una cuota periódica— el precio
+    // depende del destino, así que no hay un costo único que defender y queda
+    // null: el precio vive solo en `payment_rate`.
     //
-    // En Ver/Editar no hay drafts de tarifa (el historial es append-only), así
-    // que el costo se reenvía tal como vino de la API en vez de degradar a
-    // null — un PUT con `cost: null` borraría el precio del concepto.
+   // En Ver no hay drafts de tarifa (la lista es de solo lectura) y el costo se
+   // reenvía tal como vino de la API en vez de degradar a null — un PUT con
+   // `cost: null` borraría el precio de todo lo que aún lee
+   // `PaymentConcept.cost`.
+   //
+   // La excepción en Editar es el alcance GENERAL: la fila de la lista es el
+   // propio costo del concepto, así que si el usuario lo cambia, ese monto
+   // ese monto pasa a ser el viejo —de lo contrario el concepto y su historial
+   // de precios quedarían discrepantes.
     const generalCost = generalAmount()
+    const cost = isRegister
+      ? generalCost
+      : generalCost !== null ? generalCost : conceptCost
     const payload: PaymentConceptFormPayload = {
       name: nombre.trim(),
+      code: codigo.trim().toUpperCase(),
       description: descripcion.trim() ? sanitizeHtml(descripcion) : null,
       policies: politicas.trim() ? sanitizeHtml(politicas) : null,
       type: (tipo || 'OTHER') as PaymentConceptType,
-      isTuition: esCuotaCuatrimestral,
+      // El nivel pertenece al concepto, no a las tarifas: se manda solo en cuota
+      // periódica, que es el único tipo que lo exige.
+      levelNumber: isQuota && nivelNum.trim() !== '' ? Number(nivelNum) : null,
       isStandalone,
       maxPerStudent: maxPerStudent.trim() === '' ? null : Number(maxPerStudent),
       maxPerPeriod: maxPerPeriod.trim() === '' ? null : Number(maxPerPeriod),
@@ -1032,71 +1548,70 @@ export default function ConceptosForm() {
       availableFrom: tieneVigencia && availableFrom ? availableFrom : null,
       availableUntil: tieneVigencia && availableUntil ? availableUntil : null,
       areaId: areaId || null,
-      cost: isRegister ? generalCost : conceptCost,
+      cost,
       isExternal: esExterno,
       costExternal: esExterno && costoExterno.trim() !== '' ? Number(costoExterno) : null,
       isAccumulable: esAcumulable,
       isMulticoncept: esMulticoncepto,
       quotaLimit: limiteCuotasOn && limiteCuotas.trim() !== '' ? Number(limiteCuotas) : null,
       linkedConceptIds: esVinculados ? vinculados : [],
-      programIds: aplicaCarrera ? carreras : [],
     }
 
-    // `conceptId` se declara fuera del try a propósito: el `catch` lo necesita
-    // para distinguir "el concepto ya existe, falló una tarifa" de "el concepto
-    // ni se pudo crear". Leer `createdConceptId` del estado en el `catch`
-    // serviría de nada en el primer intento, porque `setCreatedConceptId` todavía
-    // no se ha aplicado cuando se lanza el error.
-    let conceptId: string | null = createdConceptId
-    // El lote en vuelo se fija al crear el concepto y solo se acorta con cada
-    // tarifa confirmada. Un reintento reenvía exactamente lo que falta, con los
-    // montos con los que se unsubió: volver a expandir los drafts podría
-    // mandar montos ya corregidos para filas que sí se guardaron, y el backend
-    // cerraría la fila vieja con un rango vacío.
-    let batch: PaymentRatePayload[] = pendingRates
+    // Las tarifas se mandan como el conjunto completo, nunca como un POST por
+    // fila: el backend valida el conjunto entero antes de escribir y desactiva
+    // lo que no venga, lo que además da el alta atómica (una cuota periódica no
+    // puede quedar existiendo sin cotizar) y quita la necesidad de reintentar
+    // un lote a medias con estado local.
+    const rates = shouldSendRates ? expandTarifas() : []
 
     try {
       if (isRegister) {
-        // Las tarifas cuelgan de un concepto real, así que el registro es
-        // secuencial: primero el concepto, después una fila de `payment_rate`
-        // por cada combinación.
-        if (!conceptId) {
-          const created = await apiPost<PaymentConceptResponse>('/payment-concepts', payload)
-          conceptId = created.id
-          setCreatedConceptId(conceptId)
-          batch = expandTarifas()
-          setPendingRates(batch)
-        }
-        if (batch.length === 0) batch = expandTarifas()
-
-        setRatesProgress({ done: 0, total: batch.length })
-        for (let i = 0; i < batch.length; i++) {
-          await apiPost(`/payment-concepts/${conceptId}/rates`, batch[i])
-          setPendingRates(batch.slice(i + 1))
-          setRatesProgress({ done: i + 1, total: batch.length })
-        }
-
-        navigate(`/conceptos/form?mode=view&id=${conceptId}`, { state: { toast: 'Concepto de pago registrado exitosamente.' } })
+        const created = await apiPost<PaymentConceptResponse>('/payment-concepts', {
+          ...payload,
+          rates,
+        } as CreatePaymentConceptPayload)
+        navigate(`/conceptos/form?mode=view&id=${created.id}`, { state: { toast: 'Concepto de pago registrado exitosamente.' } })
       } else if (id) {
+        // El PUT del concepto y el de las tarifas son operaciones distintas y
+        // no comparten transacción: si el segundo falla, el primero ya quedó.
+        // Se avisa en consecuencia en vez de fingir que no se guardó nada.
         await apiPut<PaymentConceptResponse>(`/payment-concepts/${id}`, payload)
+
+        let ratesFailed = false
+        if (rates.length > 0) {
+          try {
+            await apiPut(`/payment-concepts/${id}/rates`, { rates })
+          } catch {
+            ratesFailed = true
+          }
+        }
+
+        if (ratesFailed) {
+          setSubmitStatus('error')
+          setSubmitErrorMsg('Los datos del concepto se actualizaron, pero sus tarifas no. Vuelve a guardar para reintentar solo las tarifas.')
+          return
+        }
+
         navigate(`/conceptos/form?mode=view&id=${id}`, { state: { toast: 'Concepto de pago actualizado exitosamente.' } })
       }
     } catch (err) {
       setSubmitStatus('error')
-      setRatesProgress(null)
       const apiErr = err as Partial<ApiError>
-      const baseMessage = apiErr.status === 400
-        ? (apiErr.message ?? 'Revisa los datos capturados: hay un valor inválido.')
-        : apiErr.status === 401
-          ? 'Tu sesión expiró. Vuelve a iniciar sesión.'
-          : apiErr.status === 403
-            ? 'No tienes permiso para realizar esta acción.'
-            : 'No se pudo conectar con el servidor. Intenta de nuevo más tarde.'
-      if (isRegister && conceptId) {
-        setSubmitErrorMsg(`El concepto se registró, pero falló el guardado de sus tarifas. ${baseMessage} Vuelve a guardar para reintentar solo las tarifas que faltan.`)
-      } else {
-        setSubmitErrorMsg(baseMessage)
-      }
+      // El mensaje del backend es el que sabe nombrar la regla que se violó
+      // (nivel duplicado, cobertura incompleta, referencia inexistente), así
+      // que se conserva cuando viene; los textos genéricos solo sustituyen a
+      // los casos de sesión/permisos/red, donde el detalle no ayuda.
+      setSubmitErrorMsg(
+        apiErr.status === 409
+          ? (apiErr.message ?? 'Ya existe un concepto activo con ese código o ese nivel.')
+          : apiErr.status === 400
+            ? (apiErr.message ?? 'Revisa los datos capturados: hay un valor inválido.')
+            : apiErr.status === 401
+              ? 'Tu sesión expiró. Vuelve a iniciar sesión.'
+              : apiErr.status === 403
+                ? 'No tienes permiso para realizar esta acción.'
+                : 'No se pudo conectar con el servidor. Intenta de nuevo más tarde.'
+      )
     }
   }
 
@@ -1104,7 +1619,50 @@ export default function ConceptosForm() {
 
   const areaOptions = areas.map(a => ({ value: a.id, label: `${a.code} — ${a.name}` }))
   const conceptOptions = concepts.filter(c => c.id !== id).map(c => ({ id: c.id, label: c.name }))
-  const carreraOptions = programs.map(p => ({ id: p.id, label: `${p.code} — ${p.name}` }))
+  const carreraOptions = programs.map(p => ({ id: p.id, label: programOptionLabel(p) }))
+
+  /**
+   * Solo las tarifas vigentes.
+   *
+   * Las `INACTIVE` son el precio que un monto anterior tuvo, y se quedan en la
+   * base como historial de precios — no se borran nunca. Pero esta pantalla no
+   * las muestra: son un registro de cambios, no el precio que aplica hoy, y
+   * mezclarlas con las vigentes obligaba a leer la columna Estado para saber
+   * cuál de dos filas era la real.
+   *
+   * `inferScopeFromRates()` ya filtraba por `ACTIVE` antes de este cambio, así
+   * que ocultar las retiradas no altera el alcance que se deduce del historial.
+   */
+  const ratesVigentes = rates.filter(r => r.status === 'ACTIVE')
+
+  /**
+   * Carreras `ACTIVE` que no tienen tarifa vigente, para la cuota.
+   *
+   * El historial anterior se armaba con las filas de `payment_rate`, así que una
+   * carrera sin fila `ACTIVE` no aparecía y el listado se veía completo cuando
+   * el concepto no lo estaba — justo el estado que la cobertura rechaza al
+   * guardar. Con la lista combinada eso ya no hace falta en Editar (la fila sale
+   * con el monto vacío), pero en Ver sí: ahí no hay input que señale el hueco y
+   * lo único que se vería es un guion.
+   */
+  const carrerasSinTarifa = isQuota
+    ? programs.filter(p => !ratesVigentes.some(r => r.programId === p.id))
+    : []
+
+  /**
+   * Alcance ya fijado por el historial, que se muestra en vez del `ScopePicker`
+   * cuando existe. Solo en Editar: en Registrar no hay historial y el alcance se
+   * elige ahí; en Ver no hay editor.
+   *
+   * `null` cuando las tarifas guardadas son de destinos mezclados o no hay
+   * ninguna: en ese caso no se puede deducir y el `ScopePicker` se muestra para
+   * que la sección siga teniendo un alcance con el que trabajar.
+   *
+   * En cuota periódica siempre es "por carreras", lo diga o no el historial: el
+   * alcance lo impone el tipo, y mostrar un `ScopePicker` allí sería una
+   * pregunta con una sola respuesta válida.
+   */
+  const lockedScope = isQuota ? 'PROGRAMS' as TarifaScope : !isRegister ? inferScopeFromRates(rates) : null
 
   return (
     <FormPage>
@@ -1147,25 +1705,54 @@ export default function ConceptosForm() {
 
             <div className="grid grid-cols-12 gap-4">
               <TextField
+                label="Código"
+                required={!isView}
+                value={codigo}
+                onChange={v => { setCodigo(v.toUpperCase()); clearErr('codigo') }}
+                disabled={disabled}
+                error={errors.codigo}
+                placeholder="Ej. CUOTA_TSU_1"
+                help="Clave única del concepto. Se guarda en mayúsculas."
+                className="col-span-12 sm:col-span-4"
+              />
+              <TextField
                 label="Nombre"
                 required={!isView}
                 value={nombre}
                 onChange={v => { setNombre(v); clearErr('nombre') }}
                 disabled={disabled}
                 error={errors.nombre}
-                placeholder="Ej. Cuota Cuatrimestral"
+                placeholder="Ej. Cuota cuatrimestral"
                 className="col-span-12 sm:col-span-8"
               />
               <SelectField
                 label="Tipo"
                 required={!isView}
                 value={tipo}
-                onChange={v => setTipo(v as PaymentConceptType)}
+                onChange={v => { changeTipo(v as PaymentConceptType | ''); clearErr('tipo') }}
                 disabled={disabled}
+                error={errors.tipo}
                 options={(Object.keys(TYPE_LABELS) as PaymentConceptType[]).map(t => ({ value: t, label: TYPE_LABELS[t] }))}
                 placeholder="Seleccionar tipo…"
                 className="col-span-12 sm:col-span-4"
               />
+              {isQuota && (
+                <TextField
+                  label="Nivel"
+                  required={!isView}
+                  value={nivelNum}
+                  onChange={v => { setNivelNum(v); clearErr('nivel') }}
+                  disabled={disabled}
+                  error={errors.nivel}
+                  type="number"
+                  min={1}
+                  step={1}
+                  numeric
+                  placeholder="Ej. 1"
+                  help="Solo puede haber una cuota periódica activa por nivel."
+                  className="col-span-12 sm:col-span-4"
+                />
+              )}
               <SelectField
                 label="Área"
                 required={!isView}
@@ -1175,7 +1762,7 @@ export default function ConceptosForm() {
                 error={errors.areaId}
                 options={areaOptions}
                 placeholder="Selecciona una opción"
-                className="col-span-12"
+                className={isQuota ? 'col-span-12 sm:col-span-4' : 'col-span-12'}
               />
             </div>
 
@@ -1199,146 +1786,234 @@ export default function ConceptosForm() {
           </FormCard>
 
           {/* ── Tarifas ────────────────────────────────────────────────────────
-              Un solo bloque para los tres modos: en Registrar es el editor del
-              precio (alcance de la sección + una fila por monto), y en
-              Ver/Editar es el historial append-only de `payment_rate`, que no
-              se edita ni se borra. */}
+              Una sola lista en los tres modos y para todos los tipos. Lo que
+              cambia es de dónde salen las filas: en cuota las arma el catálogo
+              (una por carrera `ACTIVE`), y en los demás tipos son las que ya
+              están guardadas, más las que se agreguen con el botón. */}
           <FormCard>
             <SectionTitle>Tarifas</SectionTitle>
 
-            {!isRegister ? (
-              // ── Historial (Ver/Editar) — append-only, sin edición ─────────
-              ratesLoadStatus === 'loading' ? (
-                <div className="flex flex-col items-center gap-2 text-[#6B7280] py-8">
-                  <Loader2 size={20} className="animate-spin text-[#009574]" />
-                  <p className="text-[12px] font-medium">Cargando tarifas...</p>
-                </div>
-              ) : ratesLoadStatus === 'error' ? (
-                <p className="text-[12px] text-red-600 text-center py-6">No se pudieron cargar las tarifas. Intenta de nuevo más tarde.</p>
-              ) : rates.length === 0 ? (
-                <p className="text-[12px] text-[#6B7280] text-center py-6">Sin tarifas registradas todavía.</p>
-              ) : (
-                <>
-                  {/* La ventana se muestra UNA vez, arriba: las tarifas no tienen
-                      vigencia propia, así que repetirla por fila mostraría la
-                      misma fecha en todas. */}
-                  <p className="mb-3 text-[11px] text-[#6B7280]">
-                    <span className="font-medium text-[#333333]">Disponible para pagos:</span>{' '}
-                    {tieneVigencia && (availableFrom || availableUntil)
-                      ? [
-                          availableFrom ? formatDate(availableFrom) : 'sin fecha inicial',
-                          availableUntil ? formatDate(availableUntil) : 'sin fecha final',
-                        ].join(' – ')
-                      : 'sin vigencia — disponible siempre'}
-                    . Aplica a todas las tarifas del concepto.
-                  </p>
-
-                  <div className="hidden md:block border border-[#E5E7EB] rounded-lg overflow-hidden">
-                    <MiniTable
-                      columns={[
-                        { key: 'programa', header: 'Carrera', render: r => <span className="text-[#333333]">{programLabel(r.programId)}</span> },
-                        { key: 'nivel', header: 'Nivel', render: r => <span className="text-[#333333]">{levelLabel(r.level)}</span> },
-                        { key: 'periodo', header: 'Periodo', render: r => <span className="text-[#333333]">{periodLabel(r.periodId)}</span> },
-                        { key: 'monto', header: 'Monto', className: 'text-right tabular-nums', render: r => <span className="font-medium text-[#333333]">{formatCurrency(r.amount)}</span> },
-                      ]}
-                      items={rates}
-                      keyFor={r => r.id}
-                    />
-                  </div>
-
-                  <div className="md:hidden space-y-3">
-                    {rates.map(r => (
-                      <div key={r.id} className="border border-[#E5E7EB] rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-[13px] font-semibold text-[#333333]">{formatCurrency(r.amount)}</p>
-                          <span className="text-[11px] text-[#6B7280]">{programLabel(r.programId)}</span>
-                        </div>
-                        <p className="text-[12px] text-[#6B7280]">{levelLabel(r.level)}</p>
-                        <p className="text-[12px] text-[#6B7280]">{periodLabel(r.periodId)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )
-            ) : (
-              // ── Editor (Registrar) ─────────────────────────────────────────
+            {isQuota ? (
+              // ── Cuota periódica ───────────────────────────────────────────
               <>
-                <p className="mb-4 text-[11px] leading-snug text-[#6B7280]">
-                  El alcance es el mismo para todas las tarifas del concepto: primero
-                  elige a quién aplican y después define el monto de cada una. En
-                  alcance general basta con un monto, que además es el costo del
-                  concepto. Las tarifas no tienen vigencia propia: se rigen por la
-                  vigencia del concepto.
-                </p>
+                {/* El alcance va arriba de la lista, no debajo de tres párrafos
+                    que lo explicaban: en cuota lo fija el tipo, así que no es una
+                    decisión que haya que tomar sino un dato. */}
+                <div className="mb-4 rounded-lg border border-[#E5E7EB] bg-[#F8F9FA] px-3 py-2.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                    Alcance de las tarifas
+                  </span>
+                  <span className="mt-0.5 block text-[13px] font-semibold text-[#333333]">
+                    Por carreras
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-[#6B7280]">
+                    {cuotaFaltantes === 0
+                      ? `Las ${programs.length} carreras activas están cotizadas.`
+                      : `${programs.length - cuotaFaltantes} de ${programs.length} carreras activas cotizadas.`}
+                  </span>
+                </div>
 
-                <ScopePicker
-                  value={tarifaScope}
-                  onChange={selectScope}
-                  disabled={isSubmitting}
-                  error={errors.alcance}
-                />
-
-                {tarifaScope === '' ? (
-                  <div className="mt-4 rounded-lg border border-dashed border-[#D1D5DB] py-8 text-center">
-                    <p className="text-[12px] text-[#6B7280]">
-                      Selecciona un alcance para empezar a capturar tus tarifas.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    {errors.tarifas && <div className="mt-4"><FieldError>{errors.tarifas}</FieldError></div>}
-
-                    <div className="mt-4 space-y-3">
-                      {tarifas.map((t, i) => {
-                        // Cada fila ve el catálogo menos lo que ya tomaron las
-                        // demás, más su propia selección (si se filtrara, el
-                        // `<select>` la perdería y se vería en blanco).
-                        const takenLevels = takenLevelsBy(t.key)
-                        const takenPrograms = takenProgramsBy(t.key)
-                        return (
-                          <TarifaRow
-                            key={t.key}
-                            index={i}
-                            scope={tarifaScope}
-                            canRemove={tarifaScope !== 'GENERAL' && tarifas.length > 1}
-                            draft={t}
-                            nivelOptions={(Object.keys(LEVEL_LABELS) as AcademicLevel[]).filter(
-                              l => l === t.level || !takenLevels.has(l)
-                            )}
-                            carreraOptions={carreraOptions.filter(
-                              o => t.programIds.includes(o.id) || !takenPrograms.has(o.id)
-                            )}
-                            error={errors.tarifasByKey?.[t.key]}
-                            onChange={patch => { updateTarifa(t.key, patch); clearTarifaErr(t.key) }}
-                            onRemove={() => removeTarifa(t.key)}
-                          />
-                        )
-                      })}
-                    </div>
-
-                    {tarifaScope === 'GENERAL' ? (
-                      <p className="mt-3 text-[11px] text-[#6B7280]">
-                        El alcance general es un solo monto, sin nivel ni carrera.
-                      </p>
-                    ) : (
-                      <div className="mt-3">
-                        <Button size="sm" onClick={addTarifa} disabled={isSubmitting}>
-                          <Plus size={13} />Agregar tarifa
-                        </Button>
-                      </div>
-                    )}
-                  </>
+                {errors.cobertura && (
+                  <div className="mb-4"><FieldError>{errors.cobertura}</FieldError></div>
                 )}
 
-                {ratesProgress && (
-                  <p className="mt-3 flex items-center gap-2 text-[12px] font-medium text-[#009574]">
-                    <Loader2 size={14} className="animate-spin" />
-                    Guardando tarifas… {ratesProgress.done} de {ratesProgress.total}
+                {/* Solo en Ver: en Editar y Registrar la fila sin monto ya sale
+                    con su input vacío, así que el aviso sería repetir lo que la
+                    lista muestra. */}
+                {isView && carrerasSinTarifa.length > 0 && (
+                  <p className="mb-4 flex items-start gap-1.5 text-[11px] leading-snug text-[#B45309]">
+                    <Info size={12} className="mt-0.5 shrink-0" />
+                    <span>
+                      <span className="font-semibold">
+                        Faltan tarifas para {carrerasSinTarifa.length}{' '}
+                        {carrerasSinTarifa.length === 1 ? 'carrera activa' : 'carreras activas'}.
+                      </span>{' '}
+                      Se capturan al editar el concepto.
+                    </span>
                   </p>
+                )}
+
+                {programs.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-[#D1D5DB] py-8 text-center">
+                    <p className="text-[12px] text-[#6B7280]">
+                      No hay carreras activas para cotizar. Registra una carrera o cambia el
+                      tipo de concepto.
+                    </p>
+                  </div>
+                ) : ratesLoadStatus === 'loading' ? (
+                  // Mientras se leen los precios guardados, las filas todavía no
+                  // los tienen: mostrarlas como "Sin cotizar" sería mentir.
+                  // En Registrar no hay nada que leer y se capturan de una vez.
+                  <div className="flex flex-col items-center gap-2 text-[#6B7280] py-8">
+                    <Loader2 size={20} className="animate-spin text-[#009574]" />
+                    <p className="text-[12px] font-medium">Cargando tarifas...</p>
+                  </div>
+                ) : ratesLoadStatus === 'error' ? (
+                  // Igual que en los demás tipos: sin los precios guardados la
+                  // lista se llenaría de "Sin cotizar" y al guardar el conjunto
+                  // saldría incompleto.
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-700">
+                    No se pudieron cargar las tarifas de este concepto, así que no se pueden
+                    ver aquí. Intenta de nuevo más tarde.
+                  </p>
+                ) : (
+                  <TarifasLista
+                    filas={tarifas}
+                    scope={tarifaScope}
+                    readOnly={isView}
+                    disabled={isSubmitting}
+                    errores={errors.tarifasByKey ?? {}}
+                    destinoFijo
+                    puedeQuitar={false}
+                    labelCarrera={programLabel}
+                    labelNivel={levelLabel}
+                    formatMonto={a => formatCurrency(Number(a))}
+                    nivelOptions={() => []}
+                    carreraOptions={() => []}
+                    onChange={(key, patch) => { updateTarifa(key, patch); clearTarifaErr(key) }}
+                    onToggleEdicion={key => (tarifas.find(t => t.key === key)?.editing ? cerrarEdicionTarifa(key) : toggleEdicionTarifa(key))}
+                    onRemove={removeTarifa}
+                  />
+                )}
+              </>
+            ) : (
+              // ── Demás tipos ───────────────────────────────────────────────
+              // La lista muestra las tarifas que ya están creadas, y el botón de
+              // agregar está siempre a la vista para capturar otra. El mismo
+              // editor de la cuota: el lápiz abre el monto de una fila y nada
+              // más, porque el destino de una tarifa guardada no se cambia —se
+              // cotiza otro destino como tarifa nueva—.
+              <>
+                {!isRegister && ratesLoadStatus === 'loading' ? (
+                  // Antes de saber qué tarifas hay no se puede deducir el alcance, y
+                  // mostrarlo no sería una decisión: es un dato que todavía no llegó.
+                  <div className="flex flex-col items-center gap-2 text-[#6B7280] py-8">
+                    <Loader2 size={20} className="animate-spin text-[#009574]" />
+                    <p className="text-[12px] font-medium">Cargando tarifas...</p>
+                  </div>
+                ) : !isRegister && ratesLoadStatus === 'error' ? (
+                  // Sin el conjunto guardado no se puede armar lo que se manda, así
+                  // que la sección se bloquea en vez de capturar sobre una lista
+                  // vacía: al guardar, las tarifas que ya existen se retirarían.
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-700">
+                    No se pudieron cargar las tarifas de este concepto, así que no se pueden
+                    editar aquí. Intenta de nuevo más tarde.
+                  </p>
+                ) : (
+                  <>
+                    {isView && !lockedScope ? (
+                      // Ver sin tarifas no tiene alcance que deducir, así que no se
+                      // pregunta: el `ScopePicker` es un control de captura y en
+                      // solo lectura no debe poder tocarse.
+                      <div className="rounded-lg border border-dashed border-[#D1D5DB] py-8 text-center">
+                        <p className="text-[12px] text-[#6B7280]">
+                          Este concepto no tiene tarifas registradas.
+                        </p>
+                      </div>
+                    ) : lockedScope ? (
+                      // El alcance ya lo decidió las tarifas guardadas, así que se
+                      // informa en vez de preguntarse. `selectScope()` vacía los
+                      // destinos de las filas, así que dejarlo elegible en editar
+                      // producía pantallas donde cambiar de tarjeta vaciaba lo
+                      // capturado.
+                      <div className="rounded-lg border border-[#E5E7EB] bg-[#F8F9FA] px-3 py-2.5">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                          Alcance de las tarifas
+                        </span>
+                        <span className="mt-0.5 block text-[13px] font-semibold text-[#333333]">
+                          {SCOPE_LABELS[lockedScope]}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-[#6B7280]">
+                          {SCOPE_DESCRIPTIONS[lockedScope]}
+                        </span>
+                      </div>
+                    ) : (
+                      <ScopePicker
+                        value={tarifaScope}
+                        onChange={selectScope}
+                        disabled={isSubmitting || isView}
+                        error={errors.alcance}
+                      />
+                    )}
+
+                    {tarifaScope === '' ? (
+                      <div className="mt-4 rounded-lg border border-dashed border-[#D1D5DB] py-8 text-center">
+                        <p className="text-[12px] text-[#6B7280]">
+                          {isView
+                            ? 'Este concepto no tiene tarifas registradas.'
+                            : 'Selecciona un alcance para empezar a capturar tus tarifas.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {errors.tarifas && <div className="mt-4"><FieldError>{errors.tarifas}</FieldError></div>}
+
+                        {/* La ventana se muestra UNA vez, arriba: las tarifas no tienen
+                            vigencia propia, así que repetirla por fila mostraría la misma
+                            fecha en todas. */}
+                        {!isRegister && tarifas.length > 0 && (
+                          <p className="mt-4 mb-3 text-[11px] text-[#6B7280]">
+                            <span className="font-medium text-[#333333]">Disponible para pagos:</span>{' '}
+                            {tieneVigencia && (availableFrom || availableUntil)
+                              ? [
+                                  availableFrom ? formatDate(availableFrom) : 'sin fecha inicial',
+                                  availableUntil ? formatDate(availableUntil) : 'sin fecha final',
+                                ].join(' – ')
+                              : 'sin vigencia — disponible siempre'}
+                            . Aplica a todas las tarifas del concepto.
+                          </p>
+                        )}
+
+                        <div className="mt-4">
+                          <TarifasLista
+                            filas={tarifas}
+                            scope={tarifaScope}
+                            readOnly={isView}
+                            disabled={isSubmitting}
+                            errores={errors.tarifasByKey ?? {}}
+                            destinoFijo={false}
+                            puedeQuitar={!isView && tarifas.length > 1}
+                            labelCarrera={programLabel}
+                            labelNivel={levelLabel}
+                            formatMonto={a => formatCurrency(Number(a))}
+                            nivelOptions={key => {
+                              const taken = takenLevelsBy(key)
+                              const propia = tarifas.find(t => t.key === key)?.level
+                              return (Object.keys(LEVEL_LABELS) as AcademicLevel[])
+                                .filter(l => l === propia || !taken.has(l))
+                            }}
+                            carreraOptions={key => {
+                              // Cada fila ve el catálogo menos lo que ya tomaron las
+                              // demás, más su propia selección: si se filtrara, el
+                              // selector la perdería y se vería en blanco.
+                              const taken = takenProgramsBy(key)
+                              const propias = tarifas.find(t => t.key === key)?.programIds ?? []
+                              return carreraOptions.filter(o => propias.includes(o.id) || !taken.has(o.id))
+                            }}
+                            onChange={(key, patch) => { updateTarifa(key, patch); clearTarifaErr(key) }}
+                            onToggleEdicion={key => (tarifas.find(t => t.key === key)?.editing ? cerrarEdicionTarifa(key) : toggleEdicionTarifa(key))}
+                            onRemove={removeTarifa}
+                          />
+                        </div>
+
+                        {/* En alcance general solo cabe un monto: no hay destino que
+                            combinar, así que una fila más sería una combinación repetida
+                            que el backend rechaza. */}
+                        {!isView && tarifaScope !== 'GENERAL' && (
+                          <div className="mt-3">
+                            <Button size="sm" onClick={addTarifa} disabled={isSubmitting}>
+                              <Plus size={13} />Agregar tarifa
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
                 )}
               </>
             )}
           </FormCard>
+
 
           {/* ── Configuración del Concepto ───────────────────────────────────── */}
           <FormCard>
@@ -1409,32 +2084,7 @@ export default function ConceptosForm() {
               </SwitchRow>
 
               <SwitchRow
-                label="¿Es cuota cuatrimestral?"
-                description="Es importante indicar si el concepto se trata de una cuota cuatrimestral para la aplicación de becas y prórrogas."
-                checked={esCuotaCuatrimestral}
-                onChange={setEsCuotaCuatrimestral}
-                disabled={disabled}
-              />
-
-              <SwitchRow
-                label="¿Aplica para alguna carrera en específico?"
-                description="Si el concepto aplica para ciertas carreras en específico, debes indicar las carreras a las que aplica."
-                checked={aplicaCarrera}
-                onChange={setAplicaCarrera}
-                disabled={disabled}
-              >
-                <MultiSelectField
-                  label="Carreras"
-                  options={carreraOptions}
-                  selected={carreras}
-                  onChange={setCarreras}
-                  disabled={disabled}
-                  placeholder="Seleccionar carreras…"
-                />
-              </SwitchRow>
-
-              <SwitchRow
-                label="¿Tiene límite de cuotas cuatrimestrales?"
+                label="¿Tiene límite de cuotas?"
                 description="Si el concepto tiene límite de cuotas por cuatrimestre, debes indicar el límite de cuotas."
                 checked={limiteCuotasOn}
                 onChange={setLimiteCuotasOn}

@@ -6,7 +6,6 @@ import type { Role } from '../infra/RoleContext'
 import { apiLogin, decodeJwtPayload, mapRoles } from '../infra/auth'
 import type { ApiError } from '../infra/apiClient'
 import { ROLE_LABELS } from '../layout/layoutRoles'
-import { LlaveMxButton } from '../components/LlaveMxButton'
 
 function UniversityIllustration() {
   return (
@@ -260,29 +259,8 @@ export default function Login() {
               {isLoading ? 'Verificando...' : 'Iniciar Sesión'}
             </button>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-[#E5E7EB]" />
-              <span className="text-[12px] text-[#9CA3AF] font-medium">o</span>
-              <div className="flex-1 h-px bg-[#E5E7EB]" />
-            </div>
-
-            {/* LlaveMX button — oficial Digital Morelos. Sin integración real aún
-                (decorativo, mismo comportamiento que el anterior). */}
-            <LlaveMxButton
-              disabled={isLoading}
-              className="w-full"
-              label="Iniciar sesión con"
-            />
           </form>
 
-          {/* Footer */}
-          <p className="text-center text-[12px] text-[#9CA3AF] mt-8 leading-relaxed">
-            ¿Problemas para acceder?{' '}
-            <button className="text-[#009574] hover:text-[#007a5e] font-medium transition-colors">
-              Contacta a soporte técnico
-            </button>
-          </p>
         </div>
       </div>
 

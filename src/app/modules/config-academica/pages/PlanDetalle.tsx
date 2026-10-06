@@ -8,8 +8,8 @@ import { usePendingToast } from '@app/core/infra/hooks'
 import { ActionBtn, ModeSwitcher, Tabs, Toast } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, Button, MiniTable } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
-import { apiDelete, apiGet } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiDelete, apiGet, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { programLabelById } from '@app/core/infra/programLabel'
 
 // `gradeScales` mirrors AcademicPlanResponse.gradeScales[] (GradeScaleResponse) —
 // it travels embedded in GET /plans/{id}, no separate fetch needed.
@@ -60,6 +60,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -142,8 +143,8 @@ function NivelRow({ nivel, index, defaultOpen, planId, onChanged }: {
     try {
       await apiDelete(`/plans/${planId}/levels/${nivel.id}/subjects/${subject.id}`)
       onChanged()
-    } catch {
-      window.alert('No se pudo eliminar la materia. Intenta de nuevo más tarde.')
+    } catch (err) {
+      window.alert(getApiErrorMessage(err, 'No se pudo eliminar la materia. Intenta de nuevo más tarde.'))
     } finally {
       setDeletingId(null)
     }
@@ -275,11 +276,11 @@ export default function PlanDetalle() {
   const [loadErrorMsg, setLoadErrorMsg] = useState('')
   const [deletingScaleId, setDeletingScaleId] = useState<string | null>(null)
 
-  // Program catalog for the header label — same pattern as PlanesList.programLabel().
+  // Program catalog for the header label (`programLabelById()` from core).
   useEffect(() => {
     apiGet<ProgramsPageResponse>('/programs', { size: 100 })
       .then(data => setPrograms(data.items))
-      .catch(() => {/* non-critical — programLabel() falls back to '—' */})
+      .catch(() => {/* non-critical — programLabelById() falls back to '—' */})
   }, [])
 
   // Classification catalog to resolve gradeScales[].classificationId labels —
@@ -312,16 +313,7 @@ export default function PlanDetalle() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 404) {
-          setLoadErrorMsg('No se encontró el plan de estudios solicitado.')
-        } else if (apiErr.status === 401) {
-          setLoadErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setLoadErrorMsg('No tienes permiso para consultar este plan de estudios.')
-        } else {
-          setLoadErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setLoadErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -330,11 +322,6 @@ export default function PlanDetalle() {
   useEffect(() => {
     return loadPlan()
   }, [id, loadPlan])
-
-  function programLabel(programId: string): string {
-    const p = programs.find(p => p.id === programId)
-    return p ? `${p.code} — ${p.name}` : '—'
-  }
 
   function classificationLabel(classificationId: string): string {
     const c = classifications.find(c => c.id === classificationId)
@@ -348,8 +335,8 @@ export default function PlanDetalle() {
     try {
       await apiDelete(`/plans/${plan.id}/grade-scales/${scale.id}`)
       loadPlan({ silent: true })
-    } catch {
-      window.alert('No se pudo eliminar la escala de calificación. Intenta de nuevo más tarde.')
+    } catch (err) {
+      window.alert(getApiErrorMessage(err, 'No se pudo eliminar la escala de calificación. Intenta de nuevo más tarde.'))
     } finally {
       setDeletingScaleId(null)
     }
@@ -404,7 +391,7 @@ export default function PlanDetalle() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
                 <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Carrera</p>
-                <p className="text-[13px] font-medium text-[#333333]">{programLabel(plan.programId)}</p>
+                <p className="text-[13px] font-medium text-[#333333]">{programLabelById(programs, plan.programId)}</p>
               </div>
               <div>
                 <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Versión</p>

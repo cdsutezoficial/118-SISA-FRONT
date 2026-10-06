@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Users2, Pencil, Plus as PlusIcon } from 'lucide-react'
+import { Users2, Eye, Pencil, Plus as PlusIcon } from 'lucide-react'
 import { Toast, Switch, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { apiGet, apiPatch } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiGet, apiPatch, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { programLabel, programLabelById } from '@app/core/infra/programLabel'
 import {
   PageContainer,
   Breadcrumb,
@@ -53,6 +53,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -99,10 +100,10 @@ export default function GeneracionesList() {
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const perPage = 20
 
-  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: programLabel(p) }))
 
   // Load programs/plans/periods once — used only to resolve ids to display
-  // labels in the table (mirrors `programLabel()` in PlanesList.tsx). Not
+  // labels in the table (`programLabelById()` from core). Not
   // re-fetched on filter/page changes.
   useEffect(() => {
     apiGet<ProgramsPageResponse>('/programs', { size: 100 })
@@ -144,22 +145,10 @@ export default function GeneracionesList() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 401) {
-          setErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setErrorMsg('No tienes permiso para consultar generaciones.')
-        } else {
-          setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
   }, [statusFilter, debouncedSearch, programFilter, page])
-
-  function programLabel(programId: string): string {
-    const p = programs.find(p => p.id === programId)
-    return p ? `${p.code} — ${p.name}` : '—'
-  }
 
   function planLabel(planId: string): string {
     const pl = plans.find(pl => pl.id === planId)
@@ -190,10 +179,7 @@ export default function GeneracionesList() {
       setTotalPages(data.totalPages)
       setToast(nextStatus === 'ACTIVE' ? 'Generación activada.' : 'Generación finalizada.')
     } catch (err) {
-      const apiErr = err as Partial<ApiError>
-      setToast(apiErr.status === 403
-        ? 'No tienes permiso para cambiar el estado de esta generación.'
-        : 'No se pudo actualizar el estado. Intenta de nuevo.')
+      setToast(getApiErrorMessage(err, 'No se pudo actualizar el estado. Intenta de nuevo.'))
     } finally {
       setTogglingId(null)
     }
@@ -203,7 +189,7 @@ export default function GeneracionesList() {
 
   const columns: ColumnDef<GenerationListItem>[] = [
     { key: 'code', header: 'Código', type: 'code', className: 'w-24' },
-    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabelById(programs, row.programId) },
     { key: 'planId', header: 'Plan de Estudios', type: 'muted', value: row => planLabel(row.planId), className: 'w-28' },
     { key: 'startPeriodId', header: 'Periodo de Inicio', type: 'muted', value: row => periodLabel(row.startPeriodId) },
     { key: 'status', header: 'Estado', type: 'status', activeLabel: 'Activa', inactiveLabel: 'Finalizada', className: 'w-28' },
@@ -269,7 +255,10 @@ export default function GeneracionesList() {
         emptyHint={emptyHint}
         emptyIcon={<Users2 size={36} className="text-[#E5E7EB]" />}
         footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
-        actions={{ edit: row => navigate(`/generaciones/form?mode=edit&id=${row.id}`) }}
+        actions={{
+          view: row => navigate(`/generaciones/form?mode=view&id=${row.id}`),
+          edit: row => navigate(`/generaciones/form?mode=edit&id=${row.id}`),
+        }}
         activeValue="ACTIVE"
         onToggleStatus={handleToggleStatus}
         togglingId={togglingId}
@@ -301,13 +290,19 @@ export default function GeneracionesList() {
               </div>
             </div>
             {/* Program */}
-            <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{programLabel(row.programId)}</p>
+            <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{programLabelById(programs, row.programId)}</p>
             {/* Plan + Periodo */}
             <p className="text-[12px] text-[#6B7280] mb-3">
               {planLabel(row.planId)} · {periodLabel(row.startPeriodId)}
             </p>
             {/* Actions */}
             <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
+              <button
+                onClick={() => navigate(`/generaciones/form?mode=view&id=${row.id}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#333333] border border-[#E5E7EB] rounded-md hover:bg-[#F8F9FA] transition-colors"
+              >
+                <Eye size={14} />Ver
+              </button>
               <button
                 onClick={() => navigate(`/generaciones/form?mode=edit&id=${row.id}`)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium text-[#009574] border border-[#009574]/30 rounded-md hover:bg-[#e6f5f1] transition-colors"

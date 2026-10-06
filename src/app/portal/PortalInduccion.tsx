@@ -1,106 +1,14 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
 import { GraduationCap } from 'lucide-react'
-import { Button, TextField } from '@app/core/components/form'
-import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
-import { ErrorBanner } from '@app/core/components/list'
-import { useRole } from '@app/core/infra/RoleContext'
-import { mockCandidates } from '@app/modules/admision/data/mockData'
-import type { Candidate } from '@app/modules/admision/data/types'
 
 /**
  * Screen 16 — Portal Candidato: Acceso al pago del Curso de Inducción.
  *
- * Public, chrome-less (`AuthLayout`, no Sidebar/Navbar) — anonymous entry
- * point for the CANDIDATO identity tier. Per `specs/admision-screens/spec.md`
- * — "Portal Candidato Acceso (Screen 16, RF-ADM-010)": two access paths,
- * simulated LlaveMX (no real OAuth) and folio + last-3-CURP-characters
- * (client-side format validation + local mock matching only, no backend call).
- *
- * On success (either path): `setRole('CANDIDATO')` via `useRole()` and
- * navigate to Screen 17 (`/portal/induccion/pago`) with the matched
- * candidate via route state. On failed folio+CURP match: inline error,
- * stays on this screen (no navigation).
- *
- * Deviation note (documented, not silent): the UX prompt labels the second
- * field "Últimos 3 dígitos de tu CURP", and the spec's format-validation note
- * says "exactly 3 digits". However every CURP in `mockCandidates` ends in a
- * letter+2-digit homoclave (e.g. "...RRN08", "...RRS03") — the real Mexican
- * CURP format's last 3 characters are NOT purely numeric. Enforcing a
- * digits-only check would make local mock matching impossible for 100% of
- * the seed data. This screen validates "exactly 3 characters" (any
- * alphanumeric) instead, matching real CURP shape and keeping the "local
- * mock matching" scenario actually functional.
- *
- * CORRECTION (2026-07-02, orchestrator review): folio+CURP login now also
- * requires `induccionHabilitada === true`. Without this gate, any candidate
- * with a matching folio+CURP could reach the payment screen regardless of
- * Screen 15's habilitación step — defeating the purpose of that screen. The
- * LlaveMX path already only ever mocks a habilitado candidate, so it needed
- * no change.
+ * Public, chrome-less (`AuthLayout`, no Sidebar/Navbar). The backend domain
+ * for course access and payment is not available yet, so this route must not
+ * invent a candidate, identity, period, amount, or payment result.
  */
 
-// Botón oficial de Digital Morelos / LlaveMX — ver `core/components/LlaveMxButton.tsx`.
-
-const FOLIO_PATTERN = /^ADM-\d{4}-\d+$/i
-
 export default function PortalInduccion() {
-  const navigate = useNavigate()
-  const { setRole } = useRole()
-
-  const [folio, setFolio] = useState('')
-  const [curpSuffix, setCurpSuffix] = useState('')
-  const [error, setError] = useState('')
-  const [llaveLoading, setLlaveLoading] = useState(false)
-
-  function accederConCandidato(candidate: Candidate) {
-    setRole('CANDIDATO')
-    navigate('/portal/induccion/pago', { state: { candidate } })
-  }
-
-  function handleLlaveMX() {
-    setError('')
-    setLlaveLoading(true)
-    // Simulated LlaveMX OAuth — no real redirect/identity provider, per spec
-    // ("simulated LlaveMX (no real OAuth)").
-    setTimeout(() => {
-      setLlaveLoading(false)
-      const candidate = mockCandidates.find(c => c.induccionHabilitada) ?? mockCandidates[0]
-      accederConCandidato(candidate)
-    }, 1200)
-  }
-
-  function handleAccederManual(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-
-    if (!FOLIO_PATTERN.test(folio.trim())) {
-      setError('Folio inválido. Verifica el formato, ej. ADM-2026-000101.')
-      return
-    }
-    if (curpSuffix.trim().length !== 3) {
-      setError('Ingresa los últimos 3 dígitos de tu CURP.')
-      return
-    }
-
-    const match = mockCandidates.find(
-      c =>
-        c.folio.toLowerCase() === folio.trim().toLowerCase() &&
-        c.curp.slice(-3).toLowerCase() === curpSuffix.trim().toLowerCase()
-    )
-
-    if (!match) {
-      setError('No encontramos un candidato con ese folio y CURP. Verifica tus datos.')
-      return
-    }
-    if (!match.induccionHabilitada) {
-      setError('Tu ficha aún no ha sido habilitada para el pago del Curso de Inducción. Contacta a Servicios Escolares.')
-      return
-    }
-
-    accederConCandidato(match)
-  }
-
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <header className="bg-[#009574] px-6 py-4 flex items-center gap-2.5">
@@ -130,71 +38,13 @@ export default function PortalInduccion() {
         {/* Right panel — 60% */}
         <div className="lg:w-[60%] flex flex-col items-center justify-center px-6 py-14">
           <div className="w-full max-w-sm">
-            <h2 className="text-[18px] font-bold text-[#333333] mb-5">Elige cómo acceder</h2>
-
-            {/* Opción A — LlaveMX (destacada) */}
-            <div className="border-2 border-[#009574] rounded-lg p-5 mb-5">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[13px] font-semibold text-[#333333]">LlaveMX</span>
-                <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded uppercase tracking-wide">
-                  Nuevo
-                </span>
-              </div>
-              <p className="text-[12px] text-[#6B7280] mb-4">
-                Accede de forma segura con tu identidad digital LlaveMX.
-              </p>
-              <LlaveMxButton
-                onClick={handleLlaveMX}
-                disabled={llaveLoading}
-                loading={llaveLoading}
-                className="w-full"
-              />
+            <h2 className="text-[18px] font-bold text-[#333333] mb-3">Acceso no disponible</h2>
+            <p className="text-[13px] text-[#6B7280] leading-relaxed">
+              El acceso y pago del Curso de Inducción estarán disponibles cuando el servicio del servidor esté habilitado.
+            </p>
+            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-relaxed text-amber-900">
+              No se puede validar la identidad, consultar una ficha ni generar un pago desde esta pantalla.
             </div>
-
-            {/* Separador */}
-            <div className="flex items-center gap-3 mb-5">
-              <div className="flex-1 h-px bg-[#E5E7EB]" />
-              <span className="text-[12px] text-[#9CA3AF] font-medium">o ingresa tus datos manualmente</span>
-              <div className="flex-1 h-px bg-[#E5E7EB]" />
-            </div>
-
-            {/* Opción B — Folio + CURP (estado visible por defecto) */}
-            <form onSubmit={handleAccederManual} noValidate>
-              <p className="text-[13px] font-semibold text-[#333333] mb-3">Acceso con datos de ficha</p>
-
-              <div className="mb-3">
-                <TextField
-                  label="Folio de candidato"
-                  value={folio}
-                  onChange={v => {
-                    setFolio(v)
-                    if (error) setError('')
-                  }}
-                  placeholder="ADM-2026-XXXX"
-                  mono
-                />
-              </div>
-
-              <div className="mb-4">
-                <TextField
-                  label="Últimos 3 dígitos de tu CURP"
-                  value={curpSuffix}
-                  onChange={v => {
-                    setCurpSuffix(v.slice(0, 3))
-                    if (error) setError('')
-                  }}
-                  maxLength={3}
-                  placeholder="ej. 007"
-                  mono
-                />
-              </div>
-
-              {error && <ErrorBanner message={error} />}
-
-              <Button variant="outline" type="submit" className="w-full py-2.5">
-                Acceder
-              </Button>
-            </form>
 
             <p className="text-center text-[12px] text-[#9CA3AF] mt-6 leading-relaxed">
               ¿Problemas para acceder? Acude a la ventanilla de Servicios Escolares.

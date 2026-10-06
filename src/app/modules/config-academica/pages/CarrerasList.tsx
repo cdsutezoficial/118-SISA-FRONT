@@ -3,8 +3,7 @@ import { Eye, Pencil, Plus as PlusIcon } from 'lucide-react'
 import { Toast, Switch } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { apiGet, apiPatch } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiGet, apiPatch, getApiErrorMessage } from '@app/core/infra/apiClient'
 import {
   PageContainer,
   Breadcrumb,
@@ -108,14 +107,7 @@ export default function CarrerasList() {
       .catch((err: unknown) => {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 401) {
-          setErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setErrorMsg('No tienes permiso para consultar carreras.')
-        } else {
-          setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
   }, [divisionFilter, debouncedSearch, page])
@@ -140,10 +132,7 @@ export default function CarrerasList() {
       setTotalPages(data.totalPages)
       setToast(nextStatus === 'ACTIVE' ? 'Carrera activada.' : 'Carrera desactivada.')
     } catch (err) {
-      const apiErr = err as Partial<ApiError>
-      setToast(apiErr.status === 403
-        ? 'No tienes permiso para cambiar el estado de esta carrera.'
-        : 'No se pudo actualizar el estado. Intenta de nuevo.')
+      setToast(getApiErrorMessage(err, 'No se pudo actualizar el estado. Intenta de nuevo.'))
     } finally {
       setTogglingId(null)
     }

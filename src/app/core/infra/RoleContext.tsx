@@ -15,91 +15,25 @@ import {
   persistMustChangePasswordCleared,
 } from './auth'
 import type { LoginResponse, JwtClaims, CapabilityResponse, MeProfile } from './auth'
-import { apiGet, getAccessToken, getStoredAuthMode, setUnauthorizedHandler } from './apiClient'
+import { apiGet, getAccessToken, setUnauthorizedHandler } from './apiClient'
 import type { ApiError } from './apiClient'
 
 /**
- * Persists the mock role across full page reloads (sessionStorage — scoped to
- * the browser tab, cleared on close, closest mock equivalent to a real auth
- * session). Without this, typing a URL directly in the address bar triggers a
- * full reload, `RoleProvider`'s `useState` remounts at its hardcoded default,
- * and `RequireRole` correctly-but-confusingly blocks a role the user had
- * already switched to moments earlier via the Navbar dropdown.
+ * The selected role persists across full page reloads (sessionStorage — scoped
+ * to the browser tab). Without this, typing a URL directly in the address bar
+ * triggers a full reload, `RoleProvider`'s `useState` remounts at `null`, and
+ * `RequireRole` blocks a role the user had legitimately switched to moments
+ * earlier via the Navbar dropdown.
+ *
+ * Only ever a role the account actually holds: `readStoredActiveRole` narrows
+ * a stale stored value to one of the JWT-mapped roles or ignores it.
  */
-const ROLE_STORAGE_KEY = 'sisa.mockRole'
 const ACTIVE_ROLE_KEY = 'sisa.activeRole'
 
-/** Mock permission set for a role — mirror of the backend seed for real sessions. */
-function mockPermissionKeys(role: Role | null): string[] {
-  return role === null ? [] : (MOCK_ACTIVE_PERMISSION_KEYS[role] ?? [])
-}
-
-const MOCK_ACTIVE_PERMISSION_KEYS: Partial<Record<Role, string[]>> = {
-  ADMINISTRADOR: [
-    'USERS_READ',
-    'ROLES_READ',
-    'DIVISIONS_READ',
-    'CARRERAS_READ',
-    'PLANS_READ',
-    'SUBJECT_CLASSIFICATIONS_READ',
-    'PERIODS_READ',
-    'GENERATIONS_READ',
-    'GROUPS_READ',
-    'PROGRAM_ADMISSION_CONFIGS_READ',
-    'OUTREACH_CHANNELS_READ',
-    'HIGH_SCHOOL_TYPES_READ',
-    'PAYMENT_AREAS_READ',
-    'PAYMENT_CONCEPTS_READ',
-    'PAYMENT_RATES_CREATE',
-    'PERSONS_READ',
-    'STATES_READ',
-    'MUNICIPALITIES_READ',
-  ],
-  SERVICIOS_ESCOLARES: [
-    'DIVISIONS_READ',
-    'CARRERAS_READ',
-    'PLANS_READ',
-    'SUBJECT_CLASSIFICATIONS_READ',
-    'PERIODS_READ',
-    'GENERATIONS_READ',
-    'GROUPS_READ',
-    'PROGRAM_ADMISSION_CONFIGS_READ',
-    'OUTREACH_CHANNELS_READ',
-    'HIGH_SCHOOL_TYPES_READ',
-    'PERSONS_READ',
-    'STATES_READ',
-    'MUNICIPALITIES_READ',
-  ],
-  FINANZAS: [
-    'PAYMENT_AREAS_READ',
-    'PAYMENT_CONCEPTS_READ',
-    'PAYMENT_RATES_CREATE',
-    'STATES_READ',
-    'MUNICIPALITIES_READ',
-  ],
-  DIRECTOR_DIVISION: [
-    'PROGRAM_ADMISSION_CONFIGS_READ',
-    'STATES_READ',
-    'MUNICIPALITIES_READ',
-  ],
-}
-
-function readStoredRole(): Role | null {
-  try {
-    const raw = sessionStorage.getItem(ROLE_STORAGE_KEY)
-    if (raw === 'null') return null
-    if (raw && (ALL_ROLES as string[]).includes(raw)) return raw as Role
-  } catch {
-    // sessionStorage unavailable (e.g. private browsing) — fall through to default.
-  }
-  return 'SERVICIOS_ESCOLARES'
-}
-
 /**
- * Picks the persisted active role for a real session — only valid if it is
- * one of the user's actual JWT-mapped roles (a stale choice from an edited
- * role set falls back to the first candidate). `null` when the user has no
- * mapped role at all.
+ * Picks the persisted active role — only valid if it is one of the account's
+ * actual JWT-mapped roles (a stale choice from an edited role set falls back to
+ * the first candidate). `null` when the session has no mapped role at all.
  */
 function readStoredActiveRole(candidates: Role[]): Role | null {
   if (candidates.length === 0) return null
@@ -112,38 +46,19 @@ function readStoredActiveRole(candidates: Role[]): Role | null {
   return candidates[0]
 }
 
-function writeStoredRole(role: Role | null) {
-  try {
-    sessionStorage.setItem(ROLE_STORAGE_KEY, role === null ? 'null' : role)
-  } catch {
-    // sessionStorage unavailable — role just won't survive a reload, no crash.
-  }
-}
-
 /**
- * Mock role system for the Admisión module prototype.
+ * Role model. There is no mock tier anymore — a session either exists (an
+ * access token is in `sessionStorage`) or it doesn't.
  *
- * Three identity tiers:
+ * Two kinds of role exist:
  * 1. Staff roles (`ADMINISTRADOR`, `GESTOR_ACADEMICO`, `SERVICIOS_ESCOLARES`,
- *    `FINANZAS`, `DIRECTOR_DIVISION`) — authenticated shell, `/admision/*`.
- * 2. `CANDIDATO` — post-registration portal access, set after a simulated
- *    folio+CURP "login" on `/portal/ficha` (real backend) or `/portal/induccion`
- *    (mock). Not part of `availableRoles`.
- * 3. `null` (anonymous visitor) — pre-registration public flow
- *    (`/portal/registro*`). No login at all.
+ *    `FINANZAS`, `DIRECTOR_DIVISION`) — derived from the session's decoded JWT
+ *    `roles` claim and switchable among themselves while the session lasts.
+ * 2. `CANDIDATO` — set by the public portal after a folio+CURP lookup, never
+ *    chosen by the staff switcher and never granted by a JWT staff claim.
  *
- * Dual-mode session (real login integration, see
- * `openspec/changes/real-login-integration/design.md`): **mock mode**
- * (`authMode === 'mock'`, the default on a fresh tab) keeps every behavior
- * above exactly as it was — local `useState`, manual switcher over the full
- * staff catalog. **Real mode** (`authMode === 'real'`, entered via `login()`
- * after `POST /auth/login` succeeds) derives the user's ACTUAL roles from the
- * session's decoded JWT `roles` claim: `availableRoles` narrows to those, a
- * multi-role account picks its entry role right after login, and the shell
- * switcher keeps working to change role mid-session. The chosen role persists
- * in `sisa.activeRole` so a reload restores it. Only `ADMIN` has a seeded
- * backend user today, so mock mode stays available for every other
- * in-progress module's staff roles.
+ * `null` (anonymous) is the pre-registration public flow (`/portal/registro*`),
+ * which needs no login at all.
  */
 export type Role =
   | 'ADMINISTRADOR'
@@ -162,20 +77,19 @@ export interface RoleContextValue {
   /** `null` = anonymous visitor (pre-registration public flow). */
   role: Role | null
   /**
-   * Switches the active role. Mock mode: any of `availableRoles`/`null`.
-   * Real mode: only the session's own JWT-mapped roles (escalation/null are
-   * ignored); the selection persists in sessionStorage for reloads.
+   * Switches the active role. Only roles the session's JWT actually grants are
+   * honored — `null`/escalation attempts are ignored, never silently applied.
+   * The selection persists in sessionStorage for reloads.
    */
   setRole: (role: Role | null) => void
   /**
-   * Switchable roles. Mock mode: the full staff catalog. Real mode: exactly
-   * the current account's JWT-mapped roles. Never contains `null`/`CANDIDATO`.
+   * Every role the current session may activate (JWT-mapped). Single-role
+   * accounts get one entry; multi-role accounts get the list the shell switcher
+   * moves between. Never contains `null`/`CANDIDATO`.
    */
   availableRoles: Role[]
-  /** `null` when anonymous (`role === null`). */
+  /** `null` when anonymous (`role === null`) or while the profile loads. */
   user: RoleUser | null
-  /** `'mock'` (manual switcher, default) or `'real'` (JWT-derived, entered via `login()`). */
-  authMode: 'mock' | 'real'
   /** `true` right after a login response with `mustChangePassword: true`, until `completePasswordChange()`. */
   mustChangePassword: boolean
   /** Backend role key currently active in the shell, if the frontend role maps to one. */
@@ -183,9 +97,10 @@ export interface RoleContextValue {
   /** Permission keys granted to the current session (union across the account's JWT roles). */
   activePermissionKeys: string[]
   /**
-   * Permission resolution state. Starts `'pending'` in real mode so guards
-   * NEVER treat "not loaded yet" as "no permission" — the reload false-positive
-   * race. Proceeds to `'idle'` once the capability envelope arrives.
+   * Permission resolution state. Starts `'pending'` whenever a session exists
+   * so guards NEVER treat "not loaded yet" as "no permission" — that is the
+   * reload false-positive race. Without a session it starts `'idle'` with no
+   * keys, since there is nothing to resolve.
    */
   permissionsStatus: 'pending' | 'loading' | 'idle' | 'error'
   /** Human-readable permission loading error, if any. */
@@ -194,9 +109,9 @@ export interface RoleContextValue {
   hasPermission: (permissionKey: string) => boolean
   /** True when the session has any of the given permission keys. */
   hasAnyPermission: (permissionKeys: string[]) => boolean
-  /** Re-fetches the session's capability envelope from the backend (real mode); sync re-derivation in mock mode. */
+  /** Re-fetches the session's capability envelope from the backend. */
   refreshCapabilities: () => Promise<void>
-  /** Establishes a real session from a successful `/auth/login` response. */
+  /** Establishes a session from a successful `/auth/login` response. */
   login: (res: LoginResponse) => void
   /**
    * Session ended involuntarily (`true` when a 401 or the JWT `exp` crossed).
@@ -212,96 +127,71 @@ export interface RoleContextValue {
    * alert, and the alert itself performs the real `logout()` + redirect.
    */
   triggerSessionExpired: () => void
-  /** Clears the real session; `authMode` stays `'real'` so re-access routes to `/login`, not back to mock mode. */
+  /** Clears the session; the tab stays flagged signed-out so re-entry routes to `/login`. */
   logout: () => void
   /** Clears the pending mandatory-password-change flag after `/auth/change-password` succeeds. */
   completePasswordChange: () => void
 }
 
-const MOCK_USER: RoleUser = { name: 'María González', email: 'admin@utez.edu.mx' }
-
-// CANDIDATO is a real role (set after portal login, not chosen by staff) and
-// `null` is the anonymous tier — neither belongs in the switchable staff list.
-const AVAILABLE_ROLES: Role[] = [
-  'ADMINISTRADOR',
-  'GESTOR_ACADEMICO',
-  'SERVICIOS_ESCOLARES',
-  'FINANZAS',
-  'DIRECTOR_DIVISION',
-]
-
-/** Every valid `Role` value, including `CANDIDATO` — used only to validate a stored value before trusting it. */
-const ALL_ROLES: Role[] = [...AVAILABLE_ROLES, 'CANDIDATO']
-
 const RoleContext = createContext<RoleContextValue | undefined>(undefined)
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [mockRole, setMockRoleState] = useState<Role | null>(readStoredRole)
-  const [authMode, setAuthModeState] = useState<'mock' | 'real'>(getStoredAuthMode)
   const [mustChangePassword, setMustChangePasswordState] = useState<boolean>(getStoredMustChangePassword)
   const [sessionExpired, setSessionExpired] = useState(false)
-  // Lazy initializer (not a `useEffect`) so a real session's `claims` — and
+  // Lazy initializer (not a `useEffect`) so a session's `claims` — and
   // therefore `role` — is correct on the VERY FIRST render after a full
   // reload/direct URL navigation. An effect-based rehydration leaves `claims`
   // `null` for one render before running, which `RequireRole` reads
   // synchronously — a route wrapped in `RequireRole` would bounce an already
-  // -authenticated real-mode user away on every hard reload, since `role`
-  // resolves to `null` before the effect ever fires.
+  // -authenticated user away on every hard reload, since `role` resolves to
+  // `null` before the effect ever fires.
   const [claims, setClaims] = useState<JwtClaims | null>(() => {
-    if (getStoredAuthMode() !== 'real') return null
     const token = getAccessToken()
     return token ? decodeJwtPayload(token) : null
   })
 
-  // The shell user for a real session (Navbar/Sidebar footer): hydrated from
-  // `GET /auth/me` and cached in sessionStorage. Lazy initializer (same
-  // rationale as `claims`) so the name/email is right on the very first render
-  // of a hard reload. `null` = not fetched yet or fetch failed — the shell's
-  // `'Usuario'` placeholder shows meanwhile, never a wrong name.
+  // The shell user (Navbar/Sidebar footer): hydrated from `GET /auth/me` and
+  // cached in sessionStorage. Lazy initializer (same rationale as `claims`) so
+  // the name/email is right on the very first render of a hard reload. `null` =
+  // not fetched yet or fetch failed — the shell's `'Usuario'` placeholder shows
+  // meanwhile, never a wrong name.
   const [userProfile, setUserProfile] = useState<RoleUser | null>(() => getStoredUserProfile())
 
-  // Every real role the current session may activate (JWT-mapped). Re-derives
-  // from `claims` — set at login and lazily hydrated on reload alike — so it
-  // is never stale independently of them.
+  // Every role the current session may activate (JWT-mapped). Re-derives from
+  // `claims` — set at login and lazily hydrated on reload alike — so it is never
+  // stale independently of them.
   const realRoles: Role[] = claims ? mapRoles(claims.roles) : []
 
-  // The role actually in effect during a real session. Lazy initializer keeps
-  // a reload on a route gated per-role from flashing the wrong role first.
+  // The role actually in effect during the session. Lazy initializer keeps a
+  // reload on a route gated per-role from flashing the wrong role first.
   const [activeRole, setActiveRoleState] = useState<Role | null>(() => {
-    if (getStoredAuthMode() !== 'real') return null
     const token = getAccessToken()
     const decoded = token ? decodeJwtPayload(token) : null
     return readStoredActiveRole(decoded ? mapRoles(decoded.roles) : [])
   })
-  // Permission resolution starts `'pending'` in real mode — NOT `'idle'` — so
-  // guards wait for the capability envelope instead of treating the first,
-  // still-empty render as "no permission" (the reload false-positive race).
-  // Mock mode derives its keys synchronously from the stored role.
-  const [activePermissionKeys, setActivePermissionKeys] = useState<string[]>(() =>
-    authMode === 'real' ? [] : mockPermissionKeys(mockRole))
+  // Permission resolution starts `'pending'` while a session exists — NOT
+  // `'idle'` — so guards wait for the capability envelope instead of treating
+  // the first, still-empty render as "no permission" (the reload
+  // false-positive race). With no session there is nothing to wait for.
+  const [activePermissionKeys, setActivePermissionKeys] = useState<string[]>([])
   const [permissionsStatus, setPermissionsStatus] = useState<'pending' | 'loading' | 'idle' | 'error'>(
-    () => (authMode === 'real' ? 'pending' : 'idle'))
+    () => (getAccessToken() ? 'pending' : 'idle')
+  )
   const [permissionsError, setPermissionsError] = useState('')
-  const activeShellRole = authMode === 'real' ? activeRole : mockRole
 
-  const activeRoleKey = mapFrontendRoleKey(authMode === 'real' ? activeRole : mockRole)
+  const activeRoleKey = mapFrontendRoleKey(activeRole)
 
   function setRole(next: Role | null) {
-    if (authMode === 'real') {
-      // A real session may activate ONLY roles the account actually has —
-      // `null`/escalation attempts are ignored, never silently applied.
-      if (next !== null && realRoles.includes(next)) {
-        setActiveRoleState(next)
-        try {
-          sessionStorage.setItem(ACTIVE_ROLE_KEY, next)
-        } catch {
-          // sessionStorage unavailable — role just won't survive a reload.
-        }
+    // A session may activate ONLY roles the account actually has —
+    // `null`/escalation attempts are ignored, never silently applied.
+    if (next !== null && realRoles.includes(next)) {
+      setActiveRoleState(next)
+      try {
+        sessionStorage.setItem(ACTIVE_ROLE_KEY, next)
+      } catch {
+        // sessionStorage unavailable — role just won't survive a reload.
       }
-      return
     }
-    writeStoredRole(next)
-    setMockRoleState(next)
   }
 
   function login(res: LoginResponse) {
@@ -312,29 +202,21 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     // Drop any cached profile from a previous session so a different account
     // never flashes the old owner's name while the fresh `/auth/me` loads.
     setUserProfile(null)
-    setAuthModeState('real')
-    // Drop the mock permission set and re-enter `pending` so guards never
-    // treat stale mock keys as real permissions during the login transition.
+    // Re-enter `pending` so guards never treat the previous session's keys as
+    // this one's permissions during the login transition.
     setActivePermissionKeys([])
     setPermissionsStatus('pending')
     setPermissionsError('')
     setMustChangePasswordState(res.mustChangePassword)
     setSessionExpired(false) // a fresh login clears the expiry flag so a future expiry can alert again
     // Real-profile fetch rides on the login event itself, not on a state-guard:
-    // on re-login `authMode` is already `'real'`, so a `[authMode]` effect
-    // would never re-fire. `persistSession` already wrote `sisa.authMode`,
-    // so `refreshProfile`'s storage-based guard passes here.
+    // on re-login a `[claims]` effect would not reliably re-fire.
+    // `persistSession` already wrote the token, so `refreshProfile`'s token
+    // guard passes here.
     void refreshProfile()
   }
 
   async function refreshCapabilities(): Promise<void> {
-    if (authMode !== 'real') {
-      setActivePermissionKeys(mockPermissionKeys(mockRole))
-      setPermissionsStatus('idle')
-      setPermissionsError('')
-      return
-    }
-
     if (!activeRoleKey) {
       setActivePermissionKeys([])
       setPermissionsStatus('idle')
@@ -368,11 +250,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
    * `'Usuario'` placeholder shows.
    */
   async function refreshProfile(): Promise<void> {
-    // Storage-backed (not the `authMode` state): by the time `login()` calls
-    // this, the state update hasn't rendered yet — but `persistSession` has
-    // already written `sisa.authMode`, so this guard is correct in both the
-    // login and the hard-reload paths.
-    if (getStoredAuthMode() !== 'real') return
+    // Storage-backed, not state-backed: by the time `login()` calls this the
+    // state update hasn't rendered yet, but `persistSession` has already
+    // written the token.
+    //
+    // The token check is what keeps a signed-out `/login` visit quiet:
+    // `clearSession` deliberately leaves `sisa.signedOut` behind so re-entry
+    // routes to `/login` instead of re-hydrating, which alone would satisfy
+    // the check above and fire a guaranteed-401 `/auth/me` on every visit
+    // after a logout.
+    if (!getAccessToken()) return
     try {
       const profile: MeProfile = await apiMeProfile()
       const user = { name: profile.fullName, email: profile.email }
@@ -397,7 +284,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     // transition (`clearSession` already wiped the cached key).
     setUserProfile(null)
     setMustChangePasswordState(false)
-    setAuthModeState('real') // stays 'real' — re-access must route to /login, not fall back to mock mode
+    setActivePermissionKeys([])
+    setPermissionsStatus('idle')
   }, [])
 
   /**
@@ -428,9 +316,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   // callback-registration indirection.
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      // Only real-mode requests attach an access token; a mock-mode 401 (if any)
-      // must not nuke the mock session.
-      if (getStoredAuthMode() === 'real') triggerSessionExpired()
+      // Only authenticated requests attach an access token, so a 401 here means
+      // the session is really gone.
+      if (getAccessToken()) triggerSessionExpired()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -440,7 +328,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   // idle user. Re-armed whenever the session changes (`claims` flips on
   // login/logout), so a re-login gets a fresh timer for its new token.
   useEffect(() => {
-    if (authMode !== 'real') return
     const token = getAccessToken()
     const decoded = token ? decodeJwtPayload(token) : null
     if (!decoded) return
@@ -451,40 +338,38 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }
     const timer = setTimeout(triggerSessionExpired, msLeft)
     return () => clearTimeout(timer)
-  }, [authMode, claims, triggerSessionExpired])
+  }, [claims, triggerSessionExpired])
 
+  // Keeps the active role inside the session's role set — e.g. if the JWT's
+  // roles changed underneath (re-login as a different account in the same tab).
   useEffect(() => {
-    if (authMode !== 'real') return
     if (realRoles.length === 0) return
     if (activeRole !== null && realRoles.includes(activeRole)) return
     setActiveRoleState(readStoredActiveRole(realRoles))
-  }, [activeRole, authMode, realRoles])
+  }, [activeRole, realRoles])
 
   useEffect(() => {
     void refreshCapabilities()
-  }, [activeRoleKey, authMode, mockRole])
+  }, [activeRoleKey])
 
-  // Profile fetch rides on real-mode mount (hard reload restores the shell
-  // without a `login()` event). On fresh logins `login()` fires the fetch
-  // itself, so a `[authMode]` effect would double-request — the mount-only
-  // effect avoids that entirely.
+  // Profile fetch rides on mount (hard reload restores the shell without a
+  // `login()` event). On fresh logins `login()` fires the fetch itself, so a
+  // `[claims]` effect would double-request — the mount-only effect avoids that
+  // entirely.
   useEffect(() => {
-    if (getStoredAuthMode() !== 'real') return
     void refreshProfile()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const value: RoleContextValue = {
-    role: activeShellRole,
+    role: activeRole,
     setRole,
-    // Real mode: the account's actual JWT roles (single-role accounts get one
-    // entry; multi-role get the full list the switcher can move between).
-    // Mock mode: the full switchable staff catalog.
-    availableRoles: authMode === 'real' ? realRoles : AVAILABLE_ROLES,
-    // Real mode: the account's real profile from `GET /auth/me` (null until
-    // fetched/failed → 'Usuario' placeholder). Mock mode: the fixed sample user.
-    user: activeShellRole === null ? null : authMode === 'real' ? userProfile : MOCK_USER,
-    authMode,
+    // The account's actual JWT roles (single-role accounts get one entry;
+    // multi-role get the full list the switcher can move between).
+    availableRoles: realRoles,
+    // The account's real profile from `GET /auth/me` (null until
+    // fetched/failed → 'Usuario' placeholder).
+    user: activeRole === null ? null : userProfile,
     mustChangePassword,
     activeRoleKey,
     activePermissionKeys,
@@ -503,7 +388,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>
 }
 
-/** Only sanctioned way to read the active mock role — never reach into the provider directly. */
+/** Only sanctioned way to read the active role — never reach into the provider directly. */
 export function useRole(): RoleContextValue {
   const ctx = useContext(RoleContext)
   if (!ctx) {

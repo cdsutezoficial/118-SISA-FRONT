@@ -13,7 +13,6 @@ import ResetConfirm from '@app/core/pages/ResetConfirm'
 
 // Authenticated pages
 import Dashboard from '@app/core/pages/Dashboard'
-
 // Admisión
 import AdmisionDashboard from '@app/modules/admision/pages/AdmisionDashboard'
 import CanalesDifusion from '@app/modules/admision/pages/CanalesDifusion'
@@ -31,10 +30,9 @@ import GenerarMatriculas from '@app/modules/admision/pages/GenerarMatriculas'
 import PublicarResultados from '@app/modules/admision/pages/PublicarResultados'
 import AplicarDescuento from '@app/modules/admision/pages/AplicarDescuento'
 import HabilitarInduccion from '@app/modules/admision/pages/HabilitarInduccion'
-
 // Portal (público). Two DISTINCT public flows, deliberately not merged:
 // - ficha: pay an admission ticket that was registered but never paid (REAL backend)
-// - inducción: access/induction-course payment (still mock, per admision-screens spec)
+// - inducción: access/induction-course payment (currently unavailable; no backend domain yet)
 import PortalFicha from '@app/portal/PortalFicha'
 import PortalFichaPago from '@app/portal/PortalFichaPago'
 import PortalInduccion from '@app/portal/PortalInduccion'
@@ -104,7 +102,6 @@ import RolesList from '@app/modules/identity/pages/RolesList'
 import RolPermisos from '@app/modules/identity/pages/RolPermisos'
 
 const router = createBrowserRouter([
-  // Root redirect — goes to /login (no auth guard yet)
   { path: '/', element: <Navigate to="/login" replace /> },
 
   // ─── Bare layout (no Sidebar / Navbar) ──────────────────────────────────────
@@ -137,8 +134,7 @@ const router = createBrowserRouter([
   },
 
   // ─── Shell layout (Navbar + Sidebar) ────────────────────────────────────────
-  // Gated by `RequireAuth`: mock mode passes through unchanged; a real
-  // session must be present/non-expired, and a pending mandatory password
+  // Gated by `RequireAuth`: a real session must be present/non-expired, and a pending mandatory password
   // change is force-routed to `/usuarios/cambiar-password`. See
   // `shared/RequireAuth.tsx`.
   {
@@ -182,13 +178,28 @@ const router = createBrowserRouter([
               </RequireRole>
             ),
           },
+          // Fase 9: el catálogo de canales se abría sólo con `RequireRole`, sin
+          // `RequirePermission` — el `PermissionRegistry` ya exigía
+          // `OUTREACH_CHANNELS_READ` en el backend (Fase 8), pero un
+          // `SERVICIOS_ESCOLARES` sin el permiso en su JWT veía la pantalla y
+          // se comía el 403 sólo al guardar. Se cierra el hueco igual que
+          // `divisiones`/`clasificaciones`/`periodos`. Los verbos de escritura
+          // no llevan ruta propia (el alta y la edición son un modal en la
+          // misma pantalla), así que `_CREATE`/`_UPDATE`/`_CHANGE_STATUS` los
+          // sigue aplicando el filtro del servidor, como en `periodos/form`.
           {
             path: 'canales',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CanalesDifusion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['OUTREACH_CHANNELS_READ']} redirectTo="/dashboard"><CanalesDifusion /></RequirePermission></RequireRole>,
           },
+          // Mismo cierre que `canales` en Fase 9: el `PermissionRegistry` ya
+          // exigía `HIGH_SCHOOL_TYPES_READ` en el backend, pero aquí sólo había
+          // `RequireRole`, así que un `SERVICIOS_ESCOLARES` sin el permiso veía la
+          // pantalla y se comía el 403 sólo al guardar. El alta y la edición son un
+          // modal en esta misma pantalla, así que los verbos de escritura los
+          // aplica el filtro del servidor.
           {
             path: 'tipos-bachillerato',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><TiposBachillerato /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['HIGH_SCHOOL_TYPES_READ']} redirectTo="/dashboard"><TiposBachillerato /></RequirePermission></RequireRole>,
           },
           {
             path: 'candidatos',
@@ -208,11 +219,11 @@ const router = createBrowserRouter([
           },
           {
             path: 'candidatos/pago-ficha',
-            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoFicha /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION', 'FINANZAS']}><ConfirmarPagoFicha /></RequireRole>,
           },
           {
             path: 'candidatos/pago-induccion',
-            element: <RequireRole allowedRoles={['FINANZAS']}><ConfirmarPagoInduccion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION', 'FINANZAS']}><ConfirmarPagoInduccion /></RequireRole>,
           },
           {
             path: 'candidatos/induccion',
@@ -312,36 +323,29 @@ const router = createBrowserRouter([
         path: 'divisiones',
         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['DIVISIONS_READ']} redirectTo="/dashboard"><DivisionesList /></RequirePermission></RequireRole>,
       },
-      { path: 'divisiones/new',  element: <DivisionesForm /> },
-      { path: 'divisiones/form', element: <DivisionesForm /> },
+      { path: 'divisiones/new', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><DivisionesForm /></RequireRole> },
+      { path: 'divisiones/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><DivisionesForm /></RequireRole> },
 
       // Clasificaciones de Materias
       //
-      // Role guard: only the list route is wrapped here, mirroring the
-      // `divisiones` precedent — every `/subject-classifications` verb is
-      // enforced server-side to ADMIN/SERVICIOS_ESCOLARES, so wrapping the
-      // list gives a clean redirect instead of a raw 403/blank state for any
-      // other role. `clasificaciones/new`/`clasificaciones/form` are
-      // untouched — out of scope for this change.
+      // Role guard + fine-grained permissions, mirroring the `carreras`
+      // precedent (Fase F, 2026-10-05). `clasificaciones/new` and
+      // `clasificaciones/form` used to be `RequireRole`-only, so a
+      // SERVICIOS_ESCOLARES with `SUBJECT_CLASSIFICATIONS_READ` but not
+      // `SUBJECT_CLASSIFICATIONS_CREATE` could open the register form and only
+      // find out at the API with a raw 403. The keys are the ones the backend
+      // declares in `PermissionRegistry` for this resource.
       {
         path: 'clasificaciones',
         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['SUBJECT_CLASSIFICATIONS_READ']} redirectTo="/dashboard"><ClasificacionesList /></RequirePermission></RequireRole>,
       },
-      { path: 'clasificaciones/new',  element: <ClasificacionesForm /> },
-      { path: 'clasificaciones/form', element: <ClasificacionesForm /> },
+      { path: 'clasificaciones/new', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['SUBJECT_CLASSIFICATIONS_CREATE']} redirectTo="/dashboard"><ClasificacionesForm /></RequirePermission></RequireRole> },
+      { path: 'clasificaciones/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['SUBJECT_CLASSIFICATIONS_UPDATE']} redirectTo="/dashboard"><ClasificacionesForm /></RequirePermission></RequireRole> },
 
       // Carreras
-      //
-      // Role guard: the list route is wrapped here, mirroring the
-      // `divisiones`/`clasificaciones`/`periodos`/`generaciones`/`grupos`
-      // precedent — every `/programs` verb is enforced server-side to
-      // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
-      // redirect to `/dashboard` instead of a raw 403/blank state for any
-      // other role. `carreras/new`/`carreras/form` are untouched — out of
-      // scope for this change.
-      { path: 'carreras', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['CARRERAS_READ']} redirectTo="/dashboard"><CarrerasList /></RequirePermission></RequireRole> },
-      { path: 'carreras/new',  element: <CarrerasForm /> },
-      { path: 'carreras/form', element: <CarrerasForm /> },
+      { path: 'carreras', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['CARRERAS_READ']} redirectTo="/dashboard"><CarrerasList /></RequirePermission></RequireRole> },
+      { path: 'carreras/new', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['CARRERAS_CREATE']} redirectTo="/dashboard"><CarrerasForm /></RequirePermission></RequireRole> },
+      { path: 'carreras/form', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['CARRERAS_UPDATE']} redirectTo="/dashboard"><CarrerasForm /></RequirePermission></RequireRole> },
 
       // Periodos Académicos
       //
@@ -349,14 +353,23 @@ const router = createBrowserRouter([
       // `divisiones`/`clasificaciones` precedent — every `/periods` verb is
       // enforced server-side to ADMIN/SERVICIOS_ESCOLARES, so wrapping the
       // list gives a clean redirect instead of a raw 403/blank state for any
-      // other role. `periodos/new`/`periodos/form` are untouched — out of
-      // scope for this change.
+      // other role.
+      //
+      // `periodos/form` is the ONE route here that reads `?mode=` instead of
+      // its own segment: `mode=view` renders the read-only panel and `mode=edit`
+      // the editable one, so a single route covers both (see `useFormMode`).
+      // It existed as a navigation target in PeriodosList.tsx all along but was
+      // never declared, so both those `navigate()` calls fell through to the
+      // catch-all and the form was unreachable. Same shape as
+      // `divisiones/form`/`clasificaciones/form`, hence bare `RequireRole`
+      // without a separate `RequirePermission` — the write verbs are enforced
+      // server-side.
       {
         path: 'periodos',
         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PERIODS_READ']} redirectTo="/dashboard"><PeriodosList /></RequirePermission></RequireRole>,
       },
-      { path: 'periodos/new',  element: <PeriodosForm /> },
-      { path: 'periodos/form', element: <PeriodosForm /> },
+      { path: 'periodos/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><PeriodosForm /></RequireRole> },
+      { path: 'periodos/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><PeriodosForm /></RequireRole> },
 
       // Generaciones
       //
@@ -364,14 +377,22 @@ const router = createBrowserRouter([
       // `divisiones`/`clasificaciones`/`periodos` precedent — every
       // `/generations` verb is enforced server-side to ADMIN/SERVICIOS_
       // ESCOLARES, so wrapping the list gives a clean redirect instead of a
-      // raw 403/blank state for any other role. `generaciones/new`/
-      // `generaciones/form` are untouched — out of scope for this change.
+      // raw 403/blank state for any other role.
       {
         path: 'generaciones',
         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GENERATIONS_READ']} redirectTo="/dashboard"><GeneracionesList /></RequirePermission></RequireRole>,
       },
-      { path: 'generaciones/new',  element: <GeneracionesForm /> },
-      { path: 'generaciones/form', element: <GeneracionesForm /> },
+      // `generaciones/new` y `generaciones/form` se protegen con
+      // `RequirePermission`, igual que `clasificaciones` y `planes`: sin esto un
+      // SERVICIOS_ESCOLARES con GENERATIONS_READ pero sin GENERATIONS_CREATE
+      // abría el formulario y se enteraba del 403 crudo en el API.
+      //
+      // `generaciones/form` no estaba registrada, y `GeneracionesList` navega
+      // exactamente ahí (`/generaciones/form?mode=edit&id=…`) desde el botón de
+      // editar de cada fila y de cada tarjeta. Sin esta ruta la edición caía en
+      // la 404 del router: el formulario de edición era inalcanzable.
+      { path: 'generaciones/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GENERATIONS_CREATE']} redirectTo="/dashboard"><GeneracionesForm /></RequirePermission></RequireRole> },
+      { path: 'generaciones/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GENERATIONS_UPDATE']} redirectTo="/dashboard"><GeneracionesForm /></RequirePermission></RequireRole> },
 
       // Grupos
       //
@@ -380,11 +401,23 @@ const router = createBrowserRouter([
       // precedent — every `/groups` verb is enforced server-side to
       // ADMIN/SERVICIOS_ESCOLARES, so wrapping the list gives a clean
       // redirect to `/dashboard` instead of a raw 403/blank state for any
-      // other role. `grupos/new`/`grupos/form` are untouched — out of scope
-      // for this change.
+      // other role.
+      //
+      // `grupos/form` no estaba registrada, y `GruposList` navega a
+      // `/grupos/form?mode=…&id=…` desde ver y editar: ambas caían en la 404 del
+      // router. Es el mismo bug que se corrigió en `generaciones/form`.
+      //
+      // `grupos/new` y `grupos/form` se protegen con `RequirePermission`
+      // (GROUPS_CREATE / GROUPS_UPDATE), igual que `clasificaciones` y `planes`:
+      // antes sólo tenían RequireRole, así que un SERVICIOS_ESCOLARES con
+      // GROUPS_READ pero sin GROUPS_CREATE abría el formulario y se enteraba del
+      // 403 crudo en el API.
       { path: 'grupos', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_READ']} redirectTo="/dashboard"><GruposList /></RequirePermission></RequireRole> },
-      { path: 'grupos/new',  element: <GruposForm /> },
-      { path: 'grupos/form', element: <GruposForm /> },
+      { path: 'grupos/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_CREATE']} redirectTo="/dashboard"><GruposForm /></RequirePermission></RequireRole> },
+      { path: 'grupos/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_UPDATE']} redirectTo="/dashboard"><GruposForm /></RequirePermission></RequireRole> },
+      // Creación masiva: escribe con el mismo permiso que el alta individual
+      // (GROUPS_CREATE), no con uno propio — es la misma operación de escritura
+      // sobre la misma tabla, sólo que en lote.
 
       // Configuración de Admisión
       //
@@ -401,8 +434,7 @@ const router = createBrowserRouter([
         path: 'configuracion-admision',
         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PROGRAM_ADMISSION_CONFIGS_READ']} redirectTo="/dashboard"><ConfiguracionAdmisionList /></RequirePermission></RequireRole>,
       },
-      { path: 'configuracion-admision/new',  element: <ConfiguracionAdmisionForm /> },
-      { path: 'configuracion-admision/form', element: <ConfiguracionAdmisionForm /> },
+      { path: 'configuracion-admision/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><ConfiguracionAdmisionForm /></RequireRole> },
 
       // Conceptos
       //
@@ -418,17 +450,27 @@ const router = createBrowserRouter([
       // Ver/Editar muestran el historial append-only de `PaymentRate`. Ya no
       // existe una pantalla separada para agregar una tarifa.
       { path: 'conceptos',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_CONCEPTS_READ']} redirectTo="/dashboard"><ConceptosList /></RequirePermission></RequireRole> },
-      { path: 'conceptos/new',        element: <ConceptosForm /> },
-      { path: 'conceptos/form',       element: <ConceptosForm /> },
+      { path: 'conceptos/new',        element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><ConceptosForm /></RequireRole> },
 
       // Áreas de conceptos de pago
       //
-      // Catálogo compañero de `conceptos` — misma convención: la lista lleva
-      // RoleGuard (los verbos `/payment-areas` los exige ADMIN o
-      // PERSONAL_FINANZAS en el backend) y el form queda abierto.
+      // Catálogo compañero de `conceptos`. La lista y ahora también el form
+      // llevan `RequirePermission`, no sólo `RequireRole`: los permisos finos
+      // `PAYMENT_AREAS_CREATE` / `_UPDATE` / `_CHANGE_STATUS` ya estaban
+      // sembrados y asignados en el backend, pero (a) no había entradas para
+      // `/payment-areas` en `PermissionRegistry`, así que `PermissionFilter` no
+      // encontraba regla y dejaba pasar los verbos a cualquiera con el rol, y
+      // (b) el gate del lado del cliente sólo pedía el rol, que es más grueso.
+      //
+      // `areas/form` cubre los tres modos del mismo componente (register/view/
+      // edit), y el permiso de escritura depende de a cuál se llegue: no hay una
+      // ruta por modo. Se exige `_UPDATE` porque es el caso mayoritario (editar
+      // y ver), y es el mismo criterio que ya usa la lista para decidir si
+      // muestra el `Switch` de estatus. El alta tiene su propia ruta
+      // (`areas/new`) con `_CREATE`.
       { path: 'areas',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_AREAS_READ']} redirectTo="/dashboard"><AreasList /></RequirePermission></RequireRole> },
-      { path: 'areas/new',        element: <AreasForm /> },
-      { path: 'areas/form',       element: <AreasForm /> },
+      { path: 'areas/new',        element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><RequirePermission permissionKeys={['PAYMENT_AREAS_CREATE']} redirectToRoleMain><AreasForm /></RequirePermission></RequireRole> },
+      { path: 'areas/form',       element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><RequirePermission permissionKeys={['PAYMENT_AREAS_UPDATE']} redirectToRoleMain><AreasForm /></RequirePermission></RequireRole> },
 
       // Planes (includes extras: detalle + materia + escala)
       //
@@ -443,12 +485,12 @@ const router = createBrowserRouter([
       // wrapped here, mirroring the `divisiones`/`clasificaciones`/`usuarios`
       // precedent — every `/plans` verb is enforced server-side to
       // ADMIN/SERVICIOS_ESCOLARES.
-      { path: 'planes', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_READ']} redirectTo="/dashboard"><PlanesList /></RequirePermission></RequireRole> },
-      { path: 'planes/new',          element: <PlanForm /> },
-      { path: 'planes/form',         element: <PlanForm /> },
-      { path: 'planes/detalle',      element: <PlanDetalle /> },
-      { path: 'planes/materia/form', element: <PlanMateriaForm /> },
-      { path: 'planes/escala/form',  element: <PlanEscalaForm /> },
+      { path: 'planes', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_READ']} redirectTo="/dashboard"><PlanesList /></RequirePermission></RequireRole> },
+      { path: 'planes/new',          element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_CREATE']} redirectTo="/dashboard"><PlanForm /></RequirePermission></RequireRole> },
+      { path: 'planes/form',         element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_UPDATE']} redirectTo="/dashboard"><PlanForm /></RequirePermission></RequireRole> },
+      { path: 'planes/detalle',      element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_READ']} redirectTo="/dashboard"><PlanDetalle /></RequirePermission></RequireRole> },
+      { path: 'planes/materia/form', element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_UPDATE']} redirectTo="/dashboard"><PlanMateriaForm /></RequirePermission></RequireRole> },
+      { path: 'planes/escala/form',  element: <RequireRole allowedRoles={['ADMINISTRADOR', 'SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PLANS_UPDATE']} redirectTo="/dashboard"><PlanEscalaForm /></RequirePermission></RequireRole> },
 
       // Usuarios (includes extras: detalle + asignar-rol + cambiar-password)
       //
@@ -465,12 +507,12 @@ const router = createBrowserRouter([
       // 2026-07-28 wiring plan drops "edit" entirely (no `PUT /users/{id}`
       // exists on purpose, nothing about a `User` is editable that way).
       // `usuarios/new` is now the sole registration route, a 2-step Wizard.
-      { path: 'usuarios/new',                element: <UsuariosForm /> },
-      { path: 'usuarios/detalle',            element: <UsuarioDetalle /> },
-      { path: 'usuarios/asignar-rol',        element: <AsignarRol /> },
+      { path: 'usuarios/new',                element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><UsuariosForm /></RequireRole> },
+      { path: 'usuarios/detalle',            element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><UsuarioDetalle /></RequireRole> },
+      { path: 'usuarios/asignar-rol',        element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><AsignarRol /></RequireRole> },
       { path: 'usuarios/cambiar-password',   element: <CambiarPassword /> },
 
-      // Roles y permisos (solo front — catálogo mock, read-only)
+      // Roles y permisos (frontend catalog, read-only)
       {
         path: 'roles',
         element: <RequireRole allowedRoles={['ADMINISTRADOR']} redirectToRoleMain><RequirePermission permissionKeys={['ROLES_READ']} redirectToRoleMain><RolesList /></RequirePermission></RequireRole>,

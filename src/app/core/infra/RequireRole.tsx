@@ -5,14 +5,14 @@ import type { Role } from './RoleContext'
 import { ROLE_DEFAULT_PATHS } from '../layout/layoutRoles'
 
 /**
- * Route-level role guard shared by every guarded module (mock auth).
+ * Route-level role guard shared by every guarded module.
  *
  * `AppLayout.tsx`'s `NAV_ITEMS` role filtering only controls what the
  * Sidebar SHOWS — it never stopped direct URL navigation. This component
  * closes that gap: wrap a route's `element` and it enforces the same rule
  * at the route boundary, regardless of how the user got there.
  *
- * If the active mock role is one of `allowedRoles`, renders `children`
+ * If the active real role is one of `allowedRoles`, renders `children`
  * normally. Otherwise (including the anonymous `role === null` tier),
  * redirects to `redirectTo` with a pending toast — mirrors the
  * `usePendingToast()` convention already used across many screens (see
@@ -48,9 +48,14 @@ export function RequireRole({ allowedRoles, redirectTo = '/admision', redirectTo
   redirectToRoleMain?: boolean
   children: ReactNode
 }) {
-  const { role, authMode, availableRoles } = useRole()
+  const { role, availableRoles } = useRole()
 
-  if (authMode === 'real' && role === null && availableRoles.length > 0) {
+  // The session's roles are known but the active one hasn't resolved yet
+  // (`RequireAuth` deliberately keeps the view mounted through an expiry, and
+  // hydration is async on a hard reload). Render nothing rather than
+  // redirecting: redirecting on an unresolved role is what produced the
+  // `GESTOR_ACADEMICO` bounce between its default path and the fallback.
+  if (role === null && availableRoles.length > 0) {
     return null
   }
 

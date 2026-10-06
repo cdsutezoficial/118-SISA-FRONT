@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { ShieldCheck, CheckCircle2, GraduationCap, Lock, AlertCircle } from 'lucide-react'
+import { ShieldCheck, GraduationCap, Lock, AlertCircle } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
 import {
   FieldLabel,
@@ -15,7 +15,6 @@ import {
   type SelectOption,
 } from '@app/core/components/ui'
 import { FormPage, FormHeader, SelectField, TextField, TimeField } from '@app/core/components/form'
-import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 import { Breadcrumb } from '@app/core/components/list'
 import { ADMISSION_ERROR_CODES, apiGet, apiPost, type ApiError } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
@@ -134,10 +133,11 @@ interface CandidateRegistrationResponse {
   payment: {
     referenceNumber: string
     amount: number
-    // Two windows, two fields — see `VentanaFechas` in data/types.ts. Collapsing
-    // them back into one `deadline` is what produced the original bug.
+    // Separate dates — see `VentanaFechas` in data/types.ts. Collapsing them
+    // back into one `deadline` is what produced the original bug.
     registrationDeadline: string | null
     paymentClosesOn: string | null
+    paymentDeadline: string | null
     status: 'PENDING' | 'PAID'
   }
 }
@@ -168,22 +168,6 @@ const MODALIDAD_CODE_TO_LABEL: Record<string, ModalidadPrograma> = {
 const modalidadLabel = (code: string | null): ModalidadPrograma => (code ? MODALIDAD_CODE_TO_LABEL[code] ?? 'Presencial' : 'Presencial')
 
 const INDUCCION_MONTO = 350
-
-// Simulated LlaveMX identity response — no real OAuth, per spec. A fixed mock
-// identity keeps the prototype deterministic across verifications. The CURP
-// `LOTM060512MMCPRR09` genuinely encodes birthDate=12/05/2006, sexo=Femenino
-// (the "M" right after the date) and estadoNacimiento=Morelos (the "MC" state
-// code) — these three locked fields are derived from the CURP itself, exactly
-// like real LlaveMX would return them.
-const MOCK_LLAVE_MX_IDENTITY = {
-  nombres: 'María Fernanda',
-  apellidoPaterno: 'López',
-  apellidoMaterno: 'Torres',
-  curp: 'LOTM060512MMCPRR09',
-  fechaNacimiento: '12/05/2006',
-  sexo: 'Femenino',
-  estadoNacimiento: 'Morelos',
-}
 
 interface Paso1State {
   // Datos Generales — LlaveMX-locked once verified
@@ -360,7 +344,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const [paso1, setPaso1] = useState<Paso1State>(emptyPaso1)
   const [paso2, setPaso2] = useState<Paso2State>(emptyPaso2)
   const [paso3, setPaso3] = useState<Paso3State>(emptyPaso3)
-  const [identityStatus, setIdentityStatus] = useState<'idle' | 'verifying' | 'verified' | 'manual'>('idle')
+  const [identityStatus, setIdentityStatus] = useState<'idle' | 'manual'>('idle')
   const [folio, setFolio] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -508,40 +492,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       ? { value: selectedConfig.id, label: selectedConfig.label }
       : null
 
-  const isVerified = identityStatus === 'verified'
+  const isVerified = false
   /** Captura manual activa: los campos de identidad son editables sin pasar por LlaveMX. */
   const isManual = identityStatus === 'manual'
-  const verifiedFullName = `${MOCK_LLAVE_MX_IDENTITY.nombres} ${MOCK_LLAVE_MX_IDENTITY.apellidoPaterno} ${MOCK_LLAVE_MX_IDENTITY.apellidoMaterno}`
 
   function handleGoManual() {
     if (identityStatus !== 'idle') return
     setIdentityStatus('manual')
-  }
-
-  function handleRetryLlaveMx() {
-    if (!isManual) return
-    setIdentityStatus('idle')
-  }
-
-  function handleVerify() {
-    if (identityStatus !== 'idle') return
-    setIdentityStatus('verifying')
-    // Simulated verification — no real OAuth. Auto-fills the identity fields
-    // LlaveMX would normally return (the CURP itself encodes birth date, sex,
-    // and birth state), same as a real government-ID lookup.
-    setTimeout(() => {
-      setPaso1(f => ({
-        ...f,
-        nombres: MOCK_LLAVE_MX_IDENTITY.nombres,
-        apellidoPaterno: MOCK_LLAVE_MX_IDENTITY.apellidoPaterno,
-        apellidoMaterno: MOCK_LLAVE_MX_IDENTITY.apellidoMaterno,
-        curp: MOCK_LLAVE_MX_IDENTITY.curp,
-        fechaNacimiento: MOCK_LLAVE_MX_IDENTITY.fechaNacimiento,
-        sexo: MOCK_LLAVE_MX_IDENTITY.sexo,
-        estadoNacimiento: MOCK_LLAVE_MX_IDENTITY.estadoNacimiento,
-      }))
-      setIdentityStatus('verified')
-    }, 900)
   }
 
   // ── Paso 1 validation (Datos Generales + Domicilio + Contacto) ──
@@ -743,7 +700,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         cct: paso3.cct,
         cctConfirmacion: paso3.cctConfirmacion,
       },
-      llaveMxVerified: identityStatus === 'verified',
+      llaveMxVerified: false,
     }
 
     try {
@@ -848,14 +805,14 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       // Real backend ticket data handed to Screen 13 (ficha), per Screen 5/6/13
       // ("Pago de ficha") — reference and amount now come from the
       // `POST /candidates` response instead of mock `buildReferencia`/`addDays`.
-      // The two window dates travel under their own names: the sales window is
-      // already shut by the time anyone reads this, and the payment window is
-      // the one the applicant has to act on.
+      // The dates travel under their own names: the sales window is already shut
+      // by the time anyone reads this, and the date to act on is the ficha's
+      // visible plazo (`paymentDeadline`), not the concept's `available_until`.
       const pagoFicha = {
         referencia: res.payment.referenceNumber,
         monto: res.payment.amount,
         fechaLimiteInscripcion: res.payment.registrationDeadline ?? '',
-        fechaLimitePago: res.payment.paymentClosesOn ?? '',
+        fechaLimitePago: res.payment.paymentDeadline ?? '',
         estado: res.payment.status,
         folio: res.folio,
       }
@@ -884,6 +841,12 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         setSubmitError(apiErr.message ?? 'La venta de fichas para esa carrera ya cerró.')
       } else if (apiErr.code === ADMISSION_ERROR_CODES.candidateAlreadyExists) {
         setSubmitError(apiErr.message ?? 'Ya existe un candidato registrado con ese CURP.')
+      } else if (apiErr.code === ADMISSION_ERROR_CODES.registrationConflict) {
+        // Concurrent registration took this folio number. Transient and always
+        // resolves by resubmitting, so we stay on the step (nothing navigated —
+        // no folio was assigned) and the button re-enables via setSubmitting(false)
+        // above. Only the message matters here.
+        setSubmitError(apiErr.message ?? 'No pudimos completar tu registro en este momento. Inténtalo de nuevo en un momento.')
       } else if (apiErr.status === 400) setSubmitError(apiErr.message ?? 'Revisa los datos capturados.')
       else if (apiErr.status === 401) setSubmitError('Tu sesión expiró. Vuelve a iniciar sesión.')
       else if (apiErr.status === 403) setSubmitError('No tienes permiso para realizar el registro.')
@@ -906,25 +869,17 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             {identityStatus === 'idle' && (
               <div>
                 <p className="text-[13px] text-[#6B7280] mt-1">
-                  Recomendamos verificar tu identidad con LlaveMX para prellenar tus datos. Si no tienes LlaveMX, puedes capturarlos manualmente.
+                  La integración con LlaveMX aún no está disponible. Captura tus datos manualmente para continuar con el registro.
                 </p>
-                <div className="mt-4 flex flex-row items-start justify-between gap-2">
-                  <LlaveMxButton onClick={handleVerify} className="w-full" />
+                <div className="mt-4">
                   <button
                     type="button"
                     onClick={handleGoManual}
-                    className="self-end text-[13px] text-[#d4d4d4] hover:text-[#c5c5c5] font-medium transition-colors"
+                    className="text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
                   >
                     Ingresa tus datos manualmente
                   </button>
                 </div>
-              </div>
-            )}
-
-            {identityStatus === 'verifying' && (
-              <div className="mt-4">
-                <LlaveMxButton onClick={handleVerify} loading disabled className="w-full" />
-                <p className="text-[13px] text-[#6B7280] mt-2">Verificando tu identidad con LlaveMX…</p>
               </div>
             )}
 
@@ -936,26 +891,11 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
                   </span>
                 </div>
                 <p className="text-[13px] text-[#6B7280] mt-2">
-                  Estás capturando tus datos a mano. También puedes intentar de nuevo con LlaveMX.
+                  Estás capturando tus datos a mano.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleRetryLlaveMx}
-                  className="mt-2 text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
-                >
-                  Intentar de nuevo con LlaveMX
-                </button>
               </div>
             )}
 
-            {isVerified && (
-              <div className="mt-4 flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <CheckCircle2 size={13} />Identidad verificada ✓
-                </span>
-                <span className="text-[13px] text-[#333333] font-medium">{verifiedFullName}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>

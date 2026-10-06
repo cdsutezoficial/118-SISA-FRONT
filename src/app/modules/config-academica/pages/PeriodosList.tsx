@@ -3,8 +3,7 @@ import { ArrowRightCircle, Eye, Pencil, Plus as PlusIcon, Loader2 } from 'lucide
 import { Toast, ConfirmModal } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
-import { apiGet, apiPatch, apiPost } from '@app/core/infra/apiClient'
-import type { ApiError } from '@app/core/infra/apiClient'
+import { apiGet, apiPatch, apiPost, getApiErrorMessage } from '@app/core/infra/apiClient'
 import {
   PageContainer,
   Breadcrumb,
@@ -181,14 +180,7 @@ export default function PeriodosList() {
       } catch (err) {
         if (cancelled) return
         setLoadStatus('error')
-        const apiErr = err as Partial<ApiError>
-        if (apiErr.status === 401) {
-          setErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')
-        } else if (apiErr.status === 403) {
-          setErrorMsg('No tienes permiso para consultar periodos académicos.')
-        } else {
-          setErrorMsg('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
-        }
+        setErrorMsg(getApiErrorMessage(err))
       }
     }
     void load()
@@ -213,16 +205,7 @@ export default function PeriodosList() {
       setTotalPages(data.totalPages)
       setToast(`El periodo ahora está "${STATUS_LABELS[action.next]}".`)
     } catch (err) {
-      const apiErr = err as Partial<ApiError>
-      if (apiErr.status === 403) {
-        setToast('No tienes permiso para cambiar el estado de este periodo.')
-      } else if (apiErr.status === 404) {
-        setToast('El periodo ya no existe. Actualiza la lista.')
-      } else if (apiErr.status === 400) {
-        setToast(apiErr.message ?? 'La transición de estado no es válida.')
-      } else {
-        setToast('No se pudo actualizar el estado. Intenta de nuevo.')
-      }
+      setToast(getApiErrorMessage(err, 'No se pudo actualizar el estado. Intenta de nuevo.'))
     } finally {
       setAdvancingId(null)
     }
