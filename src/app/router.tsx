@@ -178,9 +178,18 @@ const router = createBrowserRouter([
               </RequireRole>
             ),
           },
+          // Fase 9: el catálogo de canales se abría sólo con `RequireRole`, sin
+          // `RequirePermission` — el `PermissionRegistry` ya exigía
+          // `OUTREACH_CHANNELS_READ` en el backend (Fase 8), pero un
+          // `SERVICIOS_ESCOLARES` sin el permiso en su JWT veía la pantalla y
+          // se comía el 403 sólo al guardar. Se cierra el hueco igual que
+          // `divisiones`/`clasificaciones`/`periodos`. Los verbos de escritura
+          // no llevan ruta propia (el alta y la edición son un modal en la
+          // misma pantalla), así que `_CREATE`/`_UPDATE`/`_CHANGE_STATUS` los
+          // sigue aplicando el filtro del servidor, como en `periodos/form`.
           {
             path: 'canales',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><CanalesDifusion /></RequireRole>,
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['OUTREACH_CHANNELS_READ']} redirectTo="/dashboard"><CanalesDifusion /></RequirePermission></RequireRole>,
           },
           {
             path: 'tipos-bachillerato',
