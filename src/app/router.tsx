@@ -70,7 +70,6 @@ import GeneracionesForm from '@app/modules/config-academica/pages/GeneracionesFo
 // Grupos
 import GruposList from '@app/modules/config-academica/pages/GruposList'
 import GruposForm from '@app/modules/config-academica/pages/GruposForm'
-import GruposMasivoForm from '@app/modules/config-academica/pages/GruposMasivoForm'
 
 // Configuración de Admisión
 import ConfiguracionAdmisionList from '@app/modules/config-academica/pages/ConfiguracionAdmisionList'
@@ -404,7 +403,6 @@ const router = createBrowserRouter([
       // Creación masiva: escribe con el mismo permiso que el alta individual
       // (GROUPS_CREATE), no con uno propio — es la misma operación de escritura
       // sobre la misma tabla, sólo que en lote.
-      { path: 'grupos/masivo', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectTo="/dashboard"><RequirePermission permissionKeys={['GROUPS_CREATE']} redirectTo="/dashboard"><GruposMasivoForm /></RequirePermission></RequireRole> },
 
       // Configuración de Admisión
       //

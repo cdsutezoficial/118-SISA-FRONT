@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { FieldLabel, FieldHelp, FieldError, ModeSwitcher, SearchSelectField } from '@app/core/components/ui'
 import type { SelectOption } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, TextField, SelectField } from '@app/core/components/form'
@@ -6,7 +6,7 @@ import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
-import { useFieldValidation } from '@app/core/validation/useFieldValidation'
+import { useFieldValidation, type FieldErrors } from '@app/core/validation/useFieldValidation'
 import {
   required,
   selectionRequired,
@@ -23,11 +23,11 @@ import {
 //   code        → dígitos seguidos de UNA letra, hasta 10 caracteres: "3A", "12B".
 //                 El formato lo fijó el usuario el 2026-10-05: el doc de dominio
 //                 dice `Ej: "3A", "3B"`, el placeholder de este form decía
-//                 "Ej. A" y el md de la fase 8 hablaba de "la letra". Se adopts
+//                 "Ej. A" y el md de la fase 8 hablaba de "la letra". Se adoptó
 //                 el formato del doc y se corrigió el placeholder. El `\p{L}` acepta
 //                 minúsculas, así que "3a" pasa la regla y lo sube a mayúscula el
-//                 backend (`GroupTextNormalizer`); el frontend también lo pasa a
-//                 mayúscula al teclear, que es sólo cortesía visual.
+//                 backend (`GroupTextNormalizer`); el frontend lo pasa a mayúscula
+//                 al teclear, que es sólo cortesía visual.
 //   maxCapacity → entero desde 1, sin techo (decisión del usuario, 2026-10-05).
 //   Los selects → obligatorios.
 //
@@ -35,8 +35,12 @@ import {
 // (generationId, code): dos grupos del mismo nivel no pueden diferir sólo en la
 // letra, y el nivel forma parte del código justamente por eso.
 //
-// No hay `crossRules`: nada aquí depende de dos campos a la vez. La unicidad la
-// decide el servidor (409) y se pinta en `code`.
+// `quantity` NO tiene reglas aquí, y es a propósito. Las reglas del lote dependen
+// de un dato que no es un campo del formulario — si el check de "crear masivamente"
+// está marcado o no — y el schema no puede ser dinámico: `runFieldRules` depende
+// de `fieldNames`, no de la identidad del schema, así que unas reglas cambiadas
+// en caliente no se aplicarían (el hook lo advierte en un comentario). Por eso la
+// validación del lote va en `crossRules`, que sí ve todos los valores.
 
 const GRUPOS_INITIAL_VALUES = {
   programId: '',
@@ -46,6 +50,7 @@ const GRUPOS_INITIAL_VALUES = {
   shift: '',
   code: '',
   maxCapacity: '',
+  quantity: '',
 } as const
 
 const GRUPOS_SCHEMA = {
@@ -65,7 +70,17 @@ const GRUPOS_SCHEMA = {
   maxCapacity: {
     rules: [required('la capacidad máxima'), numeric({ label: 'capacidad máxima', min: 1 })],
   },
+  quantity: { rules: [] },
 } as const
+
+type GruposField = keyof typeof GRUPOS_INITIAL_VALUES
+type GruposValues = Record<GruposField, string>
+
+// Techo de la letra: el backend asigna A–Z y su `@Max(26)` en
+// `CreateGroupsBulkRequest` corta en la misma cifra. El 26 no es un capricho: una
+// clave de dos letras ("3AA") violaría el `^\p{N}+\p{L}+$` que comparten el DTO y
+// este form, así que no hay convención de qué sigue a la Z y no se inventa una.
+const MAX_BULK = 26
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // `Group` per the corrected Pantalla 9 (2026-07-27): Programa Educativo is a
@@ -110,6 +125,21 @@ interface GroupFormPayload {
   code: string
   maxCapacity: number
   shift: Shift
+}
+
+/** Cuerpo de `POST /groups/bulk`: sin `code`, porque las claves las asigna el servidor. */
+interface GroupBulkPayload {
+  generationId: string
+  periodId: string
+  planLevelId: string
+  quantity: number
+  maxCapacity: number
+  shift: Shift
+}
+
+interface CodesPreviewResponse {
+  levelPrefix: string
+  codes: string[]
 }
 
 interface ProgramSummary {
@@ -161,21 +191,15 @@ export default function GruposForm() {
   const isRegister = mode === 'register'
   const isView = mode === 'view'
 
-  const {
-    values,
-    fieldError,
-    handleChange,
-    handleBlur,
-    setFieldValue,
-    setFieldError,
-    clearErrors,
-    reset,
-    isValid,
-    validate,
-  } = useFieldValidation(GRUPOS_SCHEMA, GRUPOS_INITIAL_VALUES)
+  // El modo masivo es estado de UI, no un campo del formulario: no se manda ni se
+  // guarda, sólo decide cuál de los dos endpoints se usa y si `quantity` cuenta.
+  const [isBulk, setIsBulk] = useState(false)
+  const [preview, setPreview] = useState<CodesPreviewResponse | null>(null)
+  const [previewStatus, setPreviewStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [previewErrorMsg, setPreviewErrorMsg] = useState('')
 
-  // `programId` es solo un filtro de UI para cascadear la Generacion: nunca se
-  // manda. Se valida igual porque la cascada depende de el, igual que en
+  // `programId` es sólo un filtro de UI para cascadear la Generación: nunca se
+  // manda. Se valida igual porque la cascada depende de él, igual que en
   // GeneracionesForm.
 
   const [programs, setPrograms] = useState<ProgramSummary[]>([])
@@ -188,14 +212,44 @@ export default function GruposForm() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [submitErrorMsg, setSubmitErrorMsg] = useState('')
 
+  // La cantidad es el único campo cuya obligatoriedad depende del check, así que
+  // su regla vive aquí y no en el schema (ver la nota del schema más arriba).
+  // El copy sale de las mismas reglas de la librería que el resto del form, para
+  // que "es requerido" no sea una variante escrita a mano.
+  const crossRules = useCallback((current: GruposValues): FieldErrors<GruposField> => {
+    if (!isBulk) return {}
+    const value = current.quantity.trim()
+    if (!value) return { quantity: required('la cantidad de grupos', 'f')(value) }
+    const error = numeric({ label: 'cantidad de grupos', gender: 'f', min: 1, max: MAX_BULK })(value)
+    return error ? { quantity: error } : {}
+  }, [isBulk])
+
+  const {
+    values: formValues,
+    fieldError: fieldErrorOf,
+    handleChange: changeField,
+    handleBlur: blurField,
+    setFieldValue: setValue,
+    setFieldError: setError,
+    clearErrors: clearFieldErrors,
+    reset: resetForm,
+    isValid: formIsValid,
+    validate: validateForm,
+  } = useFieldValidation(GRUPOS_SCHEMA, GRUPOS_INITIAL_VALUES, { crossRules })
+
   useEffect(() => {
     setSubmitStatus('idle')
     setSubmitErrorMsg('')
-    if (isRegister) {
-      reset(GRUPOS_INITIAL_VALUES)
-      setLoadStatus('idle')
-      setLoadErrorMsg('')
-    }
+    // El check sólo existe en el alta, así que al salir de aquí se apaga. Sin
+    // esto, `isBulk` sobrevive a un `reset()` (que no lo toca, no es un campo) y
+    // el mismo componente volvería a registrar en lote sin haberlo pedido.
+    setIsBulk(false)
+    setPreview(null)
+    setPreviewStatus('idle')
+    setPreviewErrorMsg('')
+    resetForm(GRUPOS_INITIAL_VALUES)
+    setLoadStatus(isRegister ? 'idle' : 'loading')
+    setLoadErrorMsg('')
   }, [mode, id])
 
   // Programa/Generación/Periodo catalogs — fetched once, used to populate the
@@ -224,13 +278,13 @@ export default function GruposForm() {
         // `programId` travels denormalized on the response — used directly
         // to preselect the Programa filter, no extra lookup through
         // Generación needed.
-        setFieldValue('programId', data.programId)
-        setFieldValue('generationId', data.generationId)
-        setFieldValue('periodId', data.periodId)
-        setFieldValue('planLevelId', data.planLevelId)
-        setFieldValue('shift', data.shift)
-        setFieldValue('code', data.code)
-        setFieldValue('maxCapacity', String(data.maxCapacity))
+        setValue('programId', data.programId)
+        setValue('generationId', data.generationId)
+        setValue('periodId', data.periodId)
+        setValue('planLevelId', data.planLevelId)
+        setValue('shift', data.shift)
+        setValue('code', data.code)
+        setValue('maxCapacity', String(data.maxCapacity))
         setLoadStatus('idle')
       })
       .catch((err: unknown) => {
@@ -247,22 +301,76 @@ export default function GruposForm() {
   // (needed to backfill on edit, since the GET-by-id fetch above sets
   // `generationId` before the catalog necessarily has that generation yet).
   useEffect(() => {
-    if (!values.generationId) { setPlanLevels([]); return }
-    const generation = generations.find(g => g.id === values.generationId)
+    if (!formValues.generationId) { setPlanLevels([]); return }
+    const generation = generations.find(g => g.id === formValues.generationId)
     if (!generation) return
     let cancelled = false
     apiGet<AcademicPlanDetail>(`/plans/${generation.planId}`)
       .then(data => { if (!cancelled) setPlanLevels(data.levels) })
       .catch(() => { if (!cancelled) setPlanLevels([]) })
     return () => { cancelled = true }
-  }, [values.generationId, generations])
+  }, [formValues.generationId, generations])
+
+  // ─── Vista previa de las claves ───────────────────────────────────────────
+  // Las letras se piden al servidor (`GET /groups/next-codes`) en vez de
+  // calcularlas aquí: si el cliente replicara la regla de "primera letra libre",
+  // serían dos implementaciones de la misma regla que divergen. El preview y la
+  // ejecución comparten el asignador, así que lo que se muestra es lo que sale —
+  // salvo que otra transacción tome las letras en medio, y entonces el 409 de la
+  // creación lo dice.
+  //
+  // De la respuesta sale también `code`: se muestra la primera clave del lote, no
+  // el prefijo pelado, porque el campo tiene que seguir cumpliendo el patrón
+  // `^\p{N}+\p{L}+$` de arriba y "3" no lo cumple. Es el mismo valor que asigna el
+  // servidor, así que el campo no puede contradecir al nivel.
+  const bulkQuantity = Number(formValues.quantity)
+  const canPreview = isBulk && !!formValues.generationId && !!formValues.planLevelId
+    && formValues.quantity.trim() !== '' && Number.isInteger(bulkQuantity)
+    && bulkQuantity >= 1 && bulkQuantity <= MAX_BULK
+
+  useEffect(() => {
+    if (!canPreview) {
+      setPreview(null)
+      setPreviewStatus('idle')
+      setPreviewErrorMsg('')
+      // Sin vista previa no hay clave que mostrar, y una clave inventada
+      // deshabilitaría el botón de guardar sin explicación.
+      if (isBulk) setValue('code', '')
+      return
+    }
+    let cancelled = false
+    setPreviewStatus('loading')
+    setPreviewErrorMsg('')
+    apiGet<CodesPreviewResponse>('/groups/next-codes', {
+      generationId: formValues.generationId,
+      planLevelId: formValues.planLevelId,
+      quantity: bulkQuantity,
+    })
+      .then(data => {
+        if (cancelled) return
+        setPreview(data)
+        setPreviewStatus('idle')
+        setValue('code', data.codes[0] ?? '')
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        // Un 409 aquí significa que no quedan letras libres: es el aviso que
+        // evita que el usuario llene el formulario para que el submit falle.
+        setPreview(null)
+        setPreviewStatus('error')
+        setPreviewErrorMsg(getApiErrorMessage(err))
+        setValue('code', '')
+      })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBulk, canPreview, bulkQuantity, formValues.generationId, formValues.planLevelId])
 
   const disabled = loadStatus === 'loading' || isView
   const isSubmitting = submitStatus === 'submitting'
 
   const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
   const generationOptions: SelectOption[] = generations
-    .filter(g => g.programId === values.programId)
+    .filter(g => g.programId === formValues.programId)
     .map(g => ({ value: g.id, label: g.code }))
   const periodOptions: SelectOption[] = periods.map(p => ({ value: p.id, label: p.name }))
   const planLevelOptions: SelectOption[] = planLevels
@@ -271,37 +379,72 @@ export default function GruposForm() {
     .map(l => ({ value: l.id, label: `Nivel ${l.levelNumber}${l.description ? ` — ${l.description}` : ''}` }))
 
   function handleProgramChange(v: string) {
-    // Reelegir la misma carrera no borra nada: el reset solo aplica al cambio
+    // Reelegir la misma carrera no borra nada: el reset sólo aplica al cambio
     // real, que deja huérfanos la generación y el nivel filtrados antes.
-    if (v === values.programId) return
-    setFieldValue('programId', v)
-    setFieldValue('generationId', '') // reset dependent selects
-    setFieldValue('planLevelId', '')
+    if (v === formValues.programId) return
+    setValue('programId', v)
+    setValue('generationId', '') // reset dependent selects
+    setValue('planLevelId', '')
   }
 
   function handleGenerationChange(v: string) {
-    setFieldValue('generationId', v)
+    setValue('generationId', v)
     // El nivel depende del plan de la generación, así que también se reinicia
     // al elegir la MISMA generación de nuevo.
-    setFieldValue('planLevelId', '')
+    setValue('planLevelId', '')
+  }
+
+  function handleBulkToggle(checked: boolean) {
+    setIsBulk(checked)
+    setPreview(null)
+    setPreviewStatus('idle')
+    setPreviewErrorMsg('')
+    // Al apagar el modo masivo, `quantity` se vacía y `code` vuelve a ser del
+    // usuario: si no, el formulario queda con la cantidad escrita a la vista
+    // mientras ya no hace nada, o con una clave autogenerada que al cambiar el
+    // nivel se queda vieja.
+    if (!checked) {
+      setValue('quantity', '')
+      setValue('code', '')
+    }
+    setSubmitStatus('idle')
+    setSubmitErrorMsg('')
   }
 
   async function handleSubmit() {
     // `validate()` marca todos los campos como tocados: un error que estaba
     // oculto sale a pantalla en vez de irse al API.
-    if (!validate()) return
+    if (!validateForm()) return
     setSubmitStatus('submitting')
     setSubmitErrorMsg('')
-    clearErrors()
-    const payload: GroupFormPayload = {
-      generationId: values.generationId,
-      periodId: values.periodId,
-      planLevelId: values.planLevelId,
-      code: values.code,
-      maxCapacity: Number(values.maxCapacity),
-      shift: values.shift as Shift,
-    }
+    clearFieldErrors()
     try {
+      if (isBulk) {
+        const payload: GroupBulkPayload = {
+          generationId: formValues.generationId,
+          periodId: formValues.periodId,
+          planLevelId: formValues.planLevelId,
+          quantity: bulkQuantity,
+          maxCapacity: Number(formValues.maxCapacity),
+          shift: formValues.shift as Shift,
+        }
+        const created = await apiPost<GroupResponse[]>('/groups/bulk', payload)
+        setSubmitStatus('idle')
+        // A diferencia del alta individual, aquí no hay un único `id` al que
+        // llevar: son N grupos recién creados, así que el destino es el listado.
+        // El toast lo lee `GruposList` con `usePendingToast`, igual que en el
+        // resto de navegaciones de este módulo.
+        navigate('/grupos', { state: { toast: `${created.length} grupos registrados exitosamente.` } })
+        return
+      }
+      const payload: GroupFormPayload = {
+        generationId: formValues.generationId,
+        periodId: formValues.periodId,
+        planLevelId: formValues.planLevelId,
+        code: formValues.code,
+        maxCapacity: Number(formValues.maxCapacity),
+        shift: formValues.shift as Shift,
+      }
       if (isRegister) {
         const created = await apiPost<GroupResponse>('/groups', payload)
         navigate(`/grupos/form?mode=view&id=${created.id}`, { state: { toast: 'Grupo registrado exitosamente.' } })
@@ -310,15 +453,17 @@ export default function GruposForm() {
         navigate(`/grupos/form?mode=view&id=${id}`, { state: { toast: 'Grupo actualizado exitosamente.' } })
       }
     } catch (err) {
-      // Cualquier 409 de POST/PUT /groups es, sin excepcion, el duplicado de
-      // (generationId, code): es la única clave única de la tabla, y los unicos
-      // handlers que devuelven 409 aca son ese y el de la creación masiva, que
-      // no pasa por este formulario. Se atribuye a `code` sin mirar el texto:
-      // `backendMessage` es el `message` de ErrorResponse, copy en espanol, y no
-      // menciona ningun campo.
       const apiErr = err as ApiError
-      if (apiErr?.status === 409) {
-        setFieldError('code', getApiErrorMessage(err))
+      // 409 en el alta individual: sin excepción es el duplicado de
+      // (generationId, code), la única clave única de la tabla, así que va al
+      // campo `code` sin mirar el texto. `backendMessage` es el `message` de
+      // ErrorResponse, copy en español que no menciona ningún campo.
+      //
+      // En el lote NO se adjudica a `code`: allí el 409 es `NotEnoughGroupCodes`,
+      // un problema del nivel entero, no de una clave que el usuario escribió. Va
+      // al banner, que es donde cabe un error de esa granularidad.
+      if (apiErr?.status === 409 && !isBulk) {
+        setError('code', getApiErrorMessage(err))
         setSubmitStatus('idle')
         return
       }
@@ -333,6 +478,10 @@ export default function GruposForm() {
     : isView
       ? 'Información del grupo académico.'
       : 'Modifica los datos del grupo académico.'
+
+  // El check sólo tiene sentido al registrar: editar o ver es siempre un grupo
+  // concreto que ya existe, y un lote de edición no tiene a qué aplicarse.
+  const bulkAvailable = isRegister && !disabled
 
   return (
     <FormPage>
@@ -361,37 +510,37 @@ export default function GruposForm() {
       <FormCard loading={loadStatus === 'loading'} loadingLabel="Cargando grupo...">
         <div className="grid grid-cols-12 gap-4">
           {/* Fila 1 */}
-          {/* 6/6 en desktop y 12/12 en movil, como pide el md de la fase 8. Antes
-              era 4/8: la Generacion quedaba comprimida frente a un campo que
-              solo filtra. */}
+          {/* 6/6 en desktop y 12/12 en móvil, como pide el md de la fase 8. Antes
+              era 4/8: la Generación quedaba comprimida frente a un campo que
+              sólo filtra. */}
           <div className="col-span-12 sm:col-span-6">
             <FieldLabel required={!isView}>Carrera</FieldLabel>
             <SearchSelectField
               options={programOptions}
-              value={values.programId}
+              value={formValues.programId}
               onChange={handleProgramChange}
               placeholder="Selecciona la carrera"
               disabled={disabled}
-              hasError={!!fieldError('programId')}
+              hasError={!!fieldErrorOf('programId')}
               searchPlaceholder="Buscar carrera…"
             />
-            {fieldError('programId')
-              ? <FieldError>{fieldError('programId')}</FieldError>
+            {fieldErrorOf('programId')
+              ? <FieldError>{fieldErrorOf('programId')}</FieldError>
               : <FieldHelp>Filtra las generaciones disponibles.</FieldHelp>}
           </div>
           <div className="col-span-12 sm:col-span-6">
             <FieldLabel required={!isView}>Generación</FieldLabel>
             <SearchSelectField
               options={generationOptions}
-              value={values.generationId}
+              value={formValues.generationId}
               onChange={handleGenerationChange}
               placeholder="Selecciona la generación"
-              disabled={disabled || !values.programId}
-              hasError={!!fieldError('generationId')}
+              disabled={disabled || !formValues.programId}
+              hasError={!!fieldErrorOf('generationId')}
               searchPlaceholder="Buscar generación…"
             />
-            {fieldError('generationId')
-              ? <FieldError>{fieldError('generationId')}</FieldError>
+            {fieldErrorOf('generationId')
+              ? <FieldError>{fieldErrorOf('generationId')}</FieldError>
               : <FieldHelp>Determina el plan de estudios del grupo (ej. &ldquo;2026-7&rdquo;).</FieldHelp>}
           </div>
 
@@ -400,55 +549,57 @@ export default function GruposForm() {
             <FieldLabel required={!isView}>Periodo Académico</FieldLabel>
             <SearchSelectField
               options={periodOptions}
-              value={values.periodId}
-              onChange={handleChange('periodId')}
+              value={formValues.periodId}
+              onChange={changeField('periodId')}
               placeholder="Selecciona el periodo"
               disabled={disabled}
-              hasError={!!fieldError('periodId')}
+              hasError={!!fieldErrorOf('periodId')}
               searchPlaceholder="Buscar periodo…"
             />
-            {fieldError('periodId') && <FieldError>{fieldError('periodId')}</FieldError>}
+            {fieldErrorOf('periodId') && <FieldError>{fieldErrorOf('periodId')}</FieldError>}
           </div>
           <div className="col-span-12 sm:col-span-6">
             <FieldLabel required={!isView}>Nivel del Plan</FieldLabel>
             <SearchSelectField
               options={planLevelOptions}
-              value={values.planLevelId}
-              onChange={handleChange('planLevelId')}
+              value={formValues.planLevelId}
+              onChange={changeField('planLevelId')}
               placeholder="Selecciona el nivel"
-              disabled={disabled || !values.generationId}
-              hasError={!!fieldError('planLevelId')}
+              disabled={disabled || !formValues.generationId}
+              hasError={!!fieldErrorOf('planLevelId')}
               searchPlaceholder="Buscar nivel…"
             />
-            {fieldError('planLevelId') && <FieldError>{fieldError('planLevelId')}</FieldError>}
+            {fieldErrorOf('planLevelId') && <FieldError>{fieldErrorOf('planLevelId')}</FieldError>}
           </div>
 
           {/* Fila 3 */}
           <SelectField
             label="Turno"
             required={!isView}
-            value={values.shift}
-            onChange={handleChange('shift')}
+            value={formValues.shift}
+            onChange={changeField('shift')}
             disabled={disabled}
-            error={fieldError('shift')}
+            error={fieldErrorOf('shift')}
             options={SHIFT_OPTIONS}
             placeholder="Selecciona el turno"
             className="col-span-12 sm:col-span-4"
           />
-          {/* El `toUpperCase` es cortesía visual: la regla acepta minúsculas y el
-              backend sube a mayúscula igual (`GroupTextNormalizer`). El
-              placeholder decía "Ej. A" y el help prometía un "IDGS-101-A" que
-              ningún endpoint genera; ambos se corrigen al formato real. */}
+          {/* En alta individual la clave se teclea entera ("3A"). `readOnly`, no
+              `disabled`, en lote porque el valor sigue siendo el que se guarda
+              (la primera del lote) y un campo gris se lee como irrelevante. */}
           <TextField
             label="Clave del Grupo"
             required={!isView}
-            value={values.code}
-            onChange={handleChange('code')}
-            onBlur={handleBlur('code')}
+            value={formValues.code}
+            onChange={changeField('code')}
+            onBlur={blurField('code')}
             disabled={disabled}
+            readOnly={isBulk}
             placeholder="Ej. 3A"
-            error={fieldError('code')}
-            help="Nivel seguido de la letra. Es única dentro de la generación."
+            error={fieldErrorOf('code')}
+            help={isBulk
+              ? 'Se genera sola: la primera del lote, a partir del nivel.'
+              : 'Nivel seguido de la letra. Es única dentro de la generación.'}
             className="col-span-6 sm:col-span-4"
           />
           <TextField
@@ -456,15 +607,78 @@ export default function GruposForm() {
             required={!isView}
             type="number"
             min={1}
-            value={values.maxCapacity}
-            onChange={handleChange('maxCapacity')}
-            onBlur={handleBlur('maxCapacity')}
+            value={formValues.maxCapacity}
+            onChange={changeField('maxCapacity')}
+            onBlur={blurField('maxCapacity')}
             disabled={disabled}
             numeric
-            error={fieldError('maxCapacity')}
+            error={fieldErrorOf('maxCapacity')}
             placeholder="Ej. 30"
             className="col-span-6 sm:col-span-4"
           />
+
+          {/* Fila 4 — sólo en alta: el check que convierte el alta individual en
+              un lote.Va fuera de la fila 3 porque el modo masivo necesita su propio
+              ancho completo para la vista previa de las letras. */}
+          {bulkAvailable && (
+            <div className="col-span-12">
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={isBulk}
+                  onChange={e => handleBulkToggle(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 accent-[#009574]"
+                />
+                <span className="text-[13px] text-[#333333]">
+                  Crear varios grupos de una vez
+                  <span className="mt-0.5 block text-[12px] text-gray-500">
+                    Las claves se asignan solas a partir del nivel, empezando en la primera letra libre.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
+
+          {/* Fila 5 — cantidad y letras del lote */}
+          {isBulk && (
+            <>
+              <TextField
+                label="Cantidad de Grupos"
+                required
+                type="number"
+                min={1}
+                max={MAX_BULK}
+                value={formValues.quantity}
+                onChange={changeField('quantity')}
+                onBlur={blurField('quantity')}
+                numeric
+                error={fieldErrorOf('quantity')}
+                placeholder="Ej. 3"
+                className="col-span-12 sm:col-span-4"
+              />
+              <div className="col-span-12 sm:col-span-8">
+                <FieldLabel>Claves que se van a crear</FieldLabel>
+                {previewStatus === 'error' ? (
+                  <FieldError>{previewErrorMsg}</FieldError>
+                ) : previewStatus === 'loading' || !preview ? (
+                  <FieldHelp>
+                    Elige generación, nivel y cantidad para ver las claves.
+                  </FieldHelp>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {preview.codes.map(code => (
+                      <span
+                        key={code}
+                        className="rounded border border-[#009574]/30 bg-[#e6f5f1] px-2 py-0.5 font-mono text-[12px] text-[#007a5e]"
+                      >
+                        {code}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </FormCard>
 
@@ -474,9 +688,15 @@ export default function GruposForm() {
           isView={isView}
           onBack={() => navigate('/grupos')}
           onPrimary={isView ? () => navigate(`/grupos/form?mode=edit&id=${id}`) : handleSubmit}
-          primaryLabel={isView ? 'Editar' : isRegister ? 'Registrar Grupo' : 'Guardar Cambios'}
+          primaryLabel={isView
+            ? 'Editar'
+            : isBulk
+              ? 'Registrar Grupos'
+              : isRegister
+                ? 'Registrar Grupo'
+                : 'Guardar Cambios'}
           isSubmitting={isSubmitting}
-          primaryDisabled={disabled || !isValid}
+          primaryDisabled={disabled || !formIsValid}
         />
       )}
     </FormPage>
