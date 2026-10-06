@@ -64,7 +64,7 @@ const GRUPOS_SCHEMA = {
       required('la clave del grupo'),
       maxLength(10, 'clave del grupo'),
       noControlChars('clave del grupo'),
-      pattern(/^\p{N}+\p{L}+$/u, 'La clave debe ser el nivel seguido de la letra, por ejemplo 3A.'),
+      pattern(/^\p{N}+\p{L}$/u, 'La clave debe ser el nivel seguido de una sola letra, por ejemplo 3A.'),
     ],
   },
   maxCapacity: {
@@ -77,9 +77,15 @@ type GruposField = keyof typeof GRUPOS_INITIAL_VALUES
 type GruposValues = Record<GruposField, string>
 
 // Techo de la letra: el backend asigna A–Z y su `@Max(26)` en
-// `CreateGroupsBulkRequest` corta en la misma cifra. El 26 no es un capricho: una
-// clave de dos letras ("3AA") violaría el `^\p{N}+\p{L}+$` que comparten el DTO y
-// este form, así que no hay convención de qué sigue a la Z y no se inventa una.
+// `CreateGroupsBulkRequest` corta en la misma cifra. El 26 no es un capricho: el
+// `^\p{N}+\p{L}$` que comparten los DTO y este form exige **una sola** letra, así
+// que no hay convención de qué sigue a la Z y no se inventa una.
+///
+/// El cuantificador `+` en la letra fue un descuido que sobrevivió a la revisión:
+// el comentario de abajo ya razonaba como si la regla fuera de una letra, pero
+// el patrón aceptaba "3AA". Corregido el 2026-10-05 en los tres sitios —los dos
+// DTO y este form— para que el contrato real sea el que el documento pedía
+// ("3A", "3B") y el que el alta masiva genera.
 const MAX_BULK = 26
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -321,7 +327,7 @@ export default function GruposForm() {
   //
   // De la respuesta sale también `code`: se muestra la primera clave del lote, no
   // el prefijo pelado, porque el campo tiene que seguir cumpliendo el patrón
-  // `^\p{N}+\p{L}+$` de arriba y "3" no lo cumple. Es el mismo valor que asigna el
+  // `^\p{N}+\p{L}$` de arriba y "3" no lo cumple. Es el mismo valor que asigna el
   // servidor, así que el campo no puede contradecir al nivel.
   const bulkQuantity = Number(formValues.quantity)
   const canPreview = isBulk && !!formValues.generationId && !!formValues.planLevelId
