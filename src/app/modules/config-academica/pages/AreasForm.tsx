@@ -181,13 +181,19 @@ export default function AreasForm() {
     } catch (err) {
       setSubmitStatus('error')
       const apiErr = err as Partial<ApiError>
-      // Los 409 se pegan a su campo, no al banner. Un 409 sin código
-      // reconocible (un handler que no lo emita, o un proxy) cae al banner en
-      // vez de desaparecer: es mejor un mensaje genérico que ningún feedback.
+      // Los 409 identificables se pegan a su campo y encienden además el
+      // banner, con el mismo mensaje: el fallo tiene que verse sin escudriñar
+      // el formulario. Un 409 sin código reconocible (un handler que no lo
+      // emita, o un proxy) cae sólo al banner: es mejor un mensaje genérico
+      // que ningún feedback.
       if (apiErr.status === 409 && apiErr.code === AREA_NAME_DUPLICATE) {
-        setFieldError('name', apiErr.message ?? 'El nombre del área ya está en uso.')
+        const msg = apiErr.message ?? 'El nombre del área ya está en uso.'
+        setFieldError('name', msg)
+        setSubmitErrorMsg(msg)
       } else if (apiErr.status === 409 && apiErr.code === AREA_CODE_DUPLICATE) {
-        setFieldError('code', apiErr.message ?? 'La clave del área ya está en uso.')
+        const msg = apiErr.message ?? 'La clave del área ya está en uso.'
+        setFieldError('code', msg)
+        setSubmitErrorMsg(msg)
       } else if (apiErr.status === 409) {
         setSubmitErrorMsg(apiErr.message ?? 'El nombre o la clave ya están en uso por otra área.')
       } else if (apiErr.status === 400) {

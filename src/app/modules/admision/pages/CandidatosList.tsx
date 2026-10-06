@@ -20,6 +20,7 @@ import {
   type BadgeStyle,
 } from '@app/core/components/list'
 import { apiGet, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { programLabel } from '@app/core/infra/programLabel'
 import { usePendingToast } from '@app/core/infra/hooks'
 import {
   STATUS_META,
@@ -58,6 +59,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -113,7 +115,7 @@ export default function CandidatosList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
 
-  const programaOptions = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  const programaOptions = programs.map(p => ({ value: p.id, label: programLabel(p) }))
   const periodoOptions = periods.map(p => ({ value: p.id, label: p.name }))
 
   // Load programs/periods once — programs/periods populate the filter dropdowns.

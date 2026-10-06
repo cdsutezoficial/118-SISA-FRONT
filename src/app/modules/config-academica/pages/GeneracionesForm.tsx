@@ -7,6 +7,7 @@ import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { programLabel } from '@app/core/infra/programLabel'
 import { useFieldValidation } from '@app/core/validation/useFieldValidation'
 import { required, selectionRequired, numeric } from '@app/core/validation/fieldRules'
 
@@ -41,6 +42,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -198,7 +200,7 @@ export default function GeneracionesForm() {
   const disabled = isView || loadStatus === 'loading'
   const isSubmitting = submitStatus === 'submitting'
 
-  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: programLabel(p) }))
   // Plan options are scoped to the selected Programa — cascading select,
   // same interaction pattern as GruposForm.tsx's Programa → Nivel cascade.
   const planOptions: SelectOption[] = plans
@@ -244,8 +246,10 @@ export default function GeneracionesForm() {
       // el handler fija en copy en español, y nunca menciona "number".
       const apiErr = err as ApiError
       if (apiErr?.status === 409) {
-        setFieldError('number', getApiErrorMessage(err))
-        setSubmitStatus('idle')
+        const msg = getApiErrorMessage(err)
+        setFieldError('number', msg)
+        setSubmitStatus('error')
+        setSubmitErrorMsg(msg)
         return
       }
       setSubmitStatus('error')

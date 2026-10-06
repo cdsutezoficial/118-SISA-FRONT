@@ -7,6 +7,7 @@ import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut, apiDelete, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { programLabel } from '@app/core/infra/programLabel'
 import { useFieldValidation } from '@app/core/validation/useFieldValidation'
 import {
   required,
@@ -15,6 +16,7 @@ import {
   noControlChars,
   numeric,
   decimal,
+  dateOnOrAfter,
   applyRules,
   normalizeText,
   type FieldRule,
@@ -38,6 +40,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -160,9 +163,13 @@ const PLAN_SCHEMA = {
   // El DatePicker trabaja en dd/mm/yyyy; la conversión a ISO ocurre al mandar
   // el payload (displayToIso). Guardar el formato de pantalla en el hook evita
   // tener dos estados para el mismo campo.
-  effectiveFrom: { rules: [required('fecha de vigencia', 'f')] },
+  // Sin tope superior: el plan puede quedar vigente desde el próximo
+  // cuatrimestre; sólo se descartan fechas imposibles y años anteriores a 2000.
+  effectiveFrom: {
+    rules: [required('fecha de vigencia', 'f'), dateOnOrAfter({ label: 'fecha de vigencia', gender: 'f' })],
+  },
   totalLevels: {
-    rules: [required('total de niveles'), numeric({ label: 'total de niveles', min: 1 })],
+    rules: [required('total de niveles'), numeric({ label: 'total de niveles', min: 1, max: 15 })],
   },
   minPassingGrade: {
     rules: [
@@ -173,7 +180,7 @@ const PLAN_SCHEMA = {
   maxExtraordinaryExamsPerPeriod: {
     rules: [
       required('exámenes extraordinarios por periodo', 'mp'),
-      numeric({ label: 'exámenes extraordinarios por periodo', gender: 'mp', min: 0 }),
+      numeric({ label: 'exámenes extraordinarios por periodo', gender: 'mp', min: 0, max: 5 }),
     ],
   },
 } as const
@@ -434,7 +441,7 @@ export default function PlanForm() {
   // ─── Load programs (dropdown) ──────────────────────────────────────────────
   useEffect(() => {
     apiGet<ProgramsPageResponse>('/programs', { size: 100 })
-      .then(data => setPrograms(data.items.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))))
+      .then(data => setPrograms(data.items.map(p => ({ value: p.id, label: programLabel(p) }))))
       .catch(() => {/* non-critical — select will be empty */})
   }, [])
 
@@ -584,10 +591,11 @@ export default function PlanForm() {
       const apiErr = err as ApiError
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         // El backend ya dice exactamente qué campo se duplicó; se pinta tal
-        // cual junto al campo, no en el banner general.
+        // cual junto al campo y en el banner general, con el mismo mensaje.
         if (apiErr.backendMessage.includes('versión')) {
           setFieldError('version', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
       }
@@ -869,6 +877,7 @@ export default function PlanForm() {
                 required={!isView}
                 type="number"
                 min={1}
+                max={15}
                 value={values.totalLevels}
                 onChange={v => {
                   handleChange('totalLevels')(v)
@@ -880,7 +889,7 @@ export default function PlanForm() {
                 error={fieldError('totalLevels')}
                 numeric
                 placeholder="Ej. 10"
-                help="Cantidad total de niveles que tendrá el plan."
+                help="Cantidad total de niveles que tendrá el plan (de 1 a 15)."
                 className="col-span-12 sm:col-span-4"
               />
             </div>
@@ -917,6 +926,7 @@ export default function PlanForm() {
                 required={!isView}
                 type="number"
                 min={0}
+                max={5}
                 value={values.maxExtraordinaryExamsPerPeriod}
                 onChange={handleChange('maxExtraordinaryExamsPerPeriod')}
                 onBlur={handleBlur('maxExtraordinaryExamsPerPeriod')}
@@ -924,7 +934,7 @@ export default function PlanForm() {
                 error={fieldError('maxExtraordinaryExamsPerPeriod')}
                 numeric
                 placeholder="Ej. 2"
-                help="Número máximo de exámenes extraordinarios por periodo."
+                help="Número máximo de exámenes extraordinarios por periodo (de 0 a 5)."
                 className="col-span-12 sm:col-span-4"
               />
 

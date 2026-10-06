@@ -7,6 +7,7 @@ import { Toast, Switch } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { apiGet, apiPatch, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { programLabel, programLabelById } from '@app/core/infra/programLabel'
 import {
   PageContainer,
   Breadcrumb,
@@ -30,6 +31,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -128,11 +130,6 @@ export default function PlanesList() {
   const endRow = Math.min(page * perPage, totalElements)
   const hasFilters = !!programFilter || !!statusFilter || !!search
 
-  function programLabel(programId: string): string {
-    const p = programs.find(p => p.id === programId)
-    return p ? `${p.code} — ${p.name}` : '—'
-  }
-
   async function handleToggleStatus(plan: PlanListItem) {
     const nextStatus: PlanStatus = plan.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
     setTogglingId(plan.id)
@@ -161,7 +158,7 @@ export default function PlanesList() {
   const columns: ColumnDef<PlanListItem>[] = [
     { key: 'version', header: 'Versión', type: 'code', className: 'w-28' },
     { key: 'validityPeriod', header: 'Vigencia', type: 'muted', className: 'w-24' },
-    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabelById(programs, row.programId) },
     { key: 'effectiveFrom', header: 'Vigente desde', type: 'count', value: row => formatDate(row.effectiveFrom), className: 'w-32 text-center', cellClassName: 'text-center tabular-nums' },
     {
       key: 'levels',
@@ -224,7 +221,7 @@ export default function PlanesList() {
           onChange={v => { setProgramFilter(v); setPage(1) }}
           allLabel="Todas las carreras"
           className="sm:w-64"
-          options={programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))}
+          options={programs.map(p => ({ value: p.id, label: programLabel(p) }))}
         />
         <FilterSelect
           value={statusFilter}
@@ -298,7 +295,7 @@ export default function PlanesList() {
               </div>
             </div>
             {/* Program name */}
-            <p className="text-[13px] font-medium text-[#333333] mb-3 leading-snug">{programLabel(row.programId)}</p>
+            <p className="text-[13px] font-medium text-[#333333] mb-3 leading-snug">{programLabelById(programs, row.programId)}</p>
             {/* Stats row */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#6B7280] mb-3">
               <span className="text-[#333333]">{row.validityPeriod}</span>

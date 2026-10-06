@@ -122,7 +122,6 @@ function TypeModal({ mode, initialName, onSave, onCancel, saving, errorMsg }: {
           onBlur={handleBlur('name')}
           disabled={saving}
           error={fieldError('name')}
-          help="Se ignoran los espacios de más: “ Bachillerato General ” y “Bachillerato General” son el mismo tipo."
           maxLength={150}
           placeholder="ej. Bachillerato General"
           className="mb-4"
@@ -221,7 +220,10 @@ export default function TiposBachillerato() {
     } catch (err) {
       const apiErr = err as Partial<ApiError>
       if (apiErr.status === 409 && apiErr.code === TYPE_NAME_DUPLICATE) {
-        return { field: 'name', message: apiErr.message ?? 'El nombre del tipo ya está en uso.' }
+        // El error va al campo y al banner del modal, con el mismo mensaje.
+        const message = apiErr.message ?? 'El nombre del tipo ya está en uso.'
+        setModalErrorMsg(message)
+        return { field: 'name', message }
       }
       if (apiErr.status === 400) setModalErrorMsg(apiErr.message ?? 'Revisa los datos capturados.')
       else if (apiErr.status === 401) setModalErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')

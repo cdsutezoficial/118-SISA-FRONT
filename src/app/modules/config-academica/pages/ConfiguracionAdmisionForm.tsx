@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
+import { programLabel } from '@app/core/infra/programLabel'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // No "Ver Detalle" mode here — per Pantalla 25, this screen only ever handles
@@ -50,6 +51,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -195,7 +197,7 @@ export default function ConfiguracionAdmisionForm() {
   const disabled = loadStatus === 'loading'
   const isSubmitting = submitStatus === 'submitting'
 
-  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: programLabel(p) }))
   // Generación options are scoped to the selected Programa — cascading
   // select, same interaction pattern as GruposForm.tsx's Programa → Generación
   // cascade. Unlike Grupos, `programId` here also travels in the payload.
