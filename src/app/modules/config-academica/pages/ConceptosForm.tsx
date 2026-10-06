@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router'
 import { useFormMode, useOpenDirection } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
+import { programLabel as buildProgramLabel } from '@app/core/infra/programLabel'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // `PaymentConcept` (academic_config bounded context). El formulario sigue el
@@ -211,9 +212,15 @@ interface ConceptsPageResponse {
 // consola— justo para el rol que administra las cuotas.
 interface ProgramOption {
   id: string
-  /** Nombre de la carrera; la opción se muestra como `code — label`. */
+  /** Nombre de la carrera; la opción se muestra como `code — label (modalidad)`. */
   label: string
   code: string
+  /** `PRESENCIAL` | `MIXTA` — sólo lo trae `GET /programs/options`. */
+  modality?: string
+}
+
+function programOptionLabel(p: ProgramOption): string {
+  return buildProgramLabel({ code: p.code, name: p.label, modality: p.modality })
 }
 
 // `PaymentRate` — historial de precios. `status` y `createdAt` los administra el
@@ -1320,7 +1327,7 @@ export default function ConceptosForm() {
   function programLabel(programId: string | null): string {
     if (!programId) return 'Todas las carreras'
     const p = programs.find(p => p.id === programId)
-    return p ? `${p.code} — ${p.label}` : '—'
+    return p ? programOptionLabel(p) : '—'
   }
 
   function levelLabel(level: AcademicLevel | null): string {
@@ -1612,7 +1619,7 @@ export default function ConceptosForm() {
 
   const areaOptions = areas.map(a => ({ value: a.id, label: `${a.code} — ${a.name}` }))
   const conceptOptions = concepts.filter(c => c.id !== id).map(c => ({ id: c.id, label: c.name }))
-  const carreraOptions = programs.map(p => ({ id: p.id, label: `${p.code} — ${p.label}` }))
+  const carreraOptions = programs.map(p => ({ id: p.id, label: programOptionLabel(p) }))
 
   /**
    * Solo las tarifas vigentes.

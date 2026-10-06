@@ -7,6 +7,7 @@ import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut, apiDelete, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { programLabel } from '@app/core/infra/programLabel'
 import { useFieldValidation } from '@app/core/validation/useFieldValidation'
 import {
   required,
@@ -38,6 +39,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -434,7 +436,7 @@ export default function PlanForm() {
   // ─── Load programs (dropdown) ──────────────────────────────────────────────
   useEffect(() => {
     apiGet<ProgramsPageResponse>('/programs', { size: 100 })
-      .then(data => setPrograms(data.items.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))))
+      .then(data => setPrograms(data.items.map(p => ({ value: p.id, label: programLabel(p) }))))
       .catch(() => {/* non-critical — select will be empty */})
   }, [])
 
@@ -584,10 +586,11 @@ export default function PlanForm() {
       const apiErr = err as ApiError
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         // El backend ya dice exactamente qué campo se duplicó; se pinta tal
-        // cual junto al campo, no en el banner general.
+        // cual junto al campo y en el banner general, con el mismo mensaje.
         if (apiErr.backendMessage.includes('versión')) {
           setFieldError('version', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
       }

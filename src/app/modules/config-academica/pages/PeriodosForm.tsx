@@ -287,8 +287,10 @@ export default function PeriodosForm() {
       // se llegaba a pintar.
       const apiErr = err as ApiError
       if (apiErr?.status === 409) {
-        setFieldError('periodNumber', getApiErrorMessage(err))
-        setSubmitStatus('idle')
+        const msg = getApiErrorMessage(err)
+        setFieldError('periodNumber', msg)
+        setSubmitStatus('error')
+        setSubmitErrorMsg(msg)
         return
       }
       setSubmitStatus('error')

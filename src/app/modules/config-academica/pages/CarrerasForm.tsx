@@ -6,6 +6,7 @@ import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { MODALITY_LABELS } from '@app/core/infra/programLabel'
 import { useFieldValidation } from '@app/core/validation/useFieldValidation'
 import {
   required,
@@ -30,11 +31,6 @@ const LEVEL_LABELS: Record<AcademicLevel, string> = {
   INGENIERIA: 'Ingeniería',
   LICENCIATURA: 'Licenciatura',
   POSGRADO: 'Posgrado',
-}
-
-const MODALITY_LABELS: Record<ProgramModality, string> = {
-  PRESENCIAL: 'Presencial',
-  MIXTA: 'Mixta',
 }
 
 interface DivisionsPageResponse {
@@ -257,12 +253,14 @@ export default function CarrerasForm() {
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         if (apiErr.backendMessage.includes('clave')) {
           setFieldError('code', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
         if (apiErr.backendMessage.includes('oferta') || apiErr.backendMessage.includes('modalidad')) {
           setFieldError('offerName', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
       }

@@ -6,6 +6,7 @@ import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { programLabel } from '@app/core/infra/programLabel'
 import { useFieldValidation, type FieldErrors } from '@app/core/validation/useFieldValidation'
 import {
   required,
@@ -152,6 +153,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -374,7 +376,7 @@ export default function GruposForm() {
   const disabled = loadStatus === 'loading' || isView
   const isSubmitting = submitStatus === 'submitting'
 
-  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: programLabel(p) }))
   const generationOptions: SelectOption[] = generations
     .filter(g => g.programId === formValues.programId)
     .map(g => ({ value: g.id, label: g.code }))
@@ -462,15 +464,18 @@ export default function GruposForm() {
       const apiErr = err as ApiError
       // 409 en el alta individual: sin excepción es el duplicado de
       // (generationId, code), la única clave única de la tabla, así que va al
-      // campo `code` sin mirar el texto. `backendMessage` es el `message` de
-      // ErrorResponse, copy en español que no menciona ningún campo.
+      // campo `code` sin mirar el texto, y también al banner con el mismo
+      // mensaje. `backendMessage` es el `message` de ErrorResponse, copy en
+      // español que no menciona ningún campo.
       //
       // En el lote NO se adjudica a `code`: allí el 409 es `NotEnoughGroupCodes`,
       // un problema del nivel entero, no de una clave que el usuario escribió. Va
-      // al banner, que es donde cabe un error de esa granularidad.
+      // sólo al banner, que es donde cabe un error de esa granularidad.
       if (apiErr?.status === 409 && !isBulk) {
-        setError('code', getApiErrorMessage(err))
-        setSubmitStatus('idle')
+        const msg = getApiErrorMessage(err)
+        setError('code', msg)
+        setSubmitStatus('error')
+        setSubmitErrorMsg(msg)
         return
       }
       setSubmitStatus('error')

@@ -274,7 +274,8 @@ export default function PlanMateriaForm() {
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         if (apiErr.backendMessage.includes('código')) {
           setFieldError('code', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
       }

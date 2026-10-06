@@ -132,7 +132,6 @@ function CanalModal({ mode, initialName, onSave, onCancel, saving, errorMsg }: {
           onBlur={handleBlur('name')}
           disabled={saving}
           error={fieldError('name')}
-          help="Se ignoran los espacios de más: “ Facebook ” y “Facebook” son el mismo canal."
           maxLength={150}
           placeholder="ej. Redes Sociales"
           className="mb-4"
@@ -234,7 +233,10 @@ export default function CanalesDifusion() {
     } catch (err) {
       const apiErr = err as Partial<ApiError>
       if (apiErr.status === 409 && apiErr.code === CHANNEL_NAME_DUPLICATE) {
-        return { field: 'name', message: apiErr.message ?? 'El nombre del canal ya está en uso.' }
+        // El error va al campo y al banner del modal, con el mismo mensaje.
+        const message = apiErr.message ?? 'El nombre del canal ya está en uso.'
+        setModalErrorMsg(message)
+        return { field: 'name', message }
       }
       if (apiErr.status === 400) setModalErrorMsg(apiErr.message ?? 'Revisa los datos capturados.')
       else if (apiErr.status === 401) setModalErrorMsg('Tu sesión expiró. Vuelve a iniciar sesión.')

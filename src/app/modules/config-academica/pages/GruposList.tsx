@@ -5,6 +5,7 @@ import type { SelectOption } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { apiGet, apiPatch, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { programLabel, programLabelById } from '@app/core/infra/programLabel'
 import {
   PageContainer,
   Breadcrumb,
@@ -70,6 +71,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -137,7 +139,7 @@ export default function GruposList() {
   const fetchedPlanIdsRef = useRef<Set<string>>(new Set())
   const perPage = 20
 
-  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: programLabel(p) }))
   // Generación filter — depends on Programa (disabled until one is picked),
   // same cascading pattern as GruposForm.tsx's Programa → Generación select.
   const generationOptions: SelectOption[] = generations
@@ -246,11 +248,6 @@ export default function GruposList() {
     return matchPeriod && matchLevel
   })
 
-  function programLabel(programId: string): string {
-    const p = programs.find(p => p.id === programId)
-    return p ? p.code : '—'
-  }
-
   function generationLabel(generationId: string): string {
     const g = generations.find(g => g.id === generationId)
     return g ? g.code : '—'
@@ -294,7 +291,7 @@ export default function GruposList() {
 
   const columns: ColumnDef<GroupListItem>[] = [
     { key: 'code', header: 'Clave', type: 'code' },
-    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabelById(programs, row.programId) },
     { key: 'generationId', header: 'Generación', type: 'muted', value: row => generationLabel(row.generationId) },
     { key: 'planLevelId', header: 'Nivel', type: 'muted', value: row => levelLabel(row) },
     { key: 'periodId', header: 'Periodo', type: 'muted', value: row => periodLabel(row.periodId) },
@@ -430,7 +427,7 @@ export default function GruposList() {
             </div>
             {/* Programa + Generación */}
             <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">
-              {programLabel(row.programId)} · {generationLabel(row.generationId)}
+              {programLabelById(programs, row.programId)} · {generationLabel(row.generationId)}
             </p>
             {/* Nivel + Periodo + Turno */}
             <p className="text-[12px] text-[#6B7280] mb-1">
