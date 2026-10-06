@@ -319,7 +319,7 @@ export default function GruposForm() {
     return () => { cancelled = true }
   }, [formValues.generationId, generations])
 
-  // ─── Vista previa de las claves ───────────────────────────────────────────
+  // ─── Clave autogenerada (alta individual y lote) ────────────────────────────
   // Las letras se piden al servidor (`GET /groups/next-codes`) en vez de
   // calcularlas aquí: si el cliente replicara la regla de "primera letra libre",
   // serían dos implementaciones de la misma regla que divergen. El preview y la
@@ -327,23 +327,34 @@ export default function GruposForm() {
   // salvo que otra transacción tome las letras en medio, y entonces el 409 de la
   // creación lo dice.
   //
-  // De la respuesta sale también `code`: se muestra la primera clave del lote, no
-  // el prefijo pelado, porque el campo tiene que seguir cumpliendo el patrón
+  // Desde el 2026-10-06 (D2, decisión del usuario) la clave es de SOLO LECTURA
+  // en los dos modos: el campo nunca se teclea, se rellena con la primera clave
+  // que devuelve el servidor. En el lote se pide el lote completo (para pintar
+  // "Claves que se van a crear") y en el alta individual se pide UNA sola
+  // (`quantity=1`), siempre contra el mismo endpoint. En edición no se pide
+  // nada: la clave que se manda es la que ya tiene el grupo, y sustituirla por
+  // "la siguiente libre" cambiaría la clave de un grupo existente.
+  //
+  // De la respuesta sale también `code`: se muestra la primera clave, no el
+  // prefijo pelado, porque el campo tiene que seguir cumpliendo el patrón
   // `^\p{N}+\p{L}$` de arriba y "3" no lo cumple. Es el mismo valor que asigna el
   // servidor, así que el campo no puede contradecir al nivel.
   const bulkQuantity = Number(formValues.quantity)
-  const canPreview = isBulk && !!formValues.generationId && !!formValues.planLevelId
-    && formValues.quantity.trim() !== '' && Number.isInteger(bulkQuantity)
-    && bulkQuantity >= 1 && bulkQuantity <= MAX_BULK
+  const quantity = isBulk ? bulkQuantity : 1
+  const canPreview = !!formValues.generationId && !!formValues.planLevelId && (isBulk
+    ? formValues.quantity.trim() !== '' && Number.isInteger(bulkQuantity)
+      && bulkQuantity >= 1 && bulkQuantity <= MAX_BULK
+    : isRegister)
 
   useEffect(() => {
     if (!canPreview) {
       setPreview(null)
       setPreviewStatus('idle')
       setPreviewErrorMsg('')
-      // Sin vista previa no hay clave que mostrar, y una clave inventada
-      // deshabilitaría el botón de guardar sin explicación.
-      if (isBulk) setValue('code', '')
+      // Sin petición no hay clave que mostrar, y una clave inventada
+      // deshabilitaría el botón de guardar sin explicación. Sólo en alta: en
+      // edición `code` viene del GET por id y hay que conservarlo tal cual.
+      if (isRegister) setValue('code', '')
       return
     }
     let cancelled = false
@@ -352,26 +363,32 @@ export default function GruposForm() {
     apiGet<CodesPreviewResponse>('/groups/next-codes', {
       generationId: formValues.generationId,
       planLevelId: formValues.planLevelId,
-      quantity: bulkQuantity,
+      quantity,
     })
       .then(data => {
         if (cancelled) return
         setPreview(data)
         setPreviewStatus('idle')
         setValue('code', data.codes[0] ?? '')
+        clearFieldErrors()
       })
       .catch((err: unknown) => {
         if (cancelled) return
         // Un 409 aquí significa que no quedan letras libres: es el aviso que
         // evita que el usuario llene el formulario para que el submit falle.
+        const msg = getApiErrorMessage(err)
         setPreview(null)
         setPreviewStatus('error')
-        setPreviewErrorMsg(getApiErrorMessage(err))
+        setPreviewErrorMsg(msg)
         setValue('code', '')
+        // En el lote el error se pinta en la franja de "Claves que se van a
+        // crear"; en el alta individual no hay franja, así que va al campo,
+        // que es exactamente lo que no se pudo resolver.
+        if (!isBulk) setError('code', msg)
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBulk, canPreview, bulkQuantity, formValues.generationId, formValues.planLevelId])
+  }, [isBulk, canPreview, quantity, formValues.generationId, formValues.planLevelId, isRegister])
 
   const disabled = loadStatus === 'loading' || isView
   const isSubmitting = submitStatus === 'submitting'
@@ -606,9 +623,12 @@ export default function GruposForm() {
             placeholder="Selecciona el turno"
             className="col-span-12 sm:col-span-4"
           />
-          {/* En alta individual la clave se teclea entera ("3A"). `readOnly`, no
-              `disabled`, en lote porque el valor sigue siendo el que se guarda
-              (la primera del lote) y un campo gris se lee como irrelevante. */}
+          {/* Clave de SOLO LECTURA en los dos modos (D2, decisión del usuario
+              2026-10-06): la rellena el servidor con la primera letra libre del
+              nivel y el usuario no la teclea nunca. `readOnly`, no `disabled`,
+              para que el valor siga visible y se lea como un dato del
+              formulario, no como un campo apagado; el gris lo pone `disabled`,
+              que sólo aplica en ver y mientras carga. */}
           <TextField
             label="Clave del Grupo"
             required={!isView}
@@ -616,12 +636,14 @@ export default function GruposForm() {
             onChange={changeField('code')}
             onBlur={blurField('code')}
             disabled={disabled}
-            readOnly={isBulk}
+            readOnly
             placeholder="Ej. 3A"
             error={fieldErrorOf('code')}
-            help={isBulk
-              ? 'Se genera sola: la primera del lote, a partir del nivel.'
-              : 'Nivel seguido de la letra. Es única dentro de la generación.'}
+            help={isRegister
+              ? isBulk
+                ? 'Se genera sola: la primera del lote, a partir del nivel.'
+                : 'Se genera sola: la primera libre a partir del nivel. No se puede editar.'
+              : 'La clave no se puede modificar.'}
             className="col-span-6 sm:col-span-4"
           />
           <TextField
