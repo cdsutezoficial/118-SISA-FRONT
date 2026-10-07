@@ -16,6 +16,7 @@ import {
 } from '@app/core/components/ui'
 import { FormPage, FormHeader, SelectField, TextField, TimeField } from '@app/core/components/form'
 import { Breadcrumb } from '@app/core/components/list'
+import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 import { ADMISSION_ERROR_CODES, apiGet, apiPost, type ApiError } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
 import type {
@@ -869,13 +870,15 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             {identityStatus === 'idle' && (
               <div>
                 <p className="text-[13px] text-[#6B7280] mt-1">
-                  La integración con LlaveMX aún no está disponible. Captura tus datos manualmente para continuar con el registro.
+                  Puedes verificar tu identidad con LlaveMX o capturar tus datos manualmente para continuar con el registro.
                 </p>
-                <div className="mt-4">
+                <div className="mt-4 flex flex-row items-start justify-between gap-2">
+                  {/* Solo visual — sin integración real aún: el clic no hace nada. */}
+                  <LlaveMxButton className="w-full" />
                   <button
                     type="button"
                     onClick={handleGoManual}
-                    className="text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
+                    className="self-end text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
                   >
                     Ingresa tus datos manualmente
                   </button>

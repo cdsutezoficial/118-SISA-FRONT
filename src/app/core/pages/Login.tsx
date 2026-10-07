@@ -6,6 +6,7 @@ import type { Role } from '../infra/RoleContext'
 import { apiLogin, decodeJwtPayload, mapRoles } from '../infra/auth'
 import type { ApiError } from '../infra/apiClient'
 import { ROLE_LABELS } from '../layout/layoutRoles'
+import { LlaveMxButton } from '../components/LlaveMxButton'
 
 function UniversityIllustration() {
   return (
@@ -259,6 +260,8 @@ export default function Login() {
               {isLoading ? 'Verificando...' : 'Iniciar Sesión'}
             </button>
 
+            {/* LlaveMX — solo visual, sin integración real aún: el clic no hace nada. */}
+            <LlaveMxButton disabled={isLoading} className="w-full" label="Iniciar sesión con" />
           </form>
 
         </div>
