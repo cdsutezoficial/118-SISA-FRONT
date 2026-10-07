@@ -502,6 +502,12 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     setIdentityStatus('manual')
   }
 
+  /** Vuelve a la opción de LlaveMX (solo visual — no hay integración real). */
+  function handleVolverLlaveMx() {
+    if (identityStatus !== 'manual') return
+    setIdentityStatus('idle')
+  }
+
   // ── Paso 1 validation (Datos Generales + Domicilio + Contacto) ──
   const curpValid = paso1.curp.trim().length === 18
   const emailValid = /\S+@\S+\.\S+/.test(paso1.email)
@@ -896,6 +902,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
                 <p className="text-[13px] text-[#6B7280] mt-2">
                   Estás capturando tus datos a mano.
                 </p>
+                <button
+                  type="button"
+                  onClick={handleVolverLlaveMx}
+                  className="mt-2 text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
+                >
+                  Volver a LlaveMX
+                </button>
               </div>
             )}
 
