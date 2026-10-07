@@ -396,7 +396,7 @@ export default function UsuarioDetalle() {
               ) : (
                 <>
                   <div className="grid grid-cols-12 gap-3">
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-12">
                       <FieldLabel>Selección múltiple</FieldLabel>
                       <div ref={addRef} className="relative">
                         <button
@@ -441,7 +441,7 @@ export default function UsuarioDetalle() {
                     </div>
 
                     {addScopedNeeded && (
-                      <div className="col-span-12 md:col-span-6">
+                      <div className="col-span-12 md:col-span-12">
                         <FieldLabel required>División (alcance)</FieldLabel>
                         <SearchSelectField
                           options={divisionOptions}
