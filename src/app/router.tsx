@@ -428,13 +428,17 @@ const router = createBrowserRouter([
       // read, part of the Admisión module's roles), so wrapping the list
       // gives a clean redirect instead of a raw 403/blank state for any other
       // role.
-      // `configuracion-admision/new`/`configuracion-admision/form` are
-      // untouched — out of scope for this change.
+      // `configuracion-admision/form` no estaba registrada y la lista navega
+      // exactamente ahí (`/configuracion-admision/form?mode=edit&id=…`): la
+      // edición caía en la 404 del router, el mismo bug que se corrigió en
+      // `generaciones/form` y `grupos/form`. Roles con UPDATE en el catálogo:
+      // SERVICIOS_ESCOLARES y DIRECTOR_DIVISION.
       {
         path: 'configuracion-admision',
         element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PROGRAM_ADMISSION_CONFIGS_READ']} redirectTo="/dashboard"><ConfiguracionAdmisionList /></RequirePermission></RequireRole>,
       },
       { path: 'configuracion-admision/new',  element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']} redirectToRoleMain><ConfiguracionAdmisionForm /></RequireRole> },
+      { path: 'configuracion-admision/form', element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']} redirectToRoleMain><RequirePermission permissionKeys={['PROGRAM_ADMISSION_CONFIGS_UPDATE']} redirectToRoleMain><ConfiguracionAdmisionForm /></RequirePermission></RequireRole> },
 
       // Conceptos
       //
@@ -451,6 +455,10 @@ const router = createBrowserRouter([
       // existe una pantalla separada para agregar una tarifa.
       { path: 'conceptos',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_CONCEPTS_READ']} redirectTo="/dashboard"><ConceptosList /></RequirePermission></RequireRole> },
       { path: 'conceptos/new',        element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><ConceptosForm /></RequireRole> },
+      // `conceptos/form` no estaba registrada, y `ConceptosList` y el propio
+      // `ConceptosForm` navegan a `/conceptos/form?mode=view|edit&id=…`: Ver y
+      // Editar caían en la 404 del router — mismo bug que `generaciones/form`.
+      { path: 'conceptos/form',       element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><RequirePermission permissionKeys={['PAYMENT_CONCEPTS_UPDATE']} redirectToRoleMain><ConceptosForm /></RequirePermission></RequireRole> },
 
       // Áreas de conceptos de pago
       //
