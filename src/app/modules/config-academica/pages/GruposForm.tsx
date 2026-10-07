@@ -354,7 +354,15 @@ export default function GruposForm() {
       // Sin petición no hay clave que mostrar, y una clave inventada
       // deshabilitaría el botón de guardar sin explicación. Sólo en alta: en
       // edición `code` viene del GET por id y hay que conservarlo tal cual.
-      if (isRegister) setValue('code', '')
+      //
+      // Se limpia únicamente cuando falta el nivel, que es lo que hace que la
+      // clave no signifique nada. La otra razón de no poder previsualizar — el
+      // lote marcado sin cantidad todavía — no deslegitima la clave que ya
+      // está pintada: marcar el check no cambia el nivel, así que esa sigue
+      // siendo la primera del lote y se sustituye sola en cuanto la cantidad
+      // da datos. Antes se borraba aquí, y era lo que vaciaba el campo justo
+      // al marcar "Crear varios grupos de una vez".
+      if (isRegister && (!formValues.generationId || !formValues.planLevelId)) setValue('code', '')
       return
     }
     let cancelled = false
@@ -424,14 +432,13 @@ export default function GruposForm() {
     setPreview(null)
     setPreviewStatus('idle')
     setPreviewErrorMsg('')
-    // Al apagar el modo masivo, `quantity` se vacía y `code` vuelve a ser del
-    // usuario: si no, el formulario queda con la cantidad escrita a la vista
-    // mientras ya no hace nada, o con una clave autogenerada que al cambiar el
-    // nivel se queda vieja.
-    if (!checked) {
-      setValue('quantity', '')
-      setValue('code', '')
-    }
+    // Al apagar el modo masivo, `quantity` se vacía: si no, el formulario
+    // queda con la cantidad escrita a la vista mientras ya no hace nada. La
+    // clave NO se toca — se vacía y se repinta con la petición individual, que
+    // devuelve la misma primera letra libre — así que borrarla sólo logra que
+    // el campo parpadee vacío. Si la clave se queda vieja es porque cambió el
+    // nivel, y a eso sí limpia el efecto de la vista previa.
+    if (!checked) setValue('quantity', '')
     setSubmitStatus('idle')
     setSubmitErrorMsg('')
   }
