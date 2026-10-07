@@ -844,6 +844,19 @@ export default function PlanForm() {
                 className="col-span-12 sm:col-span-6"
               />
 
+              {/* Vigente desde */}
+              <div className="col-span-12 sm:col-span-6">
+                <FieldLabel required={!isView}>Vigente Desde</FieldLabel>
+                <DatePicker
+                  value={values.effectiveFrom}
+                  onChange={handleChange('effectiveFrom')}
+                  onBlur={handleBlur('effectiveFrom')}
+                  disabled={disabled}
+                  error={!!fieldError('effectiveFrom')}
+                />
+                {fieldError('effectiveFrom') && <FieldError>{fieldError('effectiveFrom')}</FieldError>}
+              </div>
+
               {/* Clave de titulación */}
               <TextField
                 label="Clave de Titulación"
@@ -857,19 +870,6 @@ export default function PlanForm() {
                 placeholder="Ej. IDGS-TIT-2024"
                 className="col-span-12 sm:col-span-6"
               />
-
-              {/* Vigente desde */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required={!isView}>Vigente Desde</FieldLabel>
-                <DatePicker
-                  value={values.effectiveFrom}
-                  onChange={handleChange('effectiveFrom')}
-                  onBlur={handleBlur('effectiveFrom')}
-                  disabled={disabled}
-                  error={!!fieldError('effectiveFrom')}
-                />
-                {fieldError('effectiveFrom') && <FieldError>{fieldError('effectiveFrom')}</FieldError>}
-              </div>
 
               {/* Total de niveles */}
               <TextField
@@ -890,7 +890,7 @@ export default function PlanForm() {
                 numeric
                 placeholder="Ej. 10"
                 help="Cantidad total de niveles que tendrá el plan (de 1 a 15)."
-                className="col-span-12 sm:col-span-4"
+                className="col-span-12 sm:col-span-6"
               />
             </div>
 
@@ -917,7 +917,7 @@ export default function PlanForm() {
                 numeric
                 placeholder="Ej. 7.0"
                 help="Escala de 0 a 10."
-                className="col-span-12 sm:col-span-4"
+                className="col-span-12 sm:col-span-5"
               />
 
               {/* Extraordinarios máximos por periodo */}
@@ -935,11 +935,11 @@ export default function PlanForm() {
                 numeric
                 placeholder="Ej. 2"
                 help="Número máximo de exámenes extraordinarios por periodo (de 0 a 5)."
-                className="col-span-12 sm:col-span-4"
+                className="col-span-12 sm:col-span-5"
               />
 
               {/* Requiere servicio social */}
-              <div className="col-span-12 sm:col-span-4">
+              <div className="col-span-12 sm:col-span-2">
                 <FieldLabel>Requiere Servicio Social</FieldLabel>
                 <div className="flex items-center gap-2 h-[38px]">
                   <Switch checked={requiresSocialService} disabled={disabled} onChange={handleRequiresSocialServiceChange} />
