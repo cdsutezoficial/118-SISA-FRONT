@@ -1737,7 +1737,7 @@ export default function ConceptosForm() {
                 error={errors.tipo}
                 options={(Object.keys(TYPE_LABELS) as PaymentConceptType[]).map(t => ({ value: t, label: TYPE_LABELS[t] }))}
                 placeholder="Seleccionar tipo…"
-                className="col-span-12 sm:col-span-4"
+                className={isQuota ? "col-span-12 sm:col-span-4" : "col-span-12 sm:col-span-6"}
               />
               {isQuota && (
                 <TextField
@@ -1765,7 +1765,7 @@ export default function ConceptosForm() {
                 error={errors.areaId}
                 options={areaOptions}
                 placeholder="Selecciona una opción"
-                className={isQuota ? 'col-span-12 sm:col-span-4' : 'col-span-12'}
+                className={isQuota ? 'col-span-12 sm:col-span-4' : 'col-span-6'}
               />
             </div>
 
