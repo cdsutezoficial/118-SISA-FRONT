@@ -184,6 +184,13 @@ const LETTERS_ONLY_PATTERN = /^\p{L}+$/u
 // lo que el servidor rechaza.
 const LETTERS_SPACES_AND_HYPHENS_PATTERN = /^[ \uFEFF\u00A0\u2000-\u200A]*\p{L}+(?:(?:[ \uFEFF\u00A0\u2000-\u200A]+|[ \uFEFF\u00A0\u2000-\u200A]*[\u2010-\u2015-][ \uFEFF\u00A0\u2000-\u200A]*)\p{L}+)*[ \uFEFF\u00A0\u2000-\u200A]*$/u
 
+// Igual que `LETTERS_SPACES_AND_HYPHENS_PATTERN` pero admitiendo comas: el
+// nombre oficial de una carrera puede llevar comas ("Ingeniería en Software,
+// TSU"). Es el espejo de la expresión de `name`/`offerName` en
+// `CreateAcademicProgramRequest` y `UpdateAcademicProgramRequest`: deben
+// coincidir carácter a carácter.
+const LETTERS_SPACES_HYPHENS_AND_COMMAS_PATTERN = /^[ \uFEFF\u00A0\u2000-\u200A]*\p{L}+(?:(?:[ \uFEFF\u00A0\u2000-\u200A]+|[ \uFEFF\u00A0\u2000-\u200A]*[\u2010-\u2015-,][ \uFEFF\u00A0\u2000-\u200A]*)\p{L}+)*[ \uFEFF\u00A0\u2000-\u200A]*$/u
+
 /**
  * El campo sólo contiene letras, sin espacios. Para códigos.
  *
@@ -207,6 +214,19 @@ export function lettersSpacesAndHyphens(label?: string, gender: Gender = 'm'): F
     ? `${article(gender)} ${label} solo ${verb(gender, 'puede', 'pueden')} contener letras, espacios y guiones.`
     : 'Solo puede contener letras, espacios y guiones.'
   return value => (LETTERS_SPACES_AND_HYPHENS_PATTERN.test(value) ? undefined : message)
+}
+
+/**
+ * El campo sólo contiene letras, espacios, guiones y comas. Para la carrera:
+ * como `lettersSpacesAndHyphens`, pero el nombre oficial puede llevar comas.
+ *
+ * @example lettersSpacesHyphensAndCommas('nombre de la carrera') // "El nombre de la carrera solo puede contener letras, espacios, guiones y comas."
+ */
+export function lettersSpacesHyphensAndCommas(label?: string, gender: Gender = 'm'): FieldRule {
+  const message = label
+    ? `${article(gender)} ${label} solo ${verb(gender, 'puede', 'pueden')} contener letras, espacios, guiones y comas.`
+    : 'Solo puede contener letras, espacios, guiones y comas.'
+  return value => (LETTERS_SPACES_HYPHENS_AND_COMMAS_PATTERN.test(value) ? undefined : message)
 }
 
 // Nombres de catálogo: letras, dígitos, espacios y guiones. Es el contrato de
