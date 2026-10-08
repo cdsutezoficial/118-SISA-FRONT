@@ -296,13 +296,13 @@ function orderLevelUpdates(
 // el `@Pattern` de caracteres de control. Pegas 300 caracteres y el backend
 // respondía 400 sin que el navegador hubiera dicho nada.
 //
-// `totalLevelsValue` es el texto crudo del campo del total, para no usar como
-// referencia de comparación un total que todavía no es un entero válido.
 // `isEdit` activa la detección de ciclos, que sólo aplica cuando el plan ya
-// existe en el backend y sus niveles se actualizan uno por uno.
+// existe en el backend y sus niveles se actualizan uno por uno. El número de
+// nivel es una etiqueta libre (entero >= 1), no un índice: el usuario puede
+// numerar los niveles de un plan de 4 como 7, 8, 9 y 10. `totalLevels` sólo
+// expresa la cantidad de niveles y ya no limita la numeración.
 function validateLevels(
   levels: LevelRow[],
-  totalLevelsValue: string,
   isEdit: boolean,
   originalLevels: LevelRow[],
 ): PlanLevelError {
@@ -312,16 +312,12 @@ function validateLevels(
     }
   }
 
-  const totalLevelsNum = Number(totalLevelsValue)
   const seen = new Set<number>()
   for (const row of levels) {
     if (seen.has(row.levelNumber)) {
       return `El número de nivel ${row.levelNumber} está repetido.`
     }
     seen.add(row.levelNumber)
-    if (Number.isInteger(totalLevelsNum) && totalLevelsNum >= 1 && row.levelNumber > totalLevelsNum) {
-      return `El nivel ${row.levelNumber} excede el total de niveles definido (${totalLevelsNum}).`
-    }
   }
 
   // Edit mode only: the backend has no batch endpoint, so renumbered
@@ -557,7 +553,7 @@ export default function PlanForm() {
     // falla no sale ninguna petición. Las filas de niveles se validan aparte,
     // porque no son campos del schema: la numeración por `validateLevels` y la
     // descripción por `levelCellErrors`.
-    const invalidLevels = validateLevels(levels, values.totalLevels, isEdit, originalLevels)
+    const invalidLevels = validateLevels(levels, isEdit, originalLevels)
     const invalidCell = Object.keys(levelDescriptionErrors(levels)).length > 0
     if (!validate() || invalidLevels || invalidCell) {
       setLevelsTouched(true)
