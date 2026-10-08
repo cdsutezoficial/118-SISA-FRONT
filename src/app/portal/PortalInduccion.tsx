@@ -1,4 +1,5 @@
 import { GraduationCap } from 'lucide-react'
+import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 
 /**
  * Screen 16 — Portal Candidato: Acceso al pago del Curso de Inducción.
@@ -38,7 +39,22 @@ export default function PortalInduccion() {
         {/* Right panel — 60% */}
         <div className="lg:w-[60%] flex flex-col items-center justify-center px-6 py-14">
           <div className="w-full max-w-sm">
-            <h2 className="text-[18px] font-bold text-[#333333] mb-3">Acceso no disponible</h2>
+            <h2 className="text-[18px] font-bold text-[#333333] mb-3">Elige cómo acceder</h2>
+
+            {/* Opción A — LlaveMX. Solo visual: sin OAuth real el botón no hace nada. */}
+            <div className="border-2 border-[#009574] rounded-lg p-5 mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[13px] font-semibold text-[#333333]">LlaveMX</span>
+                <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded uppercase tracking-wide">
+                  Nuevo
+                </span>
+              </div>
+              <p className="text-[12px] text-[#6B7280] mb-4">
+                Accede de forma segura con tu identidad digital LlaveMX.
+              </p>
+              <LlaveMxButton className="w-full" />
+            </div>
+
             <p className="text-[13px] text-[#6B7280] leading-relaxed">
               El acceso y pago del Curso de Inducción estarán disponibles cuando el servicio del servidor esté habilitado.
             </p>

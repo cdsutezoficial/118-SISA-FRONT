@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { GraduationCap, Loader2, Lock } from 'lucide-react'
 import { Button, TextField } from '@app/core/components/form'
+import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 import { ErrorBanner } from '@app/core/components/list'
 import { useRole } from '@app/core/infra/RoleContext'
 import { apiPost } from '@app/core/infra/apiClient'
@@ -136,7 +137,28 @@ export default function PortalFicha() {
         {/* Right panel — 60% */}
         <div className="lg:w-[60%] flex flex-col items-center justify-center px-6 py-14">
           <div className="w-full max-w-sm">
-            <h2 className="text-[18px] font-bold text-[#333333] mb-5">Consulta tu ficha</h2>
+            <h2 className="text-[18px] font-bold text-[#333333] mb-5">Elige cómo acceder</h2>
+
+            {/* Opción A — LlaveMX. Solo visual: sin OAuth real el botón no hace nada. */}
+            <div className="border-2 border-[#009574] rounded-lg p-5 mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[13px] font-semibold text-[#333333]">LlaveMX</span>
+                <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded uppercase tracking-wide">
+                  Nuevo
+                </span>
+              </div>
+              <p className="text-[12px] text-[#6B7280] mb-4">
+                Accede de forma segura con tu identidad digital LlaveMX.
+              </p>
+              <LlaveMxButton className="w-full max-w-none" />
+            </div>
+
+            {/* Separador */}
+            <div className="flex items-center gap-3 mb-5">
+              <div className="flex-1 h-px bg-[#E5E7EB]" />
+              <span className="text-[12px] text-[#9CA3AF] font-medium">o ingresa tus datos manualmente</span>
+              <div className="flex-1 h-px bg-[#E5E7EB]" />
+            </div>
 
             {/* Folio + CURP, against the real backend. */}
             <form onSubmit={handleAcceder} noValidate>
