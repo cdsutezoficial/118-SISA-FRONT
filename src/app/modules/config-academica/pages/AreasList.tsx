@@ -69,7 +69,7 @@ export default function AreasList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300)
@@ -106,7 +106,7 @@ export default function AreasList() {
         }
       })
     return () => { cancelled = true }
-  }, [statusFilter, debouncedSearch, page])
+  }, [statusFilter, debouncedSearch, page, perPage])
 
   async function handleToggleStatus(area: PaymentAreaListItem) {
     const nextStatus: PaymentAreaStatus = area.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
@@ -204,7 +204,7 @@ export default function AreasList() {
         emptyTitle="No se encontraron áreas"
         emptyHint={emptyHint}
         emptyIcon={<Layers size={36} className="text-[#E5E7EB]" />}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{
           view: row => navigate(`/areas/form?mode=view&id=${row.id}`),
           edit: row => navigate(`/areas/form?mode=edit&id=${row.id}`),
@@ -263,7 +263,7 @@ export default function AreasList() {
         emptyTitle="No se encontraron áreas"
         emptyHint={emptyHint}
         emptyIcon={<Layers size={36} className="text-[#E5E7EB]" />}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

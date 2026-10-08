@@ -98,7 +98,7 @@ export default function GeneracionesList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: programLabel(p) }))
 
@@ -148,7 +148,7 @@ export default function GeneracionesList() {
         setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
-  }, [statusFilter, debouncedSearch, programFilter, page])
+  }, [statusFilter, debouncedSearch, programFilter, page, perPage])
 
   function planLabel(planId: string): string {
     const pl = plans.find(pl => pl.id === planId)
@@ -254,7 +254,7 @@ export default function GeneracionesList() {
         emptyTitle="No se encontraron generaciones"
         emptyHint={emptyHint}
         emptyIcon={<Users2 size={36} className="text-[#E5E7EB]" />}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{
           view: row => navigate(`/generaciones/form?mode=view&id=${row.id}`),
           edit: row => navigate(`/generaciones/form?mode=edit&id=${row.id}`),
@@ -316,7 +316,7 @@ export default function GeneracionesList() {
         emptyTitle="No se encontraron generaciones"
         emptyHint={emptyHint}
         emptyIcon={<Users2 size={36} className="text-[#E5E7EB]" />}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )
