@@ -165,7 +165,7 @@ export default function TiposBachillerato() {
   const [modalSaving, setModalSaving] = useState(false)
   const [modalErrorMsg, setModalErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300)
@@ -198,7 +198,7 @@ export default function TiposBachillerato() {
   useEffect(() => {
     fetchTypes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, page])
+  }, [debouncedSearch, page, perPage])
 
   // El 409 se devuelve al modal para que lo pinte bajo el input y deje lo tecleado
   // a la vista; todo lo demás sigue siendo banner porque no pertenece a un campo.
@@ -310,7 +310,7 @@ export default function TiposBachillerato() {
         loadingLabel="Cargando tipos de bachillerato..."
         emptyTitle="No se encontraron tipos de bachillerato"
         emptyHint={emptyHint}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{ edit: row => setModalTarget(row) }}
         onToggleStatus={handleToggleStatus}
         togglingId={togglingId}
@@ -349,7 +349,7 @@ export default function TiposBachillerato() {
         loadingLabel="Cargando tipos de bachillerato..."
         emptyTitle="No se encontraron tipos de bachillerato"
         emptyHint={emptyHint}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

@@ -176,7 +176,7 @@ export default function CanalesDifusion() {
   const [modalSaving, setModalSaving] = useState(false)
   const [modalErrorMsg, setModalErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300)
@@ -209,7 +209,7 @@ export default function CanalesDifusion() {
   useEffect(() => {
     fetchChannels()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, page])
+  }, [debouncedSearch, page, perPage])
 
   // Devuelve el error de campo en vez de ponerlo en el banner: un nombre
   // duplicado es un error de ese campo, y el modal lo muestra bajo el input
@@ -323,7 +323,7 @@ export default function CanalesDifusion() {
         loadingLabel="Cargando canales..."
         emptyTitle="No se encontraron canales de difusión"
         emptyHint={emptyHint}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{ edit: row => setModalTarget(row) }}
         onToggleStatus={handleToggleStatus}
         togglingId={togglingId}
@@ -362,7 +362,7 @@ export default function CanalesDifusion() {
         loadingLabel="Cargando canales..."
         emptyTitle="No se encontraron canales de difusión"
         emptyHint={emptyHint}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )
