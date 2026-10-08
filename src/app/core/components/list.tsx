@@ -252,13 +252,16 @@ function RowsPerPageSelect({ value, onChange, options }: {
   return (
     <label className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
       Filas por página
-      <select
-        value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        className="border border-[#E5E7EB] rounded px-1.5 py-1 text-[12px] text-[#333333] bg-white focus:outline-none focus:ring-1 focus:ring-[#009574]"
-      >
-        {options.map(n => <option key={n} value={n}>{n}</option>)}
-      </select>
+      <span className="relative">
+        <select
+          value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          className="appearance-none pl-2.5 pr-7 py-1.5 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] hover:border-[#d1d5db] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition-colors cursor-pointer"
+        >
+          {options.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#6B7280] pointer-events-none" />
+      </span>
     </label>
   )
 }
