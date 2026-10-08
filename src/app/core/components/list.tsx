@@ -239,23 +239,55 @@ export function EmptyState({ title, hint, icon }: { title: string; hint: string;
   )
 }
 
+// ─── RowsPerPageSelect ─────────────────────────────────────────────────────────
+// Selector "Filas por página" que muestran `Pagination` y `MobilePagination`
+// cuando se les pasa `onPerPageChange`. La lista dueña es quien decide qué
+// hacer al cambiar (por convención `setPerPage(n); setPage(1)`), así que aquí
+// no hay estado propio.
+function RowsPerPageSelect({ value, onChange, options }: {
+  value: number
+  onChange: (n: number) => void
+  options: number[]
+}) {
+  return (
+    <label className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
+      Filas por página
+      <select
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        className="border border-[#E5E7EB] rounded px-1.5 py-1 text-[12px] text-[#333333] bg-white focus:outline-none focus:ring-1 focus:ring-[#009574]"
+      >
+        {options.map(n => <option key={n} value={n}>{n}</option>)}
+      </select>
+    </label>
+  )
+}
+
 // ─── Pagination ────────────────────────────────────────────────────────────────
 // Paginación desktop (compacta, dentro de la tabla) — el patrón del Módulo 01.
-export function Pagination({ page, totalPages, totalElements, perPage, onPageChange, suffix }: {
+export function Pagination({ page, totalPages, totalElements, perPage, onPageChange, suffix, perPageOptions, onPerPageChange }: {
   page: number
   totalPages: number
   totalElements: number
   perPage: number
   onPageChange: (p: number) => void
   suffix?: string
+  /** Opciones del selector "Filas por página"; por defecto 10/20/50/100. */
+  perPageOptions?: number[]
+  /** Con esto presente se muestra el selector junto al contador. */
+  onPerPageChange?: (n: number) => void
 }) {
   const startRow = totalElements === 0 ? 0 : (page - 1) * perPage + 1
   const endRow = Math.min(page * perPage, totalElements)
+  const options = perPageOptions ?? [10, 20, 50, 100]
   return (
-    <div className="px-4 py-3 border-t border-[#E5E7EB] flex items-center justify-between">
-      <span className="text-[12px] text-[#6B7280]">
-        {totalElements === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${totalElements}${suffix ? ` ${suffix}` : ''}`}
-      </span>
+    <div className="px-4 py-3 border-t border-[#E5E7EB] flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-[12px] text-[#6B7280]">
+          {totalElements === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${totalElements}${suffix ? ` ${suffix}` : ''}`}
+        </span>
+        {onPerPageChange && <RowsPerPageSelect value={perPage} onChange={onPerPageChange} options={options} />}
+      </div>
       <div className="flex items-center gap-1">
         <button onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1}
           className="p-1.5 rounded border border-[#E5E7EB] text-[#6B7280] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-[#F8F9FA]">
@@ -273,7 +305,7 @@ export function Pagination({ page, totalPages, totalElements, perPage, onPageCha
 
 // ─── MobilePagination ──────────────────────────────────────────────────────────
 // Paginación móvil (cards) — "Anterior / pág / Siguiente".
-export function MobilePagination({ page, totalPages, totalElements, perPage, onPageChange, suffix }: {
+export function MobilePagination({ page, totalPages, totalElements, perPage, onPageChange, suffix, perPageOptions, onPerPageChange }: {
   page: number
   totalPages: number
   totalElements: number
@@ -281,15 +313,23 @@ export function MobilePagination({ page, totalPages, totalElements, perPage, onP
   onPageChange: (p: number) => void
   /** Sufijo de "de {n} resultado" (p.ej. "registros"). */
   suffix?: string
+  /** Opciones del selector "Filas por página"; por defecto 10/20/50/100. */
+  perPageOptions?: number[]
+  /** Con esto presente se muestra el selector junto al contador. */
+  onPerPageChange?: (n: number) => void
 }) {
   const startRow = totalElements === 0 ? 0 : (page - 1) * perPage + 1
   const endRow = Math.min(page * perPage, totalElements)
+  const options = perPageOptions ?? [10, 20, 50, 100]
   if (totalElements === 0) return null
   return (
     <div className="flex flex-col items-center gap-3 pt-2">
-      <p className="text-[12px] text-[#6B7280]">
-        Mostrando {startRow}–{endRow} de {totalElements}{suffix ? ` ${suffix}` : ''}
-      </p>
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+        <p className="text-[12px] text-[#6B7280]">
+          Mostrando {startRow}–{endRow} de {totalElements}{suffix ? ` ${suffix}` : ''}
+        </p>
+        {onPerPageChange && <RowsPerPageSelect value={perPage} onChange={onPerPageChange} options={options} />}
+      </div>
       <div className="flex items-center gap-2">
         <button onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1}
           className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed">

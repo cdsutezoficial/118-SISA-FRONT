@@ -37,8 +37,6 @@ const statusBadgeMap: Record<string, BadgeStyle> = Object.fromEntries(
 // an explanatory tooltip instead of navigating to a dead route.
 const KARDEX_TOOLTIP = 'Kardex — disponible cuando se implemente el Módulo de Calificaciones'
 
-const perPage = 10
-
 const programaOptions = Array.from(new Set(mockStudents.map(s => s.programa)))
 const nivelOptions = Array.from(new Set(mockStudents.map(s => s.nivelActual)))
 
@@ -51,6 +49,7 @@ export default function EstudiantesList() {
   const [nivelFilter, setNivelFilter] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
 
   const filtered = mockStudents.filter(s => {
     const matchPrograma = !programaFilter || s.programa === programaFilter
@@ -130,7 +129,7 @@ export default function EstudiantesList() {
         loadingLabel="Cargando estudiantes..."
         emptyTitle="No se encontraron estudiantes"
         emptyHint="Intenta ajustar los filtros de búsqueda"
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={filtered.length} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={filtered.length} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{
           view: row => navigate(`/inscripciones/estudiantes/detalle?id=${row.id}`),
           viewTooltip: 'Ver detalle',
@@ -179,7 +178,7 @@ export default function EstudiantesList() {
         loadingLabel="Cargando estudiantes..."
         emptyTitle="No se encontraron estudiantes"
         emptyHint="Intenta ajustar los filtros de búsqueda"
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={filtered.length} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={filtered.length} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

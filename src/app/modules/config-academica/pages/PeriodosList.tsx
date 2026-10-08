@@ -127,7 +127,7 @@ export default function PeriodosList() {
   const [errorMsg, setErrorMsg] = useState('')
   const [confirmTarget, setConfirmTarget] = useState<PeriodListItem | null>(null)
   const [advancingId, setAdvancingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   // Debounce free-text search — the fetch effect below only reacts to
   // `debouncedSearch`, not every keystroke of `search` (mirrors ClasificacionesList.tsx).
@@ -186,7 +186,7 @@ export default function PeriodosList() {
     void load()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, debouncedSearch, page])
+  }, [statusFilter, debouncedSearch, page, perPage])
 
   async function handleConfirmAdvance() {
     if (!confirmTarget) return
@@ -282,7 +282,7 @@ export default function PeriodosList() {
         loadingLabel="Cargando periodos..."
         emptyTitle="No se encontraron periodos"
         emptyHint={emptyHint}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{
           view: row => navigate(`/periodos/form?mode=view&id=${row.id}`),
           edit: row => navigate(`/periodos/form?mode=edit&id=${row.id}`),
@@ -363,7 +363,7 @@ export default function PeriodosList() {
         loadingLabel="Cargando periodos..."
         emptyTitle="No se encontraron periodos"
         emptyHint={emptyHint}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )
