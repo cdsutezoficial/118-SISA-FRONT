@@ -272,6 +272,12 @@ export function numeric({ label, gender = 'm', min, max, integer = true }: Numer
     : max !== undefined ? `${subject} ${cannot(gender)} ser ${verb(gender, 'mayor', 'mayores')} que ${max}.`
     : invalid
   return value => {
+    // Vacío = "sin valor": lo deja pasar para que el campo pueda ser opcional
+    // (sólo `required` debe decidir obligatoriedad). Sin esto, un campo que
+    // quitara su `required` (créditos de materia) marcaría error en cada
+    // pulsación. `numeric` se usa siempre acompañado de `required` en el resto
+    // de formularios, así que un vacío nunca llegaba aquí sin error previo.
+    if (value === '') return undefined
     if (!NUMBER_PATTERN.test(value)) return invalid
     if (integer && /[.]\d/.test(value)) return invalid
     const parsed = Number(value)
