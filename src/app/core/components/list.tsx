@@ -1,7 +1,9 @@
 import { type ReactNode, Fragment, useRef, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Loader2, Search, AlertCircle, Plus, Eye, Pencil, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { ActionBtn, Switch } from '@app/core/components/ui'
+import { useScreenPopover } from '@app/core/infra/hooks'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary: #009574, hover: #007a5e
@@ -249,20 +251,42 @@ function RowsPerPageSelect({ value, onChange, options }: {
   onChange: (n: number) => void
   options: number[]
 }) {
+  const { open, setOpen, triggerRef, panelRef, pos, openPanel } = useScreenPopover<HTMLButtonElement, HTMLUListElement>()
+
   return (
-    <label className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
-      Filas por página
-      <span className="relative">
-        <select
-          value={value}
-          onChange={e => onChange(Number(e.target.value))}
-          className="appearance-none pl-2.5 pr-7 py-1.5 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] hover:border-[#d1d5db] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition-colors cursor-pointer"
+    <div className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
+      <span className="whitespace-nowrap">Filas por página</span>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => (open ? setOpen(false) : openPanel())}
+        className={`flex items-center justify-between gap-2 pl-2.5 pr-2 py-1.5 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] hover:border-[#d1d5db] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition-colors ${open ? 'ring-2 ring-[#009574]/30 border-[#009574]' : ''}`}
+      >
+        <span className="tabular-nums">{value}</span>
+        <ChevronDown size={14} className={`text-[#6B7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && pos && createPortal(
+        <ul
+          ref={panelRef}
+          className="fixed z-[120] min-w-[88px] bg-white border border-[#E5E7EB] rounded-md shadow-lg py-1"
+          style={{ left: pos.left, top: pos.top }}
         >
-          {options.map(n => <option key={n} value={n}>{n}</option>)}
-        </select>
-        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#6B7280] pointer-events-none" />
-      </span>
-    </label>
+          {options.map(n => (
+            <li key={n}>
+              <button
+                type="button"
+                onMouseDown={() => { onChange(n); setOpen(false) }}
+                className={`w-full text-left px-3 py-2 text-[13px] tabular-nums transition-colors hover:bg-[#e6f5f1] ${value === n ? 'bg-[#e6f5f1] text-[#009574] font-semibold' : 'text-[#333333]'}`}
+              >
+                {n}
+              </button>
+            </li>
+          ))}
+        </ul>,
+        document.body,
+      )}
+    </div>
   )
 }
 

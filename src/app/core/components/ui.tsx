@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router'
 import { ChevronDown, X, Check, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, Pencil, Eye, RotateCcw, Search } from 'lucide-react'
 import { formatDate, MONTHS, DAYS } from '../infra/utils'
-import { useOpenDirection } from '@app/core/infra/hooks'
+import { useOpenDirection, useScreenPopover } from '@app/core/infra/hooks'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary: #009574, hover: #007a5e
@@ -422,26 +422,17 @@ interface DatePickerProps {
 }
 
 export function DatePicker({ value, onChange, disabled = false, minDate, placeholder = 'dd/mm/yyyy', error = false, onBlur }: DatePickerProps) {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen, triggerRef, panelRef, pos, openPanel } = useScreenPopover<HTMLDivElement>()
   const today = new Date()
   const parsed = parseDate(value)
   const [viewYear, setViewYear] = useState(parsed ? parsed.getFullYear() : today.getFullYear())
   const [viewMonth, setViewMonth] = useState(parsed ? parsed.getMonth() : today.getMonth())
   // `draft` es el texto editable en el input; se sincroniza con el valor externo.
   const [draft, setDraft] = useState(value)
-  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setDraft(value)
   }, [value])
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
@@ -493,7 +484,7 @@ export function DatePicker({ value, onChange, disabled = false, minDate, placeho
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={triggerRef} className="relative">
       <div className="flex">
         <input
           type="text"
@@ -518,15 +509,19 @@ export function DatePicker({ value, onChange, disabled = false, minDate, placeho
         />
         <button
           type="button"
-          onClick={() => setOpen(!open)}
+          onClick={() => (open ? setOpen(false) : openPanel())}
           aria-label="Abrir calendario"
           className="px-3 border border-l-0 border-[#E5E7EB] rounded-r-md bg-[#F8F9FA] text-[#6B7280] hover:text-[#009574] hover:border-[#009574]/40 focus:outline-none focus:ring-2 focus:ring-[#009574]/30 flex items-center"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         </button>
       </div>
-      {open && (
-        <div className="absolute z-50 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-72">
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          className="fixed z-[120] bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-72"
+          style={{ left: pos.left, top: pos.top }}
+        >
           <div className="flex items-center justify-between mb-2 gap-1">
             <button type="button" onClick={prevYear} aria-label="Año anterior" className="p-1 rounded hover:bg-[#F8F9FA]" title="Año anterior"><ChevronLeft size={14} /></button>
             <button type="button" onClick={prevMonth} aria-label="Mes anterior" className="p-1 rounded hover:bg-[#F8F9FA]" title="Mes anterior"><ChevronLeft size={14} className="-ml-1" /></button>
@@ -575,7 +570,8 @@ export function DatePicker({ value, onChange, disabled = false, minDate, placeho
               })}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
@@ -607,22 +603,13 @@ interface DateTimePickerProps {
 }
 
 export function DateTimePicker({ value, onChange, disabled = false, placeholder = 'dd/mm/yyyy HH:mm' }: DateTimePickerProps) {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen, triggerRef, panelRef, pos, openPanel } = useScreenPopover<HTMLDivElement>()
   const today = new Date()
   const parsed = parseDateTime(value)
   const [viewYear, setViewYear] = useState(parsed ? parsed.getFullYear() : today.getFullYear())
   const [viewMonth, setViewMonth] = useState(parsed ? parsed.getMonth() : today.getMonth())
   const [hh, setHh] = useState(parsed ? parsed.getHours() : 12)
   const [mm, setMm] = useState(parsed ? parsed.getMinutes() : 0)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   // Sincroniza calendario y hora con cambios externos (edición / carga).
   useEffect(() => {
@@ -680,17 +667,21 @@ export function DateTimePicker({ value, onChange, disabled = false, placeholder 
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={triggerRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? setOpen(false) : openPanel())}
         className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] flex items-center justify-between"
       >
         <span className={value ? 'text-[#333333]' : 'text-[#6B7280]'}>{value || placeholder}</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#6B7280]"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       </button>
-      {open && (
-        <div className="absolute z-50 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-64">
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          className="fixed z-[120] bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-64"
+          style={{ left: pos.left, top: pos.top }}
+        >
           <div className="flex items-center justify-between mb-2">
             <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-[#F8F9FA]"><ChevronLeft size={14} /></button>
             <span className="text-[13px] font-semibold text-[#333333]">{MONTHS[viewMonth]} {viewYear}</span>
@@ -741,7 +732,8 @@ export function DateTimePicker({ value, onChange, disabled = false, placeholder 
               className="w-14 px-2 py-1 text-[12px] text-center border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]"
             />
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
@@ -749,20 +741,11 @@ export function DateTimePicker({ value, onChange, disabled = false, placeholder 
 
 // ─── MiniDatePicker ───────────────────────────────────────────────────────────
 export function MiniDatePicker({ value, onChange, disabled = false }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen, triggerRef, panelRef, pos, openPanel } = useScreenPopover<HTMLDivElement>()
   const today = new Date()
   const parsed = parseDate(value)
   const [viewYear, setViewYear] = useState(parsed ? parsed.getFullYear() : today.getFullYear())
   const [viewMonth, setViewMonth] = useState(parsed ? parsed.getMonth() : today.getMonth())
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
@@ -780,16 +763,20 @@ export function MiniDatePicker({ value, onChange, disabled = false }: { value: s
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={triggerRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? setOpen(false) : openPanel())}
         className="px-2 py-1 text-[12px] border border-[#E5E7EB] rounded bg-white text-[#333333] hover:border-[#009574] focus:outline-none w-28 text-left"
       >
         {value || 'dd/mm/yyyy'}
       </button>
-      {open && (
-        <div className="absolute z-50 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-60">
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          className="fixed z-[120] bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 w-60"
+          style={{ left: pos.left, top: pos.top }}
+        >
           <div className="flex items-center justify-between mb-2">
             <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-[#F8F9FA]"><ChevronLeft size={13} /></button>
             <span className="text-[12px] font-semibold text-[#333333]">{MONTHS[viewMonth]} {viewYear}</span>
@@ -817,7 +804,8 @@ export function MiniDatePicker({ value, onChange, disabled = false }: { value: s
               })}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

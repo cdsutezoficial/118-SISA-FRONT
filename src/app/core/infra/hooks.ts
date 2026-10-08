@@ -1,5 +1,5 @@
 import { useLocation, useSearchParams } from 'react-router'
-import { useState, type RefObject } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { FormMode } from './types'
 
 /**
@@ -49,4 +49,86 @@ export function useOpenDirection<T extends HTMLElement>(ref: RefObject<T | null>
   }
 
   return { openUp, measureAndSet }
+}
+
+/**
+ * Positions a floating panel BY PORTAL to <body>, aligned to a trigger and
+ * always kept inside the viewport.
+ *
+ * Absolute panels break in two common cases:
+ *  - a container with `overflow-hidden`/`overflow-x-auto` (e.g. DataTable)
+ *    clips the panel behind the table;
+ *  - near the bottom edge of the screen the panel gets cut off.
+ *
+ * Same pattern as the ActionBtn tooltip (`createPortal` to body). On open the
+ * panel is measured: if it doesn't fit below the trigger it opens upward, and
+ * top/left are clamped with an 8px margin. A ResizeObserver re-clamps when the
+ * panel content grows (e.g. a calendar month with 6 weeks). Closes on outside
+ * click, Escape, scroll or resize (scrolls inside the panel itself, like a
+ * year list, are ignored).
+ */
+export function useScreenPopover<T extends HTMLElement, P extends HTMLElement = HTMLDivElement>() {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const triggerRef = useRef<T | null>(null)
+  const panelRef = useRef<P | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function isInside(e: Event): boolean {
+      const t = e.target as Node
+      return !!(triggerRef.current?.contains(t) || panelRef.current?.contains(t))
+    }
+    function onMouseDown(e: MouseEvent) { if (!isInside(e)) setOpen(false) }
+    function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    function onScroll(e: Event) { if (!isInside(e)) setOpen(false) }
+    function onResize() { setOpen(false) }
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onResize)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [open])
+
+  function openPanel() {
+    const el = triggerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    setPos({ left: rect.left, top: rect.bottom + 8 })
+    setOpen(true)
+  }
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const panel = panelRef.current
+    if (!panel) return
+    const panelEl = panel
+    function clamp() {
+      const h = panelEl.offsetHeight
+      const w = panelEl.offsetWidth
+      setPos(prev => {
+        if (!prev) return prev
+        const trigger = triggerRef.current
+        let top = prev.top
+        if (top + h > window.innerHeight - 8) {
+          top = trigger ? trigger.getBoundingClientRect().top - h - 8 : top
+        }
+        top = Math.max(8, Math.min(top, window.innerHeight - h - 8))
+        const left = Math.max(8, Math.min(prev.left, window.innerWidth - w - 8))
+        if (top === prev.top && left === prev.left) return prev
+        return { left, top }
+      })
+    }
+    clamp()
+    const ro = new ResizeObserver(clamp)
+    ro.observe(panelEl)
+    return () => ro.disconnect()
+  }, [open])
+
+  return { open, setOpen, triggerRef, panelRef, pos, openPanel }
 }
