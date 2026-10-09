@@ -389,6 +389,7 @@ function paso3Errors(p3: Paso3State, attempted: boolean): FieldErrors {
   const m = (v: string, msg?: string) => missing(v, attempted, msg)
   const r = (v: string, valid: boolean, msg: string) => req(v, valid, msg, attempted)
 
+  e.modalidad = m(p3.modalidad, 'Selecciona una modalidad.')
   e.programa = m(p3.admissionConfigId, 'Selecciona una carrera.')
   e.canal = m(p3.outreachChannelId, 'Selecciona un canal.')
   if (p3.isFirstChoice === null && attempted) e.isFirstChoice = 'Selecciona si es tu primera o segunda opción.'
@@ -723,6 +724,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     : paso3.paisPreparatoria.trim() !== '' && paso3.estadoPreparatoria.trim() !== '' && paso3.ciudadPreparatoria.trim() !== ''
 
   const paso3Valid =
+    paso3.modalidad !== '' &&
     paso3.admissionConfigId !== '' &&
     paso3.outreachChannelId !== '' &&
     paso3.isFirstChoice !== null &&
@@ -1179,11 +1181,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               selected={paso1.nacionalidad === 'Mexicana'}
               title="Mexicana"
               onSelect={() => setPaso1({ ...paso1, nacionalidad: 'Mexicana' })}
+              error={!!e1.nacionalidad}
             />
             <RadioCard
               selected={paso1.nacionalidad === 'Extranjera'}
               title="Extranjera"
               onSelect={() => setPaso1({ ...paso1, nacionalidad: 'Extranjera' })}
+              error={!!e1.nacionalidad}
             />
           </div>
           {e1.nacionalidad && <FieldError>{e1.nacionalidad}</FieldError>}
@@ -1196,7 +1200,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
                 <>
                   <ErrorLine error={e1.estadoNacimiento}>
                     <FieldLabel required>Estado de Nacimiento</FieldLabel>
-                    <SearchSelect options={estadoNames} value={paso1.estadoNacimiento} onChange={v => setPaso1({ ...paso1, estadoNacimiento: v, municipioNacimiento: '' })} placeholder="Selecciona un estado" />
+                    <SearchSelect options={estadoNames} value={paso1.estadoNacimiento} onChange={v => setPaso1({ ...paso1, estadoNacimiento: v, municipioNacimiento: '' })} placeholder="Selecciona un estado" hasError={!!e1.estadoNacimiento} />
                   </ErrorLine>
                 </>
               ) : (
@@ -1206,7 +1210,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             <div className="col-span-12 md:col-span-6">
               <ErrorLine error={e1.municipioNacimiento}>
                 <FieldLabel required>Municipio de Nacimiento</FieldLabel>
-                <SearchSelect options={municipioNames(paso1.estadoNacimiento)} value={paso1.municipioNacimiento} onChange={v => setPaso1({ ...paso1, municipioNacimiento: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoNacimiento === ''} />
+                <SearchSelect options={municipioNames(paso1.estadoNacimiento)} value={paso1.municipioNacimiento} onChange={v => setPaso1({ ...paso1, municipioNacimiento: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoNacimiento === ''} hasError={!!e1.municipioNacimiento} />
               </ErrorLine>
             </div>
           </>
@@ -1273,13 +1277,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         <div className="col-span-12 md:col-span-3">
           <ErrorLine error={e1.estadoDomicilio}>
             <FieldLabel required>Estado</FieldLabel>
-            <SearchSelect options={estadoNames} value={paso1.estadoDomicilio} onChange={v => setPaso1({ ...paso1, estadoDomicilio: v, municipioDomicilio: '' })} placeholder="Selecciona un estado" />
+            <SearchSelect options={estadoNames} value={paso1.estadoDomicilio} onChange={v => setPaso1({ ...paso1, estadoDomicilio: v, municipioDomicilio: '' })} placeholder="Selecciona un estado" hasError={!!e1.estadoDomicilio} />
           </ErrorLine>
         </div>
         <div className="col-span-12 md:col-span-3">
           <ErrorLine error={e1.municipioDomicilio}>
             <FieldLabel required>Municipio</FieldLabel>
-            <SearchSelect options={municipioNames(paso1.estadoDomicilio)} value={paso1.municipioDomicilio} onChange={v => setPaso1({ ...paso1, municipioDomicilio: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoDomicilio === ''} />
+            <SearchSelect options={municipioNames(paso1.estadoDomicilio)} value={paso1.municipioDomicilio} onChange={v => setPaso1({ ...paso1, municipioDomicilio: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoDomicilio === ''} hasError={!!e1.municipioDomicilio} />
           </ErrorLine>
         </div>
 
@@ -1441,10 +1445,12 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         <div className="col-span-12 md:col-span-4">
           <SelectField
             label="Modalidad (filtro)"
+            required
             options={MODALIDAD_FILTROS.map(v => ({ value: v, label: v === '' ? 'Todas' : v }))}
             value={paso3.modalidad}
             onChange={v => setPaso3({ ...paso3, modalidad: v as '' | 'Todas' | ModalidadPrograma, admissionConfigId: '', programa: '' })}
             placeholder="Seleccionar…"
+            error={e3.modalidad}
           />
         </div>
         <div className="col-span-12 md:col-span-8 space-y-2">
@@ -1484,11 +1490,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               selected={paso3.isFirstChoice === true}
               title="Es mi primera opción"
               onSelect={() => setPaso3({ ...paso3, isFirstChoice: true })}
+              error={!!e3.isFirstChoice}
             />
             <RadioCard
               selected={paso3.isFirstChoice === false}
               title="Es mi segunda opción"
               onSelect={() => setPaso3({ ...paso3, isFirstChoice: false })}
+              error={!!e3.isFirstChoice}
             />
           </div>
           {e3.isFirstChoice && <FieldError>{e3.isFirstChoice}</FieldError>}
@@ -1519,13 +1527,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             <div className="col-span-12 md:col-span-6">
               <ErrorLine error={e3.estadoPreparatoria}>
                 <FieldLabel required>Estado de la Preparatoria</FieldLabel>
-                <SearchSelect options={estadoNames} value={paso3.estadoPreparatoria} onChange={v => setPaso3({ ...paso3, estadoPreparatoria: v, municipioPreparatoria: '' })} placeholder="Selecciona un estado" />
+                <SearchSelect options={estadoNames} value={paso3.estadoPreparatoria} onChange={v => setPaso3({ ...paso3, estadoPreparatoria: v, municipioPreparatoria: '' })} placeholder="Selecciona un estado" hasError={!!e3.estadoPreparatoria} />
               </ErrorLine>
             </div>
             <div className="col-span-12 md:col-span-6">
               <ErrorLine error={e3.municipioPreparatoria}>
                 <FieldLabel required>Municipio de la Preparatoria</FieldLabel>
-                <SearchSelect options={municipioNames(paso3.estadoPreparatoria)} value={paso3.municipioPreparatoria} onChange={v => setPaso3({ ...paso3, municipioPreparatoria: v })} placeholder="Selecciona un municipio" disabled={paso3.estadoPreparatoria === ''} />
+                <SearchSelect options={municipioNames(paso3.estadoPreparatoria)} value={paso3.municipioPreparatoria} onChange={v => setPaso3({ ...paso3, municipioPreparatoria: v })} placeholder="Selecciona un municipio" disabled={paso3.estadoPreparatoria === ''} hasError={!!e3.municipioPreparatoria} />
               </ErrorLine>
             </div>
           </>
