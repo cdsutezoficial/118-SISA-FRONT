@@ -309,13 +309,11 @@ function req(v: string, valid: boolean, formatMsg: string, attempted: boolean): 
   return undefined
 }
 
-function paso1Errors(p1: Paso1State, isManual: boolean, attempted: boolean): FieldErrors {
+function paso1Errors(p1: Paso1State, attempted: boolean): FieldErrors {
   const e: FieldErrors = {}
-  // Mientras no se verifique identidad (LlaveMX/manual), elegir esa vía sigue
-  // siendo lo accionable. Los campos obligatorios —incluidos los que LlaveMX
-  // bloquea (Nombre(s), Apellidos, CURP, Fecha, Sexo)— se marcan igual en ambos
-  // modos, para que el faltante sea visible aunque el campo esté bloqueado.
-  if (!isManual && attempted) e.identidad = 'Selecciona verificar con LlaveMX o ingresa tus datos manualmente.'
+  // Los campos obligatorios —incluidos los que LlaveMX bloquea (Nombre(s),
+  // Apellidos, CURP, Fecha, Sexo)— se marcan igual en ambos modos, para que el
+  // faltante sea visible aunque el campo esté bloqueado.
   const m = (v: string, msg?: string) => missing(v, attempted, msg)
   const r = (v: string, valid: boolean, msg: string) => req(v, valid, msg, attempted)
 
@@ -1010,10 +1008,10 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   // `e{1,2,3}` pinta el error de cada campo (vacío solo tras `attempted`, y los
   // formatos inválidos en vivo como antes). `e{1,2,3}All` detecta el primer
   // paso con faltantes al pulsar "Siguiente" hacia el paso bloqueado.
-  const e1 = paso1Errors(paso1, isManual, attempted)
+  const e1 = paso1Errors(paso1, attempted)
   const e2 = paso2Errors(paso2, attempted)
   const e3 = paso3Errors(paso3, attempted)
-  const e1All = paso1Errors(paso1, isManual, true)
+  const e1All = paso1Errors(paso1, true)
   const e2All = paso2Errors(paso2, true)
   const e3All = paso3Errors(paso3, true)
   const missing1 = Object.keys(e1All).filter(k => e1All[k]).length
@@ -1059,9 +1057,6 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             <p className="text-[14px] font-semibold text-[#333333]">Verificación de Identidad</p>
             {identityStatus === 'idle' && (
               <div>
-                {attempted && !isManual && (
-                  <p className="mt-2 text-[12px] text-red-500">{e1.identidad}</p>
-                )}
                 <p className="text-[13px] text-[#6B7280] mt-1">
                   Puedes verificar tu identidad con LlaveMX o capturar tus datos manualmente para continuar con el registro.
                 </p>
