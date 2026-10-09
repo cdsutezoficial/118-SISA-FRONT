@@ -17,6 +17,9 @@ import { Button } from './form'
  * - Steps marked `gated: true` (summary/confirmation screens) stay locked
  *   until every previous step is valid — you can't enter them, and the
  *   submit action only fires when all steps are valid.
+ * - `onInvalidStepAttempt` relaja SOLO el botón Siguiente de los pasos cuyo
+ *   destino está bloqueado: en vez de deshabilitarse, al pulsarlo la página
+ *   recibe el aviso para validar y marcar lo que falta (no avanza).
  *
  * Because the Wizard never holds form data itself, navigating back and forth
  * between steps can never clear previously entered values — that state lives
@@ -40,13 +43,35 @@ interface WizardProps {
   onComplete: () => void
   /** Label for the Next action on the last step. Defaults to "Finalizar". */
   finishLabel?: string
+  /**
+   * Se dispara al pulsar "Siguiente" cuando el siguiente paso está bloqueado
+   * (gated) por tener pasos anteriores inválidos. Con esto el botón queda
+   * habilitado y la página decide validar y marcar qué falta en lugar de
+   * avanzar. Si no se pasa, el botón se deshabilita (comportamiento previo).
+   */
+  onInvalidStepAttempt?: (stepIndex: number) => void
+  /** Paso controlado (opcional). Si se pasa, la navegación delega en onStepChange. */
+  step?: number
+  onStepChange?: (i: number) => void
 }
 
-export function Wizard({ steps, onComplete, finishLabel = 'Finalizar' }: WizardProps) {
-  const [currentStep, setCurrentStep] = useState(0)
+export function Wizard({
+  steps,
+  onComplete,
+  finishLabel = 'Finalizar',
+  onInvalidStepAttempt,
+  step,
+  onStepChange,
+}: WizardProps) {
+  const [internalStep, setInternalStep] = useState(0)
 
-  const step = steps[currentStep]
+  const currentStep = step ?? internalStep
   const isLastStep = currentStep === steps.length - 1
+
+  const navigate = (i: number) => {
+    if (onStepChange) onStepChange(i)
+    else setInternalStep(i)
+  }
 
   // Steps without a validation function (isValid === undefined) count as valid.
   const isStepValid = (s: WizardStep) => s.isValid !== false
@@ -60,7 +85,7 @@ export function Wizard({ steps, onComplete, finishLabel = 'Finalizar' }: WizardP
   const canSubmit = steps.every(isStepValid)
 
   function goBack() {
-    setCurrentStep(s => Math.max(0, s - 1))
+    navigate(Math.max(0, currentStep - 1))
   }
 
   function goNext() {
@@ -68,8 +93,11 @@ export function Wizard({ steps, onComplete, finishLabel = 'Finalizar' }: WizardP
       if (canSubmit) onComplete()
       return
     }
-    if (!canEnterStep(currentStep + 1)) return
-    setCurrentStep(s => s + 1)
+    if (!canEnterStep(currentStep + 1)) {
+      onInvalidStepAttempt?.(currentStep)
+      return
+    }
+    navigate(currentStep + 1)
   }
 
   return (
@@ -84,7 +112,7 @@ export function Wizard({ steps, onComplete, finishLabel = 'Finalizar' }: WizardP
             <div key={s.id} className="flex items-center flex-1 last:flex-none">
               <button
                 type="button"
-                onClick={() => setCurrentStep(i)}
+                onClick={() => navigate(i)}
                 disabled={locked}
                 title={locked ? 'Completa los pasos anteriores para desbloquear.' : s.label}
                 className="flex flex-col items-center group flex-shrink-0"
@@ -110,14 +138,19 @@ export function Wizard({ steps, onComplete, finishLabel = 'Finalizar' }: WizardP
       </div>
 
       {/* Step content */}
-      <div className="mb-8">{step.render}</div>
+      <div className="mb-8">{steps[currentStep].render}</div>
 
       {/* Navigation */}
       <div className="flex justify-between">
         <Button variant="secondary" size="md" onClick={goBack} disabled={currentStep === 0}>
           Anterior
         </Button>
-        <Button variant="primary" size="md" onClick={goNext} disabled={isLastStep ? !canSubmit : !canEnterStep(currentStep + 1)}>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={goNext}
+          disabled={isLastStep ? !canSubmit : !canEnterStep(currentStep + 1) && !onInvalidStepAttempt}
+        >
           {isLastStep ? finishLabel : 'Siguiente'}
         </Button>
       </div>
