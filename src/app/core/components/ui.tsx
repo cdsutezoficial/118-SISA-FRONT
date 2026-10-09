@@ -76,9 +76,9 @@ export function SearchSelect({ options, value, onChange, placeholder = 'Seleccio
 
   if (disabled) {
     return (
-      <div className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-[#F8F9FA] text-[#6B7280] cursor-not-allowed flex items-center justify-between">
+      <div className={`w-full px-3 py-2 text-[13px] border rounded-md cursor-not-allowed flex items-center justify-between ${hasError ? 'border-red-400 ring-2 ring-red-200 bg-[#F8F9FA] text-[#6B7280]' : 'border-[#E5E7EB] bg-[#F8F9FA] text-[#6B7280]'}`}>
         <span>{value || placeholder}</span>
-        <ChevronDown size={14} className="text-[#6B7280]" />
+        <ChevronDown size={14} className={hasError ? 'text-red-400' : 'text-[#6B7280]'} />
       </div>
     )
   }

@@ -10,7 +10,6 @@ import {
   SearchSelectField,
   Switch,
   RadioCard,
-  inputCls,
   ReadField,
   DatePicker,
   type SelectOption,
@@ -312,12 +311,11 @@ function req(v: string, valid: boolean, formatMsg: string, attempted: boolean): 
 
 function paso1Errors(p1: Paso1State, isManual: boolean, attempted: boolean): FieldErrors {
   const e: FieldErrors = {}
-  // Sin verificación de identidad (LlaveMX/manual) lo único accionable es esa
-  // elección; los campos bloqueados se cuentan hasta que se desbloqueen.
-  if (!isManual) {
-    if (attempted) e.identidad = 'Selecciona verificar con LlaveMX o ingresa tus datos manualmente.'
-    return e
-  }
+  // Mientras no se verifique identidad (LlaveMX/manual), elegir esa vía sigue
+  // siendo lo accionable. Los campos obligatorios —incluidos los que LlaveMX
+  // bloquea (Nombre(s), Apellidos, CURP, Fecha, Sexo)— se marcan igual en ambos
+  // modos, para que el faltante sea visible aunque el campo esté bloqueado.
+  if (!isManual && attempted) e.identidad = 'Selecciona verificar con LlaveMX o ingresa tus datos manualmente.'
   const m = (v: string, msg?: string) => missing(v, attempted, msg)
   const r = (v: string, valid: boolean, msg: string) => req(v, valid, msg, attempted)
 
@@ -431,12 +429,12 @@ function ErrorLine({ error, children }: { error?: string; children: ReactNode })
 // ─── Shared field helpers ─────────────────────────────────────────────────────
 
 /** LlaveMX-locked, read-only field — Nombre(s)/Apellidos/CURP/Fecha de Nacimiento/Sexo/Estado de Nacimiento. */
-function LockedField({ label, value, required = true }: { label: string; value: string; required?: boolean }) {
+function LockedField({ label, value, required = true, error = false }: { label: string; value: string; required?: boolean; error?: boolean }) {
   return (
     <div>
       <FieldLabel required={required}>{label}</FieldLabel>
-      <div className={`${inputCls(true, false)} flex items-center gap-1.5`}>
-        <Lock size={11} className="text-[#9CA3AF] flex-shrink-0" />
+      <div className={`flex items-center gap-1.5 w-full px-3 py-2 text-[13px] border rounded-md cursor-not-allowed ${error ? 'border-red-400 ring-2 ring-red-200 bg-[#F8F9FA] text-[#6B7280]' : 'border-[#E5E7EB] bg-[#F8F9FA] text-[#6B7280]'}`}>
+        <Lock size={11} className={`flex-shrink-0 ${error ? 'text-red-400' : 'text-[#9CA3AF]'}`} />
         <span>{value || '—'}</span>
       </div>
     </div>
@@ -1112,14 +1110,14 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           {isManual ? (
             <TextField label="Nombre(s)" required value={paso1.nombres} onChange={v => setPaso1({ ...paso1, nombres: v })} error={e1.nombres} />
           ) : (
-            <LockedField label="Nombre(s)" value={paso1.nombres} />
+            <LockedField label="Nombre(s)" value={paso1.nombres} error={!!e1.nombres} />
           )}
         </div>
         <div className="col-span-12 md:col-span-4">
           {isManual ? (
             <TextField label="Primer Apellido" required value={paso1.apellidoPaterno} onChange={v => setPaso1({ ...paso1, apellidoPaterno: v })} error={e1.apellidoPaterno} />
           ) : (
-            <LockedField label="Primer Apellido" value={paso1.apellidoPaterno} />
+            <LockedField label="Primer Apellido" value={paso1.apellidoPaterno} error={!!e1.apellidoPaterno} />
           )}
         </div>
         <div className="col-span-12 md:col-span-4">
@@ -1143,7 +1141,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               error={e1.curp}
             />
           ) : (
-            <LockedField label="CURP" value={paso1.curp} />
+            <LockedField label="CURP" value={paso1.curp} error={!!e1.curp} />
           )}
         </div>
         <div className="col-span-6 md:col-span-3">
@@ -1155,7 +1153,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               </ErrorLine>
             </div>
           ) : (
-            <LockedField label="Fecha de Nacimiento" value={paso1.fechaNacimiento} />
+            <LockedField label="Fecha de Nacimiento" value={paso1.fechaNacimiento} error={!!e1.fechaNacimiento} />
           )}
         </div>
         <div className="col-span-6 md:col-span-3">
@@ -1170,7 +1168,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               error={e1.sexo}
             />
           ) : (
-            <LockedField label="Sexo" value={paso1.sexo} />
+            <LockedField label="Sexo" value={paso1.sexo} error={!!e1.sexo} />
           )}
         </div>
 
@@ -1204,7 +1202,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
                   </ErrorLine>
                 </>
               ) : (
-                <LockedField label="Estado de Nacimiento" value={paso1.estadoNacimiento} />
+                <LockedField label="Estado de Nacimiento" value={paso1.estadoNacimiento} error={!!e1.estadoNacimiento} />
               )}
             </div>
             <div className="col-span-12 md:col-span-6">
