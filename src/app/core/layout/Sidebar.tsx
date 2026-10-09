@@ -238,7 +238,7 @@ export function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { role, setRole, availableRoles, user, logout, hasAnyPermission } = useRole()
+  const { role, setRole, accountRoles, user, logout, hasAnyPermission } = useRole()
 
   // ─── Accordion state ───────────────────────────────────────────────────────
   // Default: 'config' group open + every group that contains the active route
@@ -512,22 +512,41 @@ export function Sidebar({
 
         {/* Bottom: role switcher for a real multi-role account + actions */}
         <div className="border-t border-[#E5E7EB] px-3 py-3 space-y-1 flex-shrink-0">
-          {availableRoles.length > 1 && (
+          {accountRoles.length > 1 && (
             <div className="mb-3">
               <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider px-3 mb-1.5">Cambiar rol</p>
               <div className="space-y-0.5">
-                {availableRoles.map(r => (
-                  <button
-                    key={r}
-                    onClick={() => { setRole(r); onMobileClose() }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] transition-colors ${
-                      role === r ? 'text-[#009574] font-semibold bg-[#e6f5f1]' : 'text-[#6B7280] hover:bg-[#F8F9FA] hover:text-[#333333]'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${role === r ? 'bg-[#009574]' : 'bg-[#E5E7EB]'}`} />
-                    {ROLE_LABELS[r]}
-                  </button>
-                ))}
+                {accountRoles.map(option => {
+                  if (option.role === null) {
+                    // Account role with no frontend module yet — listed, disabled.
+                    return (
+                      <div
+                        key={option.key}
+                        aria-disabled="true"
+                        className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-[13px] text-[#9CA3AF] cursor-not-allowed"
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0 bg-[#E5E7EB]" />
+                          <span className="truncate">{option.label}</span>
+                        </span>
+                        <span className="text-[10px] font-medium whitespace-nowrap flex-shrink-0">En desarrollo</span>
+                      </div>
+                    )
+                  }
+                  const target = option.role
+                  return (
+                    <button
+                      key={option.key}
+                      onClick={() => { setRole(target); onMobileClose() }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] transition-colors ${
+                        role === target ? 'text-[#009574] font-semibold bg-[#e6f5f1]' : 'text-[#6B7280] hover:bg-[#F8F9FA] hover:text-[#333333]'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${role === target ? 'bg-[#009574]' : 'bg-[#E5E7EB]'}`} />
+                      {option.label}
+                    </button>
+                  )
+                })}
               </div>
               <div className="h-px bg-[#E5E7EB] mt-3" />
             </div>

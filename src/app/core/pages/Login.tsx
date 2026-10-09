@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router'
 import { Eye, EyeOff, AlertCircle, Loader2, GraduationCap, UserCog, ChevronRight } from 'lucide-react'
 import { useRole } from '../infra/RoleContext'
 import type { Role } from '../infra/RoleContext'
-import { apiLogin, decodeJwtPayload, mapRoles } from '../infra/auth'
+import { apiLogin, decodeJwtPayload, mapAccountRoles } from '../infra/auth'
+import type { AccountRoleOption } from '../infra/auth'
 import type { ApiError } from '../infra/apiClient'
-import { ROLE_LABELS } from '../layout/layoutRoles'
 import { LlaveMxButton } from '../components/LlaveMxButton'
 
 function UniversityIllustration() {
@@ -51,9 +51,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
-  // Post-login multi-role selection: which roles the account may activate and
-  // where to land once one is chosen (`null` = single-role/straight through).
-  const [pendingRoles, setPendingRoles] = useState<Role[] | null>(null)
+  // Post-login multi-role selection: every role the account holds — those the
+  // frontend can't activate yet included (`role: null`) — and where to land once
+  // one is chosen (`null` = single-role/straight through).
+  const [pendingRoles, setPendingRoles] = useState<AccountRoleOption[] | null>(null)
   const [pendingTarget, setPendingTarget] = useState<string | null>(null)
 
   function handleRoleChosen(chosen: Role) {
@@ -85,17 +86,20 @@ export default function Login() {
       const res = await apiLogin(usuario, password)
       login(res)
       const target = res.mustChangePassword ? '/usuarios/cambiar-password' : '/dashboard'
-      const roles = mapRoles(decodeJwtPayload(res.accessToken)?.roles ?? [])
-      if (roles.length === 0) {
+      // Full role list from the JWT (disabled roles included) so the selector
+      // shows every role the account holds, not just the navigable ones.
+      const accountRoles = mapAccountRoles(decodeJwtPayload(res.accessToken)?.roles ?? [])
+      const activatableRoles = accountRoles.filter(option => option.role !== null)
+      if (activatableRoles.length === 0) {
         logout()
         setStatus('error')
         setErrorMsg('Tu cuenta no tiene un rol compatible con este frontend. Contacta a soporte técnico.')
         return
       }
-      if (roles.length > 1) {
+      if (accountRoles.length > 1) {
         // Multi-role account → the user picks which role to enter with NOW,
         // then keeps switching from the shell selector anytime afterwards.
-        setPendingRoles(roles)
+        setPendingRoles(accountRoles)
         setPendingTarget(target)
       } else {
         navigate(target)
@@ -281,16 +285,35 @@ export default function Login() {
               Tu cuenta tiene acceso con varios roles. Selecciona con el que quieras iniciar esta sesión.
             </p>
             <div className="mt-5 space-y-2">
-              {pendingRoles.map(r => (
-                <button
-                  key={r}
-                  onClick={() => handleRoleChosen(r)}
-                  className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-[#E5E7EB] hover:border-[#009574] hover:bg-[#e6f5f1] text-left transition-colors"
-                >
-                  <span className="text-[14px] font-medium text-[#333333]">{ROLE_LABELS[r]}</span>
-                  <ChevronRight size={16} className="text-[#009574] flex-shrink-0" />
-                </button>
-              ))}
+              {pendingRoles.map(option => {
+                if (option.role === null) {
+                  // Role the account holds but the frontend has no module for
+                  // yet: shown disabled instead of hidden.
+                  return (
+                    <div
+                      key={option.key}
+                      aria-disabled="true"
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-dashed border-[#E5E7EB] bg-[#F8F9FA] text-left"
+                    >
+                      <span className="text-[14px] font-medium text-[#9CA3AF]">{option.label}</span>
+                      <span className="text-[11px] font-medium text-[#9CA3AF] whitespace-nowrap flex-shrink-0">
+                        Módulo en desarrollo
+                      </span>
+                    </div>
+                  )
+                }
+                const chosen = option.role
+                return (
+                  <button
+                    key={option.key}
+                    onClick={() => handleRoleChosen(chosen)}
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-[#E5E7EB] hover:border-[#009574] hover:bg-[#e6f5f1] text-left transition-colors"
+                  >
+                    <span className="text-[14px] font-medium text-[#333333]">{option.label}</span>
+                    <ChevronRight size={16} className="text-[#009574] flex-shrink-0" />
+                  </button>
+                )
+              })}
             </div>
             <p className="text-[12px] text-[#9CA3AF] mt-4 leading-relaxed">
               Podrás cambiar de rol en cualquier momento desde el selector de la parte superior.

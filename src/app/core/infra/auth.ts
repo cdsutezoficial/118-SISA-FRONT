@@ -16,25 +16,51 @@ import { apiGet, apiPost } from './apiClient'
  */
 
 /**
- * Backend `RoleType` → frontend `Role` lookup. Only roles with an existing
- * frontend concept are mapped; anything else (estadías roles, `DOCENTE`,
- * `ESTUDIANTE`, `EGRESADO`) has no frontend `Role` yet and is intentionally
- * left out — `mapRole` skips over unmapped entries.
+ * Complete backend `RoleType` catalog — the single source of truth for the
+ * backend↔frontend role bridge (`ROLE_MAP`/`FRONTEND_ROLE_KEY_MAP`, derived
+ * below) and for the account's full role list (`mapAccountRoles`).
+ *
+ * `role: null` marks a backend role the frontend has NO module for yet
+ * (estadías roles, `DOCENTE`, `ESTUDIANTE`, `EGRESADO`). It still shows up in
+ * the role selectors, but disabled ("Módulo en desarrollo"), so an account
+ * never silently loses a role it actually holds — it just can't be activated
+ * until its module ships.
  */
-export const ROLE_MAP: Record<string, Role> = {
-  ADMIN: 'ADMINISTRADOR',
-  PERSONAL_FINANZAS: 'FINANZAS',
-  SERVICIOS_ESCOLARES: 'SERVICIOS_ESCOLARES',
-  GESTOR_ACADEMICO: 'GESTOR_ACADEMICO',
-  DIRECTOR_DIVISION: 'DIRECTOR_DIVISION',
+export interface BackendRoleCatalogEntry {
+  key: string
+  label: string
+  role: Role | null
 }
 
-export const FRONTEND_ROLE_KEY_MAP: Partial<Record<Role, string>> = {
-  ADMINISTRADOR: 'ADMIN',
-  FINANZAS: 'PERSONAL_FINANZAS',
-  SERVICIOS_ESCOLARES: 'SERVICIOS_ESCOLARES',
-  GESTOR_ACADEMICO: 'GESTOR_ACADEMICO',
-  DIRECTOR_DIVISION: 'DIRECTOR_DIVISION',
+export const BACKEND_ROLE_CATALOG: readonly BackendRoleCatalogEntry[] = [
+  { key: 'ADMIN', label: 'Administrador', role: 'ADMINISTRADOR' },
+  { key: 'SERVICIOS_ESCOLARES', label: 'Servicios Escolares', role: 'SERVICIOS_ESCOLARES' },
+  { key: 'GESTOR_ACADEMICO', label: 'Gestor Académico', role: 'GESTOR_ACADEMICO' },
+  { key: 'DIRECTOR_DIVISION', label: 'Director de División', role: 'DIRECTOR_DIVISION' },
+  { key: 'PERSONAL_FINANZAS', label: 'Finanzas', role: 'FINANZAS' },
+  { key: 'JEFATURA_ESTADIAS', label: 'Jefatura de Estadías', role: null },
+  { key: 'ASISTENTE_ESTADIAS', label: 'Asistente de Estadías', role: null },
+  { key: 'COORDINACION_ESTADIAS_DIVISION', label: 'Coordinación de Estadías de División', role: null },
+  { key: 'DOCENTE', label: 'Docente', role: null },
+  { key: 'ESTUDIANTE', label: 'Estudiante', role: null },
+  { key: 'EGRESADO', label: 'Egresado', role: null },
+]
+
+/**
+ * Backend `RoleType` → frontend `Role` lookup. Only roles with an existing
+ * frontend concept are mapped (derived from `BACKEND_ROLE_CATALOG`); anything
+ * else (estadías roles, `DOCENTE`, `ESTUDIANTE`, `EGRESADO`) has no frontend
+ * `Role` yet and is intentionally left out — `mapRole`/`mapRoles` skip over
+ * unmapped entries.
+ */
+export const ROLE_MAP: Record<string, Role> = {}
+/** Reverse lookup: frontend `Role` → backend `RoleType` key. */
+export const FRONTEND_ROLE_KEY_MAP: Partial<Record<Role, string>> = {}
+for (const entry of BACKEND_ROLE_CATALOG) {
+  if (entry.role !== null) {
+    ROLE_MAP[entry.key] = entry.role
+    FRONTEND_ROLE_KEY_MAP[entry.role] = entry.key
+  }
 }
 
 /** First entry in `roles` that has a frontend `Role` mapping wins; `null` if none do. */
@@ -60,6 +86,42 @@ export function mapRoles(roles: string[]): Role[] {
     if (mapped && !seen.has(mapped)) {
       seen.add(mapped)
       out.push(mapped)
+    }
+  }
+  return out
+}
+
+/** One entry of the account's role list, ready for the role selectors. */
+export interface AccountRoleOption {
+  /** Backend `RoleType` key, e.g. `'ADMIN'`. */
+  key: string
+  /** Spanish label to render. */
+  label: string
+  /**
+   * The frontend `Role` this backend role activates, or `null` when the
+   * frontend has no module for it yet — the UI shows it disabled instead of
+   * hiding it.
+   */
+  role: Role | null
+}
+
+/**
+ * Maps EVERY backend role an account holds to a selector option, preserving JWT
+ * order and de-duplicating. Unlike `mapRoles`, this is NOT narrowed to
+ * activatable roles: roles the frontend has no module for yet come back with
+ * `role: null` so the role-selection modal and the shell switcher can list
+ * them disabled ("Módulo en desarrollo") rather than dropping them silently.
+ * Backend keys absent from `BACKEND_ROLE_CATALOG` are skipped (unknown role).
+ */
+export function mapAccountRoles(roles: string[]): AccountRoleOption[] {
+  const out: AccountRoleOption[] = []
+  const seen = new Set<string>()
+  for (const backendRole of roles) {
+    if (seen.has(backendRole)) continue
+    const entry = BACKEND_ROLE_CATALOG.find(candidate => candidate.key === backendRole)
+    if (entry) {
+      seen.add(backendRole)
+      out.push({ key: entry.key, label: entry.label, role: entry.role })
     }
   }
   return out
