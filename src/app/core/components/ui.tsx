@@ -55,9 +55,10 @@ interface SearchSelectProps {
   onChange: (v: string) => void
   placeholder?: string
   disabled?: boolean
+  hasError?: boolean
 }
 
-export function SearchSelect({ options, value, onChange, placeholder = 'Seleccionar…', disabled = false }: SearchSelectProps) {
+export function SearchSelect({ options, value, onChange, placeholder = 'Seleccionar…', disabled = false, hasError = false }: SearchSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -75,9 +76,9 @@ export function SearchSelect({ options, value, onChange, placeholder = 'Seleccio
 
   if (disabled) {
     return (
-      <div className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-[#F8F9FA] text-[#6B7280] cursor-not-allowed flex items-center justify-between">
+      <div className={`w-full px-3 py-2 text-[13px] border rounded-md cursor-not-allowed flex items-center justify-between ${hasError ? 'border-red-400 ring-2 ring-red-200 bg-[#F8F9FA] text-[#6B7280]' : 'border-[#E5E7EB] bg-[#F8F9FA] text-[#6B7280]'}`}>
         <span>{value || placeholder}</span>
-        <ChevronDown size={14} className="text-[#6B7280]" />
+        <ChevronDown size={14} className={hasError ? 'text-red-400' : 'text-[#6B7280]'} />
       </div>
     )
   }
@@ -87,7 +88,7 @@ export function SearchSelect({ options, value, onChange, placeholder = 'Seleccio
       <button
         type="button"
         onClick={() => { if (!open) measureAndSet(); setOpen(!open); setQuery('') }}
-        className="w-full px-3 py-2 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] flex items-center justify-between"
+        className={`w-full px-3 py-2 text-[13px] border rounded-md bg-white text-[#333333] focus:outline-none flex items-center justify-between ${hasError ? 'border-red-400 focus:ring-2 focus:ring-red-300' : 'border-[#E5E7EB] focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574]'}`}
       >
         <span className={value ? 'text-[#333333]' : 'text-[#6B7280]'}>{value || placeholder}</span>
         <div className="flex items-center gap-1">
@@ -833,18 +834,23 @@ export function Switch({ checked, onChange, disabled = false }: { checked: boole
 // Tarjeta de selección visual (radio) — compartida por `CandidatoRegistro`
 // (Nacionalidad, isFirstChoice, método de pago), `AplicarDescuento` (tipo de
 // descuento) y `NuevoIngresoWizard`. `description` es opcional.
-export function RadioCard({ selected, title, description, onSelect }: {
+export function RadioCard({ selected, title, description, onSelect, error = false }: {
   selected: boolean
   title: string
   description?: string
   onSelect: () => void
+  error?: boolean
 }) {
   return (
     <button
       type="button"
       onClick={onSelect}
       className={`w-full text-left flex items-start gap-3 px-4 py-3 border rounded-lg transition-colors ${
-        selected ? 'border-[#009574] bg-[#e6f5f1]' : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
+        selected
+          ? 'border-[#009574] bg-[#e6f5f1]'
+          : error
+            ? 'border-red-400 bg-white hover:border-red-400'
+            : 'border-[#E5E7EB] bg-white hover:border-[#009574]/50'
       }`}
     >
       <span
