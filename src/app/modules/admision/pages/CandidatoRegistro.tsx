@@ -6,7 +6,9 @@ import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 import {
   consumeLlaveMxCallback,
   fetchLlaveMxAvailability,
+  fetchLlaveMxPrefill,
   startLlaveMxFlow,
+  type LlaveMxPrefill,
 } from '@app/core/infra/llaveMx'
 import {
   FieldLabel,
@@ -67,6 +69,19 @@ export type ScreenOrigin = 'staff' | 'public'
  * comment at its declaration). Tab-scoped on purpose — see there.
  */
 const LLAVE_MX_VERIFIED_KEY = 'sisa.candidato.llaveMxVerified'
+
+/**
+ * Clave de comparación tolerante para nombres de catálogo y datos del proveedor:
+ * sin mayúsculas, sin acentos y sin espacios de sobra, para que "Morelos",
+ * "MORELOS" y "Morelos " sean lo mismo. Solo para emparejar — nunca para mostrar.
+ */
+function normalizeLookup(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
 
 interface CandidatoRegistroProps {
   origin: ScreenOrigin
@@ -372,6 +387,15 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const [llaveMxAvailable, setLlaveMxAvailable] = useState<boolean | null>(null)
   const [llaveMxStarting, setLlaveMxStarting] = useState(false)
   const [llaveMxError, setLlaveMxError] = useState('')
+  /**
+   * Prellenado crudo que LlaveMX acaba de devolver, pendiente de volcar en
+   * `paso1`.
+   *
+   * Vive aparte del formulario porque el mapeo del estado de nacimiento necesita
+   * el catálogo de estados, que llega por su propio request: se guarda aquí y el
+   * efecto de abajo lo aplica en cuanto puede resolverlo.
+   */
+  const [llaveMxPrefill, setLlaveMxPrefill] = useState<LlaveMxPrefill | null>(null)
   const [folio, setFolio] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -431,6 +455,8 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       return
     }
 
+    let cancelled = false
+
     const outcome = consumeLlaveMxCallback()
     if (outcome.kind === 'candidate-verified') {
       // The marker only says "the round finished". The proof is the HttpOnly
@@ -439,14 +465,74 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       // check itself and nothing it should try to.
       setLlaveMxVerified(true)
       try { sessionStorage.setItem(LLAVE_MX_VERIFIED_KEY, 'true') } catch { /* storage disabled — the hint is cosmetic */ }
+
+      // Pulling the proven fields is part of finishing the verification, not an
+      // extra: name, CURP, birth date and sex are exactly what the applicant no
+      // longer has to key in.
+      fetchLlaveMxPrefill()
+        .then(prefill => { if (!cancelled) setLlaveMxPrefill(prefill) })
+        .catch(err => {
+          if (cancelled) return
+          // The ticket is gone (expired, or the tab lost the cookie), so the
+          // green badge would be lying and `POST /candidates` would reject the
+          // ficha anyway. Drop the hint and ask for the round again.
+          setLlaveMxVerified(false)
+          try { sessionStorage.removeItem(LLAVE_MX_VERIFIED_KEY) } catch { /* storage disabled */ }
+          setLlaveMxError(getApiErrorMessage(
+            err,
+            'Tu verificación con Llave Morelos ya venció. Vuelve a verificar tu identidad.',
+          ))
+        })
     } else if (outcome.kind === 'error') {
       setLlaveMxError(outcome.message)
     }
 
-    let cancelled = false
     fetchLlaveMxAvailability().then(ok => { if (!cancelled) setLlaveMxAvailable(ok) })
     return () => { cancelled = true }
   }, [origin])
+
+  /**
+   * Vuelca el prellenado de LlaveMX en el paso 1, una sola vez.
+   *
+   * Se aplica en cuanto llega, salvo el estado de nacimiento, que espera al
+   * catálogo: el proveedor manda texto libre ("MORELOS", "Ciudad de Mexico") y
+   * el catálogo tiene su propia forma ("Morelos"), así que sin la lista no hay
+   * forma de mapearlo. Si el catálogo falla, se aplica igual y el campo queda
+   * editable, que es mejor que dejar la ficha a medias.
+   *
+   * Cada campo se escribe solo si el proveedor mandó algo (`|| prev`), y el
+   * estado únicamente si empata con el catálogo: un nombre que el selector no
+   * conoce se vería tan vacío como no escribir nada. El municipio se deja al
+   * selector a propósito — los catálogos de municipios son por estado y muy
+   * sensibles a la forma, así que casi nunca empataría.
+   */
+  useEffect(() => {
+    if (!llaveMxPrefill) return
+    if (llaveMxPrefill.estadoNacimiento !== '' && catalogsStatus === 'loading') return
+
+    const estadoNacimiento = estados.find(
+      e => normalizeLookup(e.name) === normalizeLookup(llaveMxPrefill.estadoNacimiento),
+    )?.name ?? ''
+
+    setPaso1(prev => ({
+      ...prev,
+      nombres: llaveMxPrefill.nombres || prev.nombres,
+      apellidoPaterno: llaveMxPrefill.apellidoPaterno || prev.apellidoPaterno,
+      apellidoMaterno: llaveMxPrefill.apellidoMaterno || prev.apellidoMaterno,
+      curp: llaveMxPrefill.curp || prev.curp,
+      fechaNacimiento: llaveMxPrefill.fechaNacimiento || prev.fechaNacimiento,
+      sexo: llaveMxPrefill.sexo || prev.sexo,
+      estadoNacimiento: estadoNacimiento || prev.estadoNacimiento,
+      // Un estado mexicano solo lo emite una identidad mexicana. El Aspirante
+      // puede cambiarlo, pero ahorrarle el clic es justamente el punto.
+      nacionalidad: estadoNacimiento && prev.nacionalidad === '' ? 'Mexicana' : prev.nacionalidad,
+      email: llaveMxPrefill.email || prev.email,
+      celular: llaveMxPrefill.celular || prev.celular,
+    }))
+    setLlaveMxPrefill(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [llaveMxPrefill, estados, catalogsStatus])
+
 
   async function handleVerifyWithLlaveMx() {
     setLlaveMxStarting(true)
@@ -563,6 +649,17 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const isVerified = llaveMxVerified
   /** Captura manual activa: los campos de identidad son editables sin pasar por LlaveMX. */
   const isManual = identityStatus === 'manual'
+
+  /**
+   * Si un campo de identidad se captura a mano.
+   *
+   * Con la captura manual activa, todos. Y con LlaveMX verificado, los que el
+   * proveedor NO mandó: dejarlos bloqueados y vacíos sería un callejón sin
+   * salida — nadie puede escribir en ellos y la ficha nunca pasa la validación.
+   * Un campo verificado con valor sigue bloqueado; uno sin valor vuelve a ser
+   * del Aspirante.
+   */
+  const identityEditable = (value: string) => isManual || (isVerified && !value)
 
   function handleGoManual() {
     if (identityStatus !== 'idle') return
@@ -1021,21 +1118,21 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Datos Generales</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12 md:col-span-4">
-          {isManual ? (
+          {identityEditable(paso1.nombres) ? (
             <TextField label="Nombre(s)" required value={paso1.nombres} onChange={v => setPaso1({ ...paso1, nombres: v })} />
           ) : (
             <LockedField label="Nombre(s)" value={paso1.nombres} />
           )}
         </div>
         <div className="col-span-12 md:col-span-4">
-          {isManual ? (
+          {identityEditable(paso1.apellidoPaterno) ? (
             <TextField label="Primer Apellido" required value={paso1.apellidoPaterno} onChange={v => setPaso1({ ...paso1, apellidoPaterno: v })} />
           ) : (
             <LockedField label="Primer Apellido" value={paso1.apellidoPaterno} />
           )}
         </div>
         <div className="col-span-12 md:col-span-4">
-          {isManual ? (
+          {identityEditable(paso1.apellidoMaterno) ? (
             <TextField label="Segundo Apellido" value={paso1.apellidoMaterno} onChange={v => setPaso1({ ...paso1, apellidoMaterno: v })} />
           ) : (
             <LockedField label="Segundo Apellido" value={paso1.apellidoMaterno} required={false} />
@@ -1043,7 +1140,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         </div>
 
         <div className="col-span-12 md:col-span-6">
-          {isManual ? (
+          {identityEditable(paso1.curp) ? (
             <TextField
               label="CURP"
               required
@@ -1059,7 +1156,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           )}
         </div>
         <div className="col-span-6 md:col-span-3">
-          {isManual ? (
+          {identityEditable(paso1.fechaNacimiento) ? (
             <div>
               <FieldLabel required>Fecha de Nacimiento</FieldLabel>
               <DatePicker value={paso1.fechaNacimiento} onChange={v => setPaso1({ ...paso1, fechaNacimiento: v })} />
@@ -1069,7 +1166,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           )}
         </div>
         <div className="col-span-6 md:col-span-3">
-          {isManual ? (
+          {identityEditable(paso1.sexo) ? (
             <SelectField
               label="Sexo"
               required
@@ -1102,7 +1199,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         {paso1.nacionalidad === 'Mexicana' && (
           <>
             <div className="col-span-12 md:col-span-6">
-              {isManual ? (
+              {identityEditable(paso1.estadoNacimiento) ? (
                 <>
                   <FieldLabel required>Estado de Nacimiento</FieldLabel>
                   <SearchSelect options={estadoNames} value={paso1.estadoNacimiento} onChange={v => setPaso1({ ...paso1, estadoNacimiento: v, municipioNacimiento: '' })} placeholder="Selecciona un estado" />

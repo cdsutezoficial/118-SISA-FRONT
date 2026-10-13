@@ -97,6 +97,44 @@ export async function startLlaveMxLink(userId: string): Promise<void> {
 }
 
 /**
+ * The identity fields LlaveMX proved, named the way the wizard stores them.
+ *
+ * Every field can come back empty: which ones the provider actually returns is
+ * not contractual, and an empty one means "capture it by hand", not "the value
+ * is false". `fechaNacimiento` is already `dd/MM/yyyy` (the backend normalizes
+ * it on the way out) and `sexo` is one of the form's own labels.
+ */
+export interface LlaveMxPrefill {
+  nombres: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  curp: string
+  fechaNacimiento: string
+  sexo: string
+  estadoNacimiento: string
+  municipioNacimiento: string
+  email: string
+  celular: string
+}
+
+/**
+ * Asks the backend what LlaveMX said about the person who just verified.
+ *
+ * There is no id to pass and nothing here to forge: the credential is the
+ * HttpOnly `sisa.llave.verified` ticket cookie the callback left behind, which
+ * only the tab that completed the round carries, and the backend re-validates
+ * it on `POST /candidates` regardless of what this returns.
+ *
+ * Throws when the ticket is gone (403) instead of resolving to empty fields —
+ * an expired verification must not be indistinguishable from "the provider sent
+ * nothing", or the applicant would key the whole form by hand and only find out
+ * at submit time.
+ */
+export async function fetchLlaveMxPrefill(): Promise<LlaveMxPrefill> {
+  return apiGet<LlaveMxPrefill>('/auth/llave-mx/prefill')
+}
+
+/**
  * Reads the callback's landing parameters and scrubs them from the URL.
  *
  * The scrub is not cosmetic. Without it the tokens sit in the address bar for
