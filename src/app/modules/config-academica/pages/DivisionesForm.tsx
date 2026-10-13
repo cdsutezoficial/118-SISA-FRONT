@@ -275,12 +275,14 @@ export default function DivisionesForm() {
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         if (apiErr.backendMessage.includes('nombre')) {
           setFieldError('name', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
         if (apiErr.backendMessage.includes('clave')) {
           setFieldError('code', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
       }

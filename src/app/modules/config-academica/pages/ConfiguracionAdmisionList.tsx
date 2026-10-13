@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { apiGet, apiPatch } from '@app/core/infra/apiClient'
 import type { ApiError } from '@app/core/infra/apiClient'
+import { programLabel, programLabelById } from '@app/core/infra/programLabel'
 import {
   PageContainer,
   Breadcrumb,
@@ -56,6 +57,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -110,13 +112,13 @@ export default function ConfiguracionAdmisionList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
-  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: programLabel(p) }))
 
   // Load programs/periods/generations once — used only to resolve ids to
-  // display labels in the table (mirrors `programLabel()` in
-  // GeneracionesList.tsx). Not re-fetched on filter/page changes.
+  // display labels in the table (`programLabelById()` from core). Not
+  // re-fetched on filter/page changes.
   useEffect(() => {
     apiGet<ProgramsPageResponse>('/programs', { size: 100 })
       .then(data => setPrograms(data.items))
@@ -159,12 +161,7 @@ export default function ConfiguracionAdmisionList() {
         }
       })
     return () => { cancelled = true }
-  }, [statusFilter, programFilter, page])
-
-  function programLabel(programId: string): string {
-    const p = programs.find(p => p.id === programId)
-    return p ? `${p.code} — ${p.name}` : '—'
-  }
+  }, [statusFilter, programFilter, page, perPage])
 
   function periodLabel(periodId: string): string {
     const per = periods.find(per => per.id === periodId)
@@ -206,7 +203,7 @@ export default function ConfiguracionAdmisionList() {
   const emptyHint = loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'
 
   const columns: ColumnDef<ConfigListItem>[] = [
-    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabelById(programs, row.programId) },
     { key: 'periodId', header: 'Periodo Destino', type: 'muted', value: row => periodLabel(row.periodId) },
     { key: 'targetGenerationId', header: 'Generación Destino', type: 'code', value: row => generationLabel(row.targetGenerationId), className: 'w-24' },
     { key: 'maxCandidates', header: 'Cupo Máximo', type: 'count', className: 'w-24', cellClassName: 'tabular-nums' },
@@ -268,7 +265,7 @@ export default function ConfiguracionAdmisionList() {
         emptyTitle="No se encontraron configuraciones"
         emptyHint={emptyHint}
         emptyIcon={<Ticket size={36} className="text-[#E5E7EB]" />}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{ edit: row => navigate(`/configuracion-admision/form?mode=edit&id=${row.id}`) }}
         activeValue="OPEN"
         onToggleStatus={handleToggleStatus}
@@ -301,7 +298,7 @@ export default function ConfiguracionAdmisionList() {
               </div>
             </div>
             {/* Program */}
-            <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{programLabel(row.programId)}</p>
+            <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{programLabelById(programs, row.programId)}</p>
             {/* Periodo + cupo */}
             <p className="text-[12px] text-[#6B7280] mb-1">
               {periodLabel(row.periodId)} · Cupo {row.maxCandidates}
@@ -325,7 +322,7 @@ export default function ConfiguracionAdmisionList() {
         emptyTitle="No se encontraron configuraciones"
         emptyHint={emptyHint}
         emptyIcon={<Ticket size={36} className="text-[#E5E7EB]" />}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

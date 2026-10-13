@@ -36,8 +36,8 @@ interface AcademicPeriodDetail {
   type: PeriodType
   startDate: string
   endDate: string
-  enrollmentStart: string
-  enrollmentEnd: string
+  enrollmentStart: string | null
+  enrollmentEnd: string | null
   status: PeriodStatus
 }
 
@@ -53,8 +53,8 @@ interface PeriodFormPayload {
   type: PeriodType
   startDate: string
   endDate: string
-  enrollmentStart: string
-  enrollmentEnd: string
+  enrollmentStart: string | null
+  enrollmentEnd: string | null
 }
 
 type FormErrors = Partial<Record<
@@ -78,9 +78,10 @@ type FormErrors = Partial<Record<
 //              bimestrales: un bimestral necesita más de tres periodos al año, así
 //              que un tope de 3 contradiría al dominio.
 //   type    → selección obligatoria.
-//   Las 4 fechas → obligatorias. Esto cambia el requisito original de la fase 6,
-//              que pedía hacer opcionales las dos de inscripción; el usuario decidió
-//              el 2026-10-05 que las cuatro se llenan.
+//   Las 4 fechas → inicio y fin del periodo son obligatorias; inicio y fin de
+//              inscripciones son OPCIONALES (decisión del usuario 2026-10-06,
+//              que revierte la del 2026-10-05). Vacías se mandan como `null`:
+//              el backend ya no las exige y la columna es anulable.
 //
 // `name` es texto libre y NO lleva `normalize`: recortar en cada pulsación
 // impediría escribir un espacio entre palabras. Se usa `validateOn: normalizeText`,
@@ -126,8 +127,8 @@ const PERIODO_SCHEMA = {
   },
   startDate: { rules: [required('la fecha de inicio')] },
   endDate: { rules: [required('la fecha de fin')] },
-  enrollmentStart: { rules: [required('la fecha de inicio de inscripciones')] },
-  enrollmentEnd: { rules: [required('la fecha de fin de inscripciones')] },
+  enrollmentStart: { rules: [] },
+  enrollmentEnd: { rules: [] },
 } as const
 
 // Las tres reglas de orden de fechas no las puede expresar el schema, porque cada
@@ -154,7 +155,7 @@ const PERIODO_CROSS_RULES = (values: typeof PERIODO_INITIAL_VALUES): FormErrors 
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 // La API trabaja con ISO (YYYY-MM-DD); el DatePicker muestra dd/mm/yyyy.
-function isoToDisplay(iso: string): string {
+function isoToDisplay(iso: string | null | undefined): string {
   if (!iso) return ''
   const [y, m, d] = iso.split('-')
   return d && m && y ? `${d}/${m}/${y}` : ''
@@ -260,8 +261,8 @@ export default function PeriodosForm() {
       type: values.type as PeriodType,
       startDate: displayToIso(values.startDate),
       endDate: displayToIso(values.endDate),
-      enrollmentStart: displayToIso(values.enrollmentStart),
-      enrollmentEnd: displayToIso(values.enrollmentEnd),
+      enrollmentStart: displayToIso(values.enrollmentStart) || null,
+      enrollmentEnd: displayToIso(values.enrollmentEnd) || null,
     }
 
     try {
@@ -287,8 +288,10 @@ export default function PeriodosForm() {
       // se llegaba a pintar.
       const apiErr = err as ApiError
       if (apiErr?.status === 409) {
-        setFieldError('periodNumber', getApiErrorMessage(err))
-        setSubmitStatus('idle')
+        const msg = getApiErrorMessage(err)
+        setFieldError('periodNumber', msg)
+        setSubmitStatus('error')
+        setSubmitErrorMsg(msg)
         return
       }
       setSubmitStatus('error')
@@ -419,7 +422,7 @@ export default function PeriodosForm() {
             {fieldError('endDate') && <FieldError>{fieldError('endDate')}</FieldError>}
           </div>
           <div className="col-span-6 sm:col-span-3">
-            <FieldLabel required={!isView}>Inicio de Inscripciones</FieldLabel>
+            <FieldLabel>Inicio de Inscripciones</FieldLabel>
             <DatePicker
               value={values.enrollmentStart}
               onChange={handleChange('enrollmentStart')}
@@ -430,7 +433,7 @@ export default function PeriodosForm() {
             {fieldError('enrollmentStart') && <FieldError>{fieldError('enrollmentStart')}</FieldError>}
           </div>
           <div className="col-span-6 sm:col-span-3">
-            <FieldLabel required={!isView}>Fin de Inscripciones</FieldLabel>
+            <FieldLabel>Fin de Inscripciones</FieldLabel>
             <DatePicker
               value={values.enrollmentEnd}
               onChange={handleChange('enrollmentEnd')}

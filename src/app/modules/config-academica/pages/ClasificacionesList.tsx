@@ -55,7 +55,7 @@ export default function ClasificacionesList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   // Debounce free-text search — the fetch effect below only reacts to
   // `debouncedSearch`, not every keystroke of `search` (mirrors DivisionesList.tsx).
@@ -87,7 +87,7 @@ export default function ClasificacionesList() {
         setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
-  }, [statusFilter, debouncedSearch, page])
+  }, [statusFilter, debouncedSearch, page, perPage])
 
   async function handleToggleStatus(classification: ClassificationListItem) {
     const nextStatus: ClassificationStatus = classification.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
@@ -169,7 +169,7 @@ export default function ClasificacionesList() {
         loadingLabel="Cargando clasificaciones..."
         emptyTitle="No se encontraron clasificaciones"
         emptyHint={emptyHint}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{ edit: row => navigate(`/clasificaciones/form?mode=edit&id=${row.id}`) }}
         onToggleStatus={handleToggleStatus}
         togglingId={togglingId}
@@ -216,7 +216,7 @@ export default function ClasificacionesList() {
         loadingLabel="Cargando clasificaciones..."
         emptyTitle="No se encontraron clasificaciones"
         emptyHint={emptyHint}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

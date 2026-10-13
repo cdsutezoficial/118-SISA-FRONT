@@ -20,6 +20,7 @@ import {
   type BadgeStyle,
 } from '@app/core/components/list'
 import { apiGet, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { programLabel } from '@app/core/infra/programLabel'
 import { usePendingToast } from '@app/core/infra/hooks'
 import {
   STATUS_META,
@@ -50,14 +51,13 @@ const statusBadgeMap: Record<string, BadgeStyle> = Object.fromEntries(
   STATUS_ORDER.map(s => [s, { label: STATUS_META[s].label, className: STATUS_META[s].badgeClass }]),
 )
 
-const perPage = 20
-
 // ─── Reference-catalog shapes (mirror `GET /programs` + `GET /periods`) ───────
 
 interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -108,12 +108,13 @@ export default function CandidatosList() {
   const [periodoFilter, setPeriodoFilter] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(20)
   const [totalElements, setTotalElements] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
 
-  const programaOptions = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  const programaOptions = programs.map(p => ({ value: p.id, label: programLabel(p) }))
   const periodoOptions = periods.map(p => ({ value: p.id, label: p.name }))
 
   // Load programs/periods once — programs/periods populate the filter dropdowns.
@@ -171,7 +172,7 @@ export default function CandidatosList() {
         setErrorMsg(getApiErrorMessage(err, 'No tienes permiso para consultar los candidatos.'))
       })
     return () => { cancelled = true }
-  }, [estadoFilter, programaFilter, periodoFilter, debouncedSearch, page])
+  }, [estadoFilter, programaFilter, periodoFilter, debouncedSearch, page, perPage])
 
   const emptyHint = loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'
 
@@ -242,7 +243,7 @@ export default function CandidatosList() {
         loadingLabel="Cargando candidatos..."
         emptyTitle="No se encontraron candidatos"
         emptyHint={emptyHint}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{
           view: row => navigate(`/admision/candidatos/detalle?id=${row.id}`),
           viewTooltip: 'Ver detalle',
@@ -289,7 +290,7 @@ export default function CandidatosList() {
         loadingLabel="Cargando candidatos..."
         emptyTitle="No se encontraron candidatos"
         emptyHint={emptyHint}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

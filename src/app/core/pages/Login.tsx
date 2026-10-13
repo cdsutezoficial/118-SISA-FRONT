@@ -342,6 +342,8 @@ export default function Login() {
               {isLoading ? 'Verificando...' : 'Iniciar Sesión'}
             </button>
 
+            {/* LlaveMX — solo visual, sin integración real aún: el clic no hace nada. */}
+            <LlaveMxButton disabled={isLoading} className="w-full" label="Iniciar sesión con" />
           </form>
 
           {/* Llave Morelos / Digital Morelos — RF-AUTH-002.

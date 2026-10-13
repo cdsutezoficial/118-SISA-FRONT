@@ -72,7 +72,7 @@ export default function CarrerasList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   // Load divisions once for the filter dropdown (code → id mapping).
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function CarrerasList() {
         setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
-  }, [divisionFilter, debouncedSearch, page])
+  }, [divisionFilter, debouncedSearch, page, perPage])
 
   function divisionCode(divisionId: string): string {
     return divisions.find(d => d.id === divisionId)?.code ?? '—'
@@ -192,7 +192,7 @@ export default function CarrerasList() {
         loadingLabel="Cargando carreras..."
         emptyTitle="No se encontraron carreras"
         emptyHint={emptyHint}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{
           view: row => navigate(`/carreras/form?mode=view&id=${row.id}`),
           edit: row => navigate(`/carreras/form?mode=edit&id=${row.id}`),
@@ -255,7 +255,7 @@ export default function CarrerasList() {
         loadingLabel="Cargando carreras..."
         emptyTitle="No se encontraron carreras"
         emptyHint={emptyHint}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

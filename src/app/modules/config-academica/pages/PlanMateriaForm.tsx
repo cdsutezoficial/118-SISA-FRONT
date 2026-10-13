@@ -119,7 +119,9 @@ const SUBJECT_SCHEMA = {
     ],
   },
   credits: {
-    rules: [required('créditos', 'mp'), numeric({ label: 'créditos', gender: 'mp', min: 0 })],
+    // Opcional: si se deja vacío se envía `0`, y el backend lo acepta
+    // (@Min(0) int sin @NotNull). `numeric` pasa de largo el vacío.
+    rules: [numeric({ label: 'créditos', gender: 'mp', min: 0 })],
   },
   weeklyHours: {
     rules: [required('horas semanales', 'fp'), numeric({ label: 'horas semanales', gender: 'fp', min: 0 })],
@@ -274,7 +276,8 @@ export default function PlanMateriaForm() {
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         if (apiErr.backendMessage.includes('código')) {
           setFieldError('code', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
       }

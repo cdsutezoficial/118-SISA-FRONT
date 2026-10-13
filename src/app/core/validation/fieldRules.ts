@@ -184,6 +184,13 @@ const LETTERS_ONLY_PATTERN = /^\p{L}+$/u
 // lo que el servidor rechaza.
 const LETTERS_SPACES_AND_HYPHENS_PATTERN = /^[ \uFEFF\u00A0\u2000-\u200A]*\p{L}+(?:(?:[ \uFEFF\u00A0\u2000-\u200A]+|[ \uFEFF\u00A0\u2000-\u200A]*[\u2010-\u2015-][ \uFEFF\u00A0\u2000-\u200A]*)\p{L}+)*[ \uFEFF\u00A0\u2000-\u200A]*$/u
 
+// Igual que `LETTERS_SPACES_AND_HYPHENS_PATTERN` pero admitiendo comas: el
+// nombre oficial de una carrera puede llevar comas ("Ingeniería en Software,
+// TSU"). Es el espejo de la expresión de `name`/`offerName` en
+// `CreateAcademicProgramRequest` y `UpdateAcademicProgramRequest`: deben
+// coincidir carácter a carácter.
+const LETTERS_SPACES_HYPHENS_AND_COMMAS_PATTERN = /^[ \uFEFF\u00A0\u2000-\u200A]*\p{L}+(?:(?:[ \uFEFF\u00A0\u2000-\u200A]+|[ \uFEFF\u00A0\u2000-\u200A]*[\u2010-\u2015-,][ \uFEFF\u00A0\u2000-\u200A]*)\p{L}+)*[ \uFEFF\u00A0\u2000-\u200A]*$/u
+
 /**
  * El campo sólo contiene letras, sin espacios. Para códigos.
  *
@@ -207,6 +214,19 @@ export function lettersSpacesAndHyphens(label?: string, gender: Gender = 'm'): F
     ? `${article(gender)} ${label} solo ${verb(gender, 'puede', 'pueden')} contener letras, espacios y guiones.`
     : 'Solo puede contener letras, espacios y guiones.'
   return value => (LETTERS_SPACES_AND_HYPHENS_PATTERN.test(value) ? undefined : message)
+}
+
+/**
+ * El campo sólo contiene letras, espacios, guiones y comas. Para la carrera:
+ * como `lettersSpacesAndHyphens`, pero el nombre oficial puede llevar comas.
+ *
+ * @example lettersSpacesHyphensAndCommas('nombre de la carrera') // "El nombre de la carrera solo puede contener letras, espacios, guiones y comas."
+ */
+export function lettersSpacesHyphensAndCommas(label?: string, gender: Gender = 'm'): FieldRule {
+  const message = label
+    ? `${article(gender)} ${label} solo ${verb(gender, 'puede', 'pueden')} contener letras, espacios, guiones y comas.`
+    : 'Solo puede contener letras, espacios, guiones y comas.'
+  return value => (LETTERS_SPACES_HYPHENS_AND_COMMAS_PATTERN.test(value) ? undefined : message)
 }
 
 // Nombres de catálogo: letras, dígitos, espacios y guiones. Es el contrato de
@@ -272,6 +292,12 @@ export function numeric({ label, gender = 'm', min, max, integer = true }: Numer
     : max !== undefined ? `${subject} ${cannot(gender)} ser ${verb(gender, 'mayor', 'mayores')} que ${max}.`
     : invalid
   return value => {
+    // Vacío = "sin valor": lo deja pasar para que el campo pueda ser opcional
+    // (sólo `required` debe decidir obligatoriedad). Sin esto, un campo que
+    // quitara su `required` (créditos de materia) marcaría error en cada
+    // pulsación. `numeric` se usa siempre acompañado de `required` en el resto
+    // de formularios, así que un vacío nunca llegaba aquí sin error previo.
+    if (value === '') return undefined
     if (!NUMBER_PATTERN.test(value)) return invalid
     if (integer && /[.]\d/.test(value)) return invalid
     const parsed = Number(value)
@@ -342,6 +368,44 @@ export function decimal({ label, gender = 'm', min, max, integer = false, fracti
     if (maxIntegerDigits !== undefined && integerDigits > maxIntegerDigits) {
       return `${subject} admite hasta ${maxIntegerDigits} dígito${maxIntegerDigits !== 1 ? 's' : ''} entero${maxIntegerDigits !== 1 ? 's' : ''} como máximo.`
     }
+    return undefined
+  }
+}
+
+// ─── Fechas ──────────────────────────────────────────────────────────────────
+
+/** Opciones de las reglas de fecha. */
+export interface DateOptions {
+  label: string
+  gender?: Gender
+  /** Año mínimo inclusive. Por defecto 2000: descarta basura, no el futuro. */
+  minYear?: number
+}
+
+/**
+ * El campo es una fecha real en `dd/mm/yyyy` (sin overflow: `31/02/2020` no
+ * pasa) y su año no es anterior a `minYear`.
+ *
+ * **No** tope superior: un plan puede quedar vigente a partir del próximo
+ * cuatrimestre, así que el `DatePicker` deja navegar y teclear fechas
+ * futuras. La máscara y `required` son los que garantizan el formato; aquí se
+ * mide que la fecha exista de verdad.
+ *
+ * @example dateOnOrAfter({ label: 'fecha de vigencia', gender: 'f' })
+ *   // "La fecha de vigencia debe ser una fecha válida (dd/mm/yyyy)."
+ */
+export function dateOnOrAfter({ label, gender = 'm', minYear = 2000 }: DateOptions): FieldRule {
+  const invalid = `${article(gender)} ${label} ${must(gender)} ser una fecha válida (dd/mm/yyyy).`
+  const tooOld = `${article(gender)} ${label} ${cannot(gender)} ser anterior al 01/01/${minYear}.`
+  return value => {
+    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)
+    if (!match) return invalid
+    const day = Number(match[1])
+    const month = Number(match[2])
+    const year = Number(match[3])
+    const date = new Date(year, month - 1, day)
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return invalid
+    if (year < minYear) return tooOld
     return undefined
   }
 }

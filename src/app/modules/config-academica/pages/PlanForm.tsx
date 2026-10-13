@@ -7,6 +7,7 @@ import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut, apiDelete, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { programLabel } from '@app/core/infra/programLabel'
 import { useFieldValidation } from '@app/core/validation/useFieldValidation'
 import {
   required,
@@ -15,6 +16,7 @@ import {
   noControlChars,
   numeric,
   decimal,
+  dateOnOrAfter,
   applyRules,
   normalizeText,
   type FieldRule,
@@ -38,6 +40,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -160,9 +163,13 @@ const PLAN_SCHEMA = {
   // El DatePicker trabaja en dd/mm/yyyy; la conversión a ISO ocurre al mandar
   // el payload (displayToIso). Guardar el formato de pantalla en el hook evita
   // tener dos estados para el mismo campo.
-  effectiveFrom: { rules: [required('fecha de vigencia', 'f')] },
+  // Sin tope superior: el plan puede quedar vigente desde el próximo
+  // cuatrimestre; sólo se descartan fechas imposibles y años anteriores a 2000.
+  effectiveFrom: {
+    rules: [required('fecha de vigencia', 'f'), dateOnOrAfter({ label: 'fecha de vigencia', gender: 'f' })],
+  },
   totalLevels: {
-    rules: [required('total de niveles'), numeric({ label: 'total de niveles', min: 1 })],
+    rules: [required('total de niveles'), numeric({ label: 'total de niveles', min: 1, max: 15 })],
   },
   minPassingGrade: {
     rules: [
@@ -173,7 +180,7 @@ const PLAN_SCHEMA = {
   maxExtraordinaryExamsPerPeriod: {
     rules: [
       required('exámenes extraordinarios por periodo', 'mp'),
-      numeric({ label: 'exámenes extraordinarios por periodo', gender: 'mp', min: 0 }),
+      numeric({ label: 'exámenes extraordinarios por periodo', gender: 'mp', min: 0, max: 5 }),
     ],
   },
 } as const
@@ -289,13 +296,13 @@ function orderLevelUpdates(
 // el `@Pattern` de caracteres de control. Pegas 300 caracteres y el backend
 // respondía 400 sin que el navegador hubiera dicho nada.
 //
-// `totalLevelsValue` es el texto crudo del campo del total, para no usar como
-// referencia de comparación un total que todavía no es un entero válido.
 // `isEdit` activa la detección de ciclos, que sólo aplica cuando el plan ya
-// existe en el backend y sus niveles se actualizan uno por uno.
+// existe en el backend y sus niveles se actualizan uno por uno. El número de
+// nivel es una etiqueta libre (entero >= 1), no un índice: el usuario puede
+// numerar los niveles de un plan de 4 como 7, 8, 9 y 10. `totalLevels` sólo
+// expresa la cantidad de niveles y ya no limita la numeración.
 function validateLevels(
   levels: LevelRow[],
-  totalLevelsValue: string,
   isEdit: boolean,
   originalLevels: LevelRow[],
 ): PlanLevelError {
@@ -305,16 +312,12 @@ function validateLevels(
     }
   }
 
-  const totalLevelsNum = Number(totalLevelsValue)
   const seen = new Set<number>()
   for (const row of levels) {
     if (seen.has(row.levelNumber)) {
       return `El número de nivel ${row.levelNumber} está repetido.`
     }
     seen.add(row.levelNumber)
-    if (Number.isInteger(totalLevelsNum) && totalLevelsNum >= 1 && row.levelNumber > totalLevelsNum) {
-      return `El nivel ${row.levelNumber} excede el total de niveles definido (${totalLevelsNum}).`
-    }
   }
 
   // Edit mode only: the backend has no batch endpoint, so renumbered
@@ -434,7 +437,7 @@ export default function PlanForm() {
   // ─── Load programs (dropdown) ──────────────────────────────────────────────
   useEffect(() => {
     apiGet<ProgramsPageResponse>('/programs', { size: 100 })
-      .then(data => setPrograms(data.items.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))))
+      .then(data => setPrograms(data.items.map(p => ({ value: p.id, label: programLabel(p) }))))
       .catch(() => {/* non-critical — select will be empty */})
   }, [])
 
@@ -550,7 +553,7 @@ export default function PlanForm() {
     // falla no sale ninguna petición. Las filas de niveles se validan aparte,
     // porque no son campos del schema: la numeración por `validateLevels` y la
     // descripción por `levelCellErrors`.
-    const invalidLevels = validateLevels(levels, values.totalLevels, isEdit, originalLevels)
+    const invalidLevels = validateLevels(levels, isEdit, originalLevels)
     const invalidCell = Object.keys(levelDescriptionErrors(levels)).length > 0
     if (!validate() || invalidLevels || invalidCell) {
       setLevelsTouched(true)
@@ -584,10 +587,11 @@ export default function PlanForm() {
       const apiErr = err as ApiError
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         // El backend ya dice exactamente qué campo se duplicó; se pinta tal
-        // cual junto al campo, no en el banner general.
+        // cual junto al campo y en el banner general, con el mismo mensaje.
         if (apiErr.backendMessage.includes('versión')) {
           setFieldError('version', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
       }
@@ -836,6 +840,19 @@ export default function PlanForm() {
                 className="col-span-12 sm:col-span-6"
               />
 
+              {/* Vigente desde */}
+              <div className="col-span-12 sm:col-span-6">
+                <FieldLabel required={!isView}>Vigente Desde</FieldLabel>
+                <DatePicker
+                  value={values.effectiveFrom}
+                  onChange={handleChange('effectiveFrom')}
+                  onBlur={handleBlur('effectiveFrom')}
+                  disabled={disabled}
+                  error={!!fieldError('effectiveFrom')}
+                />
+                {fieldError('effectiveFrom') && <FieldError>{fieldError('effectiveFrom')}</FieldError>}
+              </div>
+
               {/* Clave de titulación */}
               <TextField
                 label="Clave de Titulación"
@@ -850,25 +867,13 @@ export default function PlanForm() {
                 className="col-span-12 sm:col-span-6"
               />
 
-              {/* Vigente desde */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required={!isView}>Vigente Desde</FieldLabel>
-                <DatePicker
-                  value={values.effectiveFrom}
-                  onChange={handleChange('effectiveFrom')}
-                  onBlur={handleBlur('effectiveFrom')}
-                  disabled={disabled}
-                  error={!!fieldError('effectiveFrom')}
-                />
-                {fieldError('effectiveFrom') && <FieldError>{fieldError('effectiveFrom')}</FieldError>}
-              </div>
-
               {/* Total de niveles */}
               <TextField
                 label="Total de Niveles"
                 required={!isView}
                 type="number"
                 min={1}
+                max={15}
                 value={values.totalLevels}
                 onChange={v => {
                   handleChange('totalLevels')(v)
@@ -880,8 +885,8 @@ export default function PlanForm() {
                 error={fieldError('totalLevels')}
                 numeric
                 placeholder="Ej. 10"
-                help="Cantidad total de niveles que tendrá el plan."
-                className="col-span-12 sm:col-span-4"
+                help="Cantidad total de niveles que tendrá el plan (de 1 a 15)."
+                className="col-span-12 sm:col-span-6"
               />
             </div>
 
@@ -908,7 +913,7 @@ export default function PlanForm() {
                 numeric
                 placeholder="Ej. 7.0"
                 help="Escala de 0 a 10."
-                className="col-span-12 sm:col-span-4"
+                className="col-span-12 sm:col-span-5"
               />
 
               {/* Extraordinarios máximos por periodo */}
@@ -917,6 +922,7 @@ export default function PlanForm() {
                 required={!isView}
                 type="number"
                 min={0}
+                max={5}
                 value={values.maxExtraordinaryExamsPerPeriod}
                 onChange={handleChange('maxExtraordinaryExamsPerPeriod')}
                 onBlur={handleBlur('maxExtraordinaryExamsPerPeriod')}
@@ -924,12 +930,12 @@ export default function PlanForm() {
                 error={fieldError('maxExtraordinaryExamsPerPeriod')}
                 numeric
                 placeholder="Ej. 2"
-                help="Número máximo de exámenes extraordinarios por periodo."
-                className="col-span-12 sm:col-span-4"
+                help="Número máximo de exámenes extraordinarios por periodo (de 0 a 5)."
+                className="col-span-12 sm:col-span-5"
               />
 
               {/* Requiere servicio social */}
-              <div className="col-span-12 sm:col-span-4">
+              <div className="col-span-12 sm:col-span-2">
                 <FieldLabel>Requiere Servicio Social</FieldLabel>
                 <div className="flex items-center gap-2 h-[38px]">
                   <Switch checked={requiresSocialService} disabled={disabled} onChange={handleRequiresSocialServiceChange} />

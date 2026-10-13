@@ -5,6 +5,7 @@ import type { SelectOption } from '@app/core/components/ui'
 import { useNavigate } from 'react-router'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { apiGet, apiPatch, getApiErrorMessage } from '@app/core/infra/apiClient'
+import { programLabel, programLabelById } from '@app/core/infra/programLabel'
 import {
   PageContainer,
   Breadcrumb,
@@ -52,6 +53,7 @@ interface ProgramSummary {
   id: string
   name: string
   code: string
+  modality?: string
 }
 
 interface ProgramsPageResponse {
@@ -96,12 +98,12 @@ export default function GeneracionesList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
-  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: `${p.code} — ${p.name}` }))
+  const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: programLabel(p) }))
 
   // Load programs/plans/periods once — used only to resolve ids to display
-  // labels in the table (mirrors `programLabel()` in PlanesList.tsx). Not
+  // labels in the table (`programLabelById()` from core). Not
   // re-fetched on filter/page changes.
   useEffect(() => {
     apiGet<ProgramsPageResponse>('/programs', { size: 100 })
@@ -146,12 +148,7 @@ export default function GeneracionesList() {
         setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
-  }, [statusFilter, debouncedSearch, programFilter, page])
-
-  function programLabel(programId: string): string {
-    const p = programs.find(p => p.id === programId)
-    return p ? `${p.code} — ${p.name}` : '—'
-  }
+  }, [statusFilter, debouncedSearch, programFilter, page, perPage])
 
   function planLabel(planId: string): string {
     const pl = plans.find(pl => pl.id === planId)
@@ -192,7 +189,7 @@ export default function GeneracionesList() {
 
   const columns: ColumnDef<GenerationListItem>[] = [
     { key: 'code', header: 'Código', type: 'code', className: 'w-24' },
-    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabel(row.programId) },
+    { key: 'programId', header: 'Carrera', type: 'name', value: row => programLabelById(programs, row.programId) },
     { key: 'planId', header: 'Plan de Estudios', type: 'muted', value: row => planLabel(row.planId), className: 'w-28' },
     { key: 'startPeriodId', header: 'Periodo de Inicio', type: 'muted', value: row => periodLabel(row.startPeriodId) },
     { key: 'status', header: 'Estado', type: 'status', activeLabel: 'Activa', inactiveLabel: 'Finalizada', className: 'w-28' },
@@ -257,7 +254,7 @@ export default function GeneracionesList() {
         emptyTitle="No se encontraron generaciones"
         emptyHint={emptyHint}
         emptyIcon={<Users2 size={36} className="text-[#E5E7EB]" />}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{
           view: row => navigate(`/generaciones/form?mode=view&id=${row.id}`),
           edit: row => navigate(`/generaciones/form?mode=edit&id=${row.id}`),
@@ -293,7 +290,7 @@ export default function GeneracionesList() {
               </div>
             </div>
             {/* Program */}
-            <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{programLabel(row.programId)}</p>
+            <p className="text-[13px] font-medium text-[#333333] mb-1 leading-snug">{programLabelById(programs, row.programId)}</p>
             {/* Plan + Periodo */}
             <p className="text-[12px] text-[#6B7280] mb-3">
               {planLabel(row.planId)} · {periodLabel(row.startPeriodId)}
@@ -319,7 +316,7 @@ export default function GeneracionesList() {
         emptyTitle="No se encontraron generaciones"
         emptyHint={emptyHint}
         emptyIcon={<Users2 size={36} className="text-[#E5E7EB]" />}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

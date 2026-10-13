@@ -163,13 +163,14 @@ export default function ClasificacionesForm() {
       const apiErr = err as ApiError
       // El único 409 de este módulo es el de código duplicado, y su mensaje
       // ("Ya existe una clasificación con la clave proporcionada.") contiene
-      // "clave". Se inyecta inline en el campo en vez de dejarlo sólo en el
-      // banner, que queda como fallback si el mensaje cambia y deja de
-      // identificar el campo.
+      // "clave". Se inyecta inline en el campo y en el banner, con el mismo
+      // mensaje. Si el mensaje cambia y deja de identificar el campo, cae al
+      // bloque de abajo, que sólo pinta el banner.
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         if (apiErr.backendMessage.includes('clave')) {
           setFieldError('code', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
       }

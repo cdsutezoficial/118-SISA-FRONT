@@ -6,6 +6,7 @@ import { Breadcrumb, ErrorBanner } from '@app/core/components/list'
 import { useNavigate } from 'react-router'
 import { useFormMode } from '@app/core/infra/hooks'
 import { apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { MODALITY_LABELS } from '@app/core/infra/programLabel'
 import { useFieldValidation } from '@app/core/validation/useFieldValidation'
 import {
   required,
@@ -13,7 +14,7 @@ import {
   maxLength,
   lengthBetween,
   noControlChars,
-  lettersSpacesAndHyphens,
+  lettersSpacesHyphensAndCommas,
   codePattern,
   normalizeCode,
   normalizeText,
@@ -30,11 +31,6 @@ const LEVEL_LABELS: Record<AcademicLevel, string> = {
   INGENIERIA: 'Ingeniería',
   LICENCIATURA: 'Licenciatura',
   POSGRADO: 'Posgrado',
-}
-
-const MODALITY_LABELS: Record<ProgramModality, string> = {
-  PRESENCIAL: 'Presencial',
-  MIXTA: 'Mixta',
 }
 
 interface DivisionsPageResponse {
@@ -72,7 +68,9 @@ interface ProgramFormPayload {
 // usa como dependencia de sus callbacks.
 //
 // Contenido permitido por campo (decisión de negocio 2026-10-04):
-//   name        → letras y acentos, separados por espacios o guiones
+//   name        → letras y acentos, separados por espacios o guiones; admite
+//                 comas (los nombres oficiales pueden llevarlas, p.ej.
+//                 "Ingeniería en Software, TSU")
 //   offerName   → igual que `name`; además forma parte de la unicidad
 //                 (offerName, modality), así que admite lo mismo
 //   code        → segmentos alfanuméricos unidos por guiones simples. A
@@ -107,7 +105,7 @@ const PROGRAM_SCHEMA = {
       required('nombre de la carrera'),
       maxLength(150, 'nombre'),
       noControlChars('nombre'),
-      lettersSpacesAndHyphens('nombre'),
+      lettersSpacesHyphensAndCommas('nombre'),
     ],
   },
   offerName: {
@@ -116,7 +114,7 @@ const PROGRAM_SCHEMA = {
       required('nombre de oferta'),
       maxLength(200, 'nombre de oferta'),
       noControlChars('nombre de oferta'),
-      lettersSpacesAndHyphens('nombre de oferta'),
+      lettersSpacesHyphensAndCommas('nombre de oferta'),
     ],
   },
   code: {
@@ -257,12 +255,14 @@ export default function CarrerasForm() {
       if (apiErr?.status === 409 && typeof apiErr.backendMessage === 'string') {
         if (apiErr.backendMessage.includes('clave')) {
           setFieldError('code', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
         if (apiErr.backendMessage.includes('oferta') || apiErr.backendMessage.includes('modalidad')) {
           setFieldError('offerName', apiErr.backendMessage)
-          setSubmitStatus('idle')
+          setSubmitStatus('error')
+          setSubmitErrorMsg(apiErr.backendMessage)
           return
         }
       }
