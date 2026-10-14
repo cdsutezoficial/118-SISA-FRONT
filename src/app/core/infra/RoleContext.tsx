@@ -6,6 +6,7 @@ import {
   decodeJwtPayload,
   getStoredMustChangePassword,
   getStoredUserProfile,
+  mapAccountRoles,
   mapFrontendRoleKey,
   mapRoles,
   markSignedOut,
@@ -14,7 +15,7 @@ import {
   clearSession,
   persistMustChangePasswordCleared,
 } from './auth'
-import type { LoginResponse, JwtClaims, CapabilityResponse, MeProfile } from './auth'
+import type { LoginResponse, JwtClaims, CapabilityResponse, MeProfile, AccountRoleOption } from './auth'
 import { apiGet, getAccessToken, setUnauthorizedHandler } from './apiClient'
 import type { ApiError } from './apiClient'
 
@@ -88,6 +89,13 @@ export interface RoleContextValue {
    * moves between. Never contains `null`/`CANDIDATO`.
    */
   availableRoles: Role[]
+  /**
+   * The account's COMPLETE role list from the JWT, including roles the frontend
+   * has no module for yet (`role: null`). `availableRoles` is the activatable
+   * subset of this. The role selectors render the disabled entries too, so an
+   * account never loses sight of a role it actually holds.
+   */
+  accountRoles: AccountRoleOption[]
   /** `null` when anonymous (`role === null`) or while the profile loads. */
   user: RoleUser | null
   /** `true` right after a login response with `mustChangePassword: true`, until `completePasswordChange()`. */
@@ -161,6 +169,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   // `claims` — set at login and lazily hydrated on reload alike — so it is never
   // stale independently of them.
   const realRoles: Role[] = claims ? mapRoles(claims.roles) : []
+
+  // The account's COMPLETE role list (including roles the frontend can't
+  // activate yet); drives the role selectors. `realRoles` above is just its
+  // activatable subset.
+  const accountRoles: AccountRoleOption[] = claims ? mapAccountRoles(claims.roles) : []
 
   // The role actually in effect during the session. Lazy initializer keeps a
   // reload on a route gated per-role from flashing the wrong role first.
@@ -367,6 +380,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     // The account's actual JWT roles (single-role accounts get one entry;
     // multi-role get the full list the switcher can move between).
     availableRoles: realRoles,
+    // Every role the account holds, activatable or not (disabled in the UI).
+    accountRoles,
     // The account's real profile from `GET /auth/me` (null until
     // fetched/failed → 'Usuario' placeholder).
     user: activeRole === null ? null : userProfile,
