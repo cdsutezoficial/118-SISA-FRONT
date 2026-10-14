@@ -27,7 +27,7 @@ function Navbar({
   onMobileMenuToggle: () => void
 }) {
   const navigate = useNavigate()
-  const { role, setRole, availableRoles, user, logout } = useRole()
+  const { role, setRole, accountRoles, user, logout } = useRole()
 
   function handleLogout() {
     logout()
@@ -69,17 +69,33 @@ function Navbar({
                 <p className="text-[12px] font-semibold text-[#333333]">{user?.name}</p>
                 <p className="text-[11px] text-[#6B7280]">{user?.email}</p>
               </div>
-              {availableRoles.map(r => (
-                <button
-                  key={r}
-                  onClick={() => { setRole(r); onRoleMenuToggle() }}
-                  className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                    role === r ? 'text-[#009574] font-medium bg-[#e6f5f1]' : 'text-[#333333] hover:bg-[#F8F9FA]'
-                  }`}
-                >
-                  {ROLE_LABELS[r]}
-                </button>
-              ))}
+              {accountRoles.map(option => {
+                if (option.role === null) {
+                  // Account role with no frontend module yet — listed, disabled.
+                  return (
+                    <div
+                      key={option.key}
+                      aria-disabled="true"
+                      className="w-full flex items-center justify-between gap-2 px-4 py-2 text-sm text-[#9CA3AF] cursor-not-allowed"
+                    >
+                      <span className="truncate">{option.label}</span>
+                      <span className="text-[10px] font-medium whitespace-nowrap flex-shrink-0">En desarrollo</span>
+                    </div>
+                  )
+                }
+                const target = option.role
+                return (
+                  <button
+                    key={option.key}
+                    onClick={() => { setRole(target); onRoleMenuToggle() }}
+                    className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                      role === target ? 'text-[#009574] font-medium bg-[#e6f5f1]' : 'text-[#333333] hover:bg-[#F8F9FA]'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
               <div className="h-px bg-[#E5E7EB] my-1" />
               <button
                 onClick={() => navigate('/usuarios/cambiar-password')}
