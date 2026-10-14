@@ -2,6 +2,14 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { ShieldCheck, GraduationCap, Lock, AlertCircle } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
+import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
+import {
+  consumeLlaveMxCallback,
+  fetchLlaveMxAvailability,
+  fetchLlaveMxPrefill,
+  startLlaveMxFlow,
+  type LlaveMxPrefill,
+} from '@app/core/infra/llaveMx'
 import {
   FieldLabel,
   FieldHelp,
@@ -16,8 +24,7 @@ import {
 } from '@app/core/components/ui'
 import { FormPage, FormHeader, SelectField, TextField, TimeField } from '@app/core/components/form'
 import { Breadcrumb } from '@app/core/components/list'
-import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
-import { ADMISSION_ERROR_CODES, apiGet, apiPost, type ApiError } from '@app/core/infra/apiClient'
+import { ADMISSION_ERROR_CODES, apiGet, apiPost, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
 import type {
   Candidate,
@@ -56,6 +63,25 @@ import type {
  */
 
 export type ScreenOrigin = 'staff' | 'public'
+
+/**
+ * sessionStorage key backing the "identity verified" hint (see the state
+ * comment at its declaration). Tab-scoped on purpose — see there.
+ */
+const LLAVE_MX_VERIFIED_KEY = 'sisa.candidato.llaveMxVerified'
+
+/**
+ * Clave de comparación tolerante para nombres de catálogo y datos del proveedor:
+ * sin mayúsculas, sin acentos y sin espacios de sobra, para que "Morelos",
+ * "MORELOS" y "Morelos " sean lo mismo. Solo para emparejar — nunca para mostrar.
+ */
+function normalizeLookup(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
 
 interface CandidatoRegistroProps {
   origin: ScreenOrigin
@@ -483,6 +509,30 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const [paso2, setPaso2] = useState<Paso2State>(emptyPaso2)
   const [paso3, setPaso3] = useState<Paso3State>(emptyPaso3)
   const [identityStatus, setIdentityStatus] = useState<'idle' | 'manual'>('idle')
+  /**
+   * LlaveMX identity verified for THIS tab's ticket.
+   *
+   * Session-scoped on purpose, and the reasoning is the security model rather
+   * than tidiness: the proof of verification is the HttpOnly ticket cookie, which
+   * JavaScript can neither read nor forge. So this boolean is only ever a hint
+   * for what to render — it must never outlive the tab that earned it, which is
+   * what `sessionStorage` gives. Persisting it to `localStorage` would let a
+   * later applicant on a shared machine inherit someone else's "verified" badge
+   * on screen while the backend correctly refuses the POST.
+   */
+  const [llaveMxVerified, setLlaveMxVerified] = useState(() => sessionStorage.getItem(LLAVE_MX_VERIFIED_KEY) === 'true')
+  const [llaveMxAvailable, setLlaveMxAvailable] = useState<boolean | null>(null)
+  const [llaveMxStarting, setLlaveMxStarting] = useState(false)
+  const [llaveMxError, setLlaveMxError] = useState('')
+  /**
+   * Prellenado crudo que LlaveMX acaba de devolver, pendiente de volcar en
+   * `paso1`.
+   *
+   * Vive aparte del formulario porque el mapeo del estado de nacimiento necesita
+   * el catálogo de estados, que llega por su propio request: se guarda aquí y el
+   * efecto de abajo lo aplica en cuanto puede resolverlo.
+   */
+  const [llaveMxPrefill, setLlaveMxPrefill] = useState<LlaveMxPrefill | null>(null)
   const [folio, setFolio] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -533,6 +583,109 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       })
     return () => { cancelled = true }
   }, [])
+
+  // ── LlaveMX identity verification (RF-AUTH-003) ──
+  //
+  // Only the public mount offers it. On the staff mount an official registers an
+  // applicant on their behalf, and forcing them through their own LlaveMX round
+  // would prove the wrong person's identity — the applicant's — while storing the
+  // official's ticket against it.
+  useEffect(() => {
+    if (origin !== 'public') {
+      setLlaveMxAvailable(false)
+      return
+    }
+
+    let cancelled = false
+
+    const outcome = consumeLlaveMxCallback()
+    if (outcome.kind === 'candidate-verified') {
+      // The marker only says "the round finished". The proof is the HttpOnly
+      // ticket cookie the backend set on its callback response, which
+      // `POST /candidates` will re-validate; there is nothing for this tab to
+      // check itself and nothing it should try to.
+      setLlaveMxVerified(true)
+      try { sessionStorage.setItem(LLAVE_MX_VERIFIED_KEY, 'true') } catch { /* storage disabled — the hint is cosmetic */ }
+
+      // Pulling the proven fields is part of finishing the verification, not an
+      // extra: name, CURP, birth date and sex are exactly what the applicant no
+      // longer has to key in.
+      fetchLlaveMxPrefill()
+        .then(prefill => { if (!cancelled) setLlaveMxPrefill(prefill) })
+        .catch(err => {
+          if (cancelled) return
+          // The ticket is gone (expired, or the tab lost the cookie), so the
+          // green badge would be lying and `POST /candidates` would reject the
+          // ficha anyway. Drop the hint and ask for the round again.
+          setLlaveMxVerified(false)
+          try { sessionStorage.removeItem(LLAVE_MX_VERIFIED_KEY) } catch { /* storage disabled */ }
+          setLlaveMxError(getApiErrorMessage(
+            err,
+            'Tu verificación con Llave Morelos ya venció. Vuelve a verificar tu identidad.',
+          ))
+        })
+    } else if (outcome.kind === 'error') {
+      setLlaveMxError(outcome.message)
+    }
+
+    fetchLlaveMxAvailability().then(ok => { if (!cancelled) setLlaveMxAvailable(ok) })
+    return () => { cancelled = true }
+  }, [origin])
+
+  /**
+   * Vuelca el prellenado de LlaveMX en el paso 1, una sola vez.
+   *
+   * Se aplica en cuanto llega, salvo el estado de nacimiento, que espera al
+   * catálogo: el proveedor manda texto libre ("MORELOS", "Ciudad de Mexico") y
+   * el catálogo tiene su propia forma ("Morelos"), así que sin la lista no hay
+   * forma de mapearlo. Si el catálogo falla, se aplica igual y el campo queda
+   * editable, que es mejor que dejar la ficha a medias.
+   *
+   * Cada campo se escribe solo si el proveedor mandó algo (`|| prev`), y el
+   * estado únicamente si empata con el catálogo: un nombre que el selector no
+   * conoce se vería tan vacío como no escribir nada. El municipio se deja al
+   * selector a propósito — los catálogos de municipios son por estado y muy
+   * sensibles a la forma, así que casi nunca empataría.
+   */
+  useEffect(() => {
+    if (!llaveMxPrefill) return
+    if (llaveMxPrefill.estadoNacimiento !== '' && catalogsStatus === 'loading') return
+
+    const estadoNacimiento = estados.find(
+      e => normalizeLookup(e.name) === normalizeLookup(llaveMxPrefill.estadoNacimiento),
+    )?.name ?? ''
+
+    setPaso1(prev => ({
+      ...prev,
+      nombres: llaveMxPrefill.nombres || prev.nombres,
+      apellidoPaterno: llaveMxPrefill.apellidoPaterno || prev.apellidoPaterno,
+      apellidoMaterno: llaveMxPrefill.apellidoMaterno || prev.apellidoMaterno,
+      curp: llaveMxPrefill.curp || prev.curp,
+      fechaNacimiento: llaveMxPrefill.fechaNacimiento || prev.fechaNacimiento,
+      sexo: llaveMxPrefill.sexo || prev.sexo,
+      estadoNacimiento: estadoNacimiento || prev.estadoNacimiento,
+      // Un estado mexicano solo lo emite una identidad mexicana. El Aspirante
+      // puede cambiarlo, pero ahorrarle el clic es justamente el punto.
+      nacionalidad: estadoNacimiento && prev.nacionalidad === '' ? 'Mexicana' : prev.nacionalidad,
+      email: llaveMxPrefill.email || prev.email,
+      celular: llaveMxPrefill.celular || prev.celular,
+    }))
+    setLlaveMxPrefill(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [llaveMxPrefill, estados, catalogsStatus])
+
+
+  async function handleVerifyWithLlaveMx() {
+    setLlaveMxStarting(true)
+    setLlaveMxError('')
+    try {
+      // Leaves the tab; there is no success branch to write here.
+      await startLlaveMxFlow('candidate')
+    } catch (err) {
+      setLlaveMxStarting(false)
+      setLlaveMxError(getApiErrorMessage(err, 'No se pudo iniciar la verificación con Llave Morelos.'))
+    }
+  }
 
   // Load a state's municipalities on demand (cascade) and cache by stateId.
   const stateIdOf = (name: string): string => estados.find(e => e.name === name)?.id ?? ''
@@ -634,9 +787,20 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       ? { value: selectedConfig.id, label: selectedConfig.label }
       : null
 
-  const isVerified = false
+  const isVerified = llaveMxVerified
   /** Captura manual activa: los campos de identidad son editables sin pasar por LlaveMX. */
   const isManual = identityStatus === 'manual'
+
+  /**
+   * Si un campo de identidad se captura a mano.
+   *
+   * Con la captura manual activa, todos. Y con LlaveMX verificado, los que el
+   * proveedor NO mandó: dejarlos bloqueados y vacíos sería un callejón sin
+   * salida — nadie puede escribir en ellos y la ficha nunca pasa la validación.
+   * Un campo verificado con valor sigue bloqueado; uno sin valor vuelve a ser
+   * del Aspirante.
+   */
+  const identityEditable = (value: string) => isManual || (isVerified && !value)
 
   function handleGoManual() {
     if (identityStatus !== 'idle') return
@@ -849,7 +1013,12 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         cct: paso3.cct,
         cctConfirmacion: paso3.cctConfirmacion,
       },
-      llaveMxVerified: false,
+      // Advisory only. The backend re-validates the HttpOnly
+      // `sisa.llave.verified` ticket cookie on this very request and is the only
+      // thing that decides whether `llaveMxVerified` sticks — a `true` forged in
+      // DevTools buys nothing. The honest flag keeps the response's own value
+      // meaningful instead of echoing what we hoped for.
+      llaveMxVerified: isVerified,
     }
 
     try {
@@ -1055,22 +1224,64 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           </div>
           <div className="flex-1">
             <p className="text-[14px] font-semibold text-[#333333]">Verificación de Identidad</p>
-            {identityStatus === 'idle' && (
+            {identityStatus === 'idle' && !llaveMxVerified && (
               <div>
-                <p className="text-[13px] text-[#6B7280] mt-1">
-                  Puedes verificar tu identidad con LlaveMX o capturar tus datos manualmente para continuar con el registro.
-                </p>
-                <div className="mt-4 flex flex-row items-start justify-between gap-2">
-                  {/* Solo visual — sin integración real aún: el clic no hace nada. */}
-                  <LlaveMxButton className="w-full" />
-                  <button
-                    type="button"
-                    onClick={handleGoManual}
-                    className="self-end text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
-                  >
-                    Ingresa tus datos manualmente
-                  </button>
+                {llaveMxAvailable === true ? (
+                  <>
+                    <p className="text-[13px] text-[#6B7280] mt-1">
+                      Confirma tu identidad con Llave Morelos para registrarte. Solo te pediremos los datos que la llave no trae.
+                    </p>
+                    <div className="mt-4 flex justify-start">
+                      <LlaveMxButton
+                        variant="light"
+                        loading={llaveMxStarting}
+                        onClick={handleVerifyWithLlaveMx}
+                      />
+                    </div>
+                    {llaveMxStarting && (
+                      <p className="mt-2.5 text-[12px] text-[#9CA3AF]">
+                        Te llevamos a Llave Morelos para confirmar tu identidad.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[13px] text-[#6B7280] mt-1">
+                      {llaveMxAvailable === null
+                        ? 'Consultando la disponibilidad de Llave Morelos...'
+                        : 'La integración con LlaveMX aún no está disponible. Captura tus datos manualmente para continuar con el registro.'}
+                    </p>
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={handleGoManual}
+                        className="text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
+                      >
+                        Ingresa tus datos manualmente
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {llaveMxVerified && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#e6f5f1] text-[#007a5e] border border-[#9ad9c6]">
+                    <ShieldCheck size={13} />Identidad verificada con Llave Morelos
+                  </span>
                 </div>
+                <p className="text-[13px] text-[#6B7280] mt-2">
+                  Listo, ya puedes continuar con el resto de la ficha.
+                </p>
+              </div>
+            )}
+
+            {llaveMxError && (
+              <div className="mt-4 flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700">
+                <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                {llaveMxError}
               </div>
             )}
 
@@ -1102,21 +1313,21 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Datos Generales</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12 md:col-span-4">
-          {isManual ? (
+{identityEditable(paso1.nombres) ? (
             <TextField label="Nombre(s)" required value={paso1.nombres} onChange={v => setPaso1({ ...paso1, nombres: v })} error={e1.nombres} />
           ) : (
             <LockedField label="Nombre(s)" value={paso1.nombres} error={!!e1.nombres} />
           )}
         </div>
         <div className="col-span-12 md:col-span-4">
-          {isManual ? (
+{identityEditable(paso1.apellidoPaterno) ? (
             <TextField label="Primer Apellido" required value={paso1.apellidoPaterno} onChange={v => setPaso1({ ...paso1, apellidoPaterno: v })} error={e1.apellidoPaterno} />
           ) : (
             <LockedField label="Primer Apellido" value={paso1.apellidoPaterno} error={!!e1.apellidoPaterno} />
           )}
         </div>
         <div className="col-span-12 md:col-span-4">
-          {isManual ? (
+          {identityEditable(paso1.apellidoMaterno) ? (
             <TextField label="Segundo Apellido" value={paso1.apellidoMaterno} onChange={v => setPaso1({ ...paso1, apellidoMaterno: v })} />
           ) : (
             <LockedField label="Segundo Apellido" value={paso1.apellidoMaterno} required={false} />
@@ -1124,7 +1335,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         </div>
 
         <div className="col-span-12 md:col-span-6">
-          {isManual ? (
+          {identityEditable(paso1.curp) ? (
             <TextField
               label="CURP"
               required
@@ -1140,7 +1351,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           )}
         </div>
         <div className="col-span-6 md:col-span-3">
-          {isManual ? (
+          {identityEditable(paso1.fechaNacimiento) ? (
             <div>
               <FieldLabel required>Fecha de Nacimiento</FieldLabel>
               <ErrorLine error={e1.fechaNacimiento}>
@@ -1152,7 +1363,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           )}
         </div>
         <div className="col-span-6 md:col-span-3">
-          {isManual ? (
+          {identityEditable(paso1.sexo) ? (
             <SelectField
               label="Sexo"
               required
@@ -1189,7 +1400,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         {paso1.nacionalidad === 'Mexicana' && (
           <>
             <div className="col-span-12 md:col-span-6">
-              {isManual ? (
+              {identityEditable(paso1.estadoNacimiento) ? (
                 <>
                   <ErrorLine error={e1.estadoNacimiento}>
                     <FieldLabel required>Estado de Nacimiento</FieldLabel>

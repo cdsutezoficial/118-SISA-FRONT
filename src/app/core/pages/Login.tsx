@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Eye, EyeOff, AlertCircle, Loader2, GraduationCap, UserCog, ChevronRight } from 'lucide-react'
 import { useRole } from '../infra/RoleContext'
@@ -6,7 +6,31 @@ import type { Role } from '../infra/RoleContext'
 import { apiLogin, decodeJwtPayload, mapAccountRoles } from '../infra/auth'
 import type { AccountRoleOption } from '../infra/auth'
 import type { ApiError } from '../infra/apiClient'
+import { getApiErrorMessage } from '../infra/apiClient'
 import { LlaveMxButton } from '../components/LlaveMxButton'
+import {
+  consumeLlaveMxCallback,
+  fetchLlaveMxAvailability,
+  startLlaveMxFlow,
+} from '../infra/llaveMx'
+
+/**
+ * Seconds left on a token whose `exp` we can read locally.
+ *
+ * The OAuth callback arrives as a fragment, not a JSON body, so there is no
+ * `expiresIn` field to take — but `persistSession` still wants one, and the
+ * value is only used for the client-side "your session is about to expire"
+ * timer. Deriving it from the token's own `exp` keeps the number honest instead
+ * of hardcoding the backend's configured TTL here and letting the two drift.
+ *
+ * Falls back to 0 when `exp` is missing or unparseable: the refresh flow is the
+ * thing that has to notice an expired token anyway, not this.
+ */
+function secondsUntilExpiry(accessToken: string): number {
+  const exp = decodeJwtPayload(accessToken)?.exp
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) return 0
+  return Math.max(0, Math.floor(exp - Date.now() / 1000))
+}
 
 function UniversityIllustration() {
   return (
@@ -56,6 +80,83 @@ export default function Login() {
   // one is chosen (`null` = single-role/straight through).
   const [pendingRoles, setPendingRoles] = useState<AccountRoleOption[] | null>(null)
   const [pendingTarget, setPendingTarget] = useState<string | null>(null)
+  // `null` = not known yet. The LlaveMX button stays hidden until the backend
+  // confirms the integration is configured, so an unconfigured environment never
+  // offers a login that cannot finish.
+  const [llaveMxAvailable, setLlaveMxAvailable] = useState<boolean | null>(null)
+  const [llaveMxStarting, setLlaveMxStarting] = useState(false)
+
+  /**
+   * Everything that happens AFTER a valid token pair exists, shared by both login
+   * paths (the local form and the OAuth callback). One place is the point: it is
+   * what guarantees an official signing in with LlaveMX lands on the same page,
+   * meets the same role gate and honours the same `mustChangePassword` redirect
+   * as one who typed their password.
+   */
+  function establishSession(accessToken: string, refreshToken: string, mustChangePassword: boolean) {
+    login({ accessToken, refreshToken, tokenType: 'Bearer', expiresIn: secondsUntilExpiry(accessToken), mustChangePassword })
+
+    const target = mustChangePassword ? '/usuarios/cambiar-password' : '/dashboard'
+    // Full role list from the JWT (disabled roles included) so the selector
+    // shows every role the account holds, not just the navigable ones.
+    const accountRoles = mapAccountRoles(decodeJwtPayload(accessToken)?.roles ?? [])
+    const activatableRoles = accountRoles.filter(option => option.role !== null)
+    if (activatableRoles.length === 0) {
+      logout()
+      setStatus('error')
+      setErrorMsg('Tu cuenta no tiene un rol compatible con este frontend. Contacta a soporte técnico.')
+      return
+    }
+    if (accountRoles.length > 1) {
+      // Multi-role account → the user picks which role to enter with NOW,
+      // then keeps switching from the shell selector anytime afterwards.
+      setPendingRoles(accountRoles)
+      setPendingTarget(target)
+    } else {
+      navigate(target)
+    }
+  }
+
+  // Availability + callback handoff in one effect: both answer "what is this page
+  // showing, and can LlaveMX be used here?", and the callback has to be consumed
+  // before anything else re-renders the URL out from under the read.
+  useEffect(() => {
+    let cancelled = false
+
+    fetchLlaveMxAvailability().then(ok => {
+      if (!cancelled) setLlaveMxAvailable(ok)
+    })
+
+    const outcome = consumeLlaveMxCallback()
+    if (outcome.kind === 'error') {
+      // `consumeLlaveMxCallback` already scrubbed the URL, so the banner survives
+      // a reload and the tokens are never readable from the address bar again.
+      setStatus('error')
+      setErrorMsg(outcome.message)
+    } else if (outcome.kind === 'staff') {
+      establishSession(outcome.accessToken, outcome.refreshToken, outcome.mustChangePassword)
+    }
+
+    return () => { cancelled = true }
+    // Once per mount. `establishSession` is deliberately not a dependency: it
+    // closes only over stable setters and `navigate`, and re-running would
+    // re-consume a callback the first pass already handled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleLlaveMxClick() {
+    setLlaveMxStarting(true)
+    setErrorMsg('')
+    try {
+      await startLlaveMxFlow('staff')
+    } catch (err) {
+      // Only reachable when the backend refused to mint a round. On success the
+      // tab leaves, so there is deliberately no success branch here.
+      setLlaveMxStarting(false)
+      setStatus('error')
+      setErrorMsg(getApiErrorMessage(err, 'No se pudo iniciar el acceso con Llave Morelos.'))
+    }
+  }
 
   function handleRoleChosen(chosen: Role) {
     setRole(chosen)
@@ -84,26 +185,7 @@ export default function Login() {
       // Sent as `username` regardless of the input's `type="email"` — the
       // seeded ADMIN username is email-shaped, so this isn't a mismatch.
       const res = await apiLogin(usuario, password)
-      login(res)
-      const target = res.mustChangePassword ? '/usuarios/cambiar-password' : '/dashboard'
-      // Full role list from the JWT (disabled roles included) so the selector
-      // shows every role the account holds, not just the navigable ones.
-      const accountRoles = mapAccountRoles(decodeJwtPayload(res.accessToken)?.roles ?? [])
-      const activatableRoles = accountRoles.filter(option => option.role !== null)
-      if (activatableRoles.length === 0) {
-        logout()
-        setStatus('error')
-        setErrorMsg('Tu cuenta no tiene un rol compatible con este frontend. Contacta a soporte técnico.')
-        return
-      }
-      if (accountRoles.length > 1) {
-        // Multi-role account → the user picks which role to enter with NOW,
-        // then keeps switching from the shell selector anytime afterwards.
-        setPendingRoles(accountRoles)
-        setPendingTarget(target)
-      } else {
-        navigate(target)
-      }
+      establishSession(res.accessToken, res.refreshToken, res.mustChangePassword)
     } catch (err) {
       setStatus('error')
       const apiErr = err as Partial<ApiError>
@@ -263,10 +345,36 @@ export default function Login() {
               {isLoading && <Loader2 size={16} className="animate-spin" />}
               {isLoading ? 'Verificando...' : 'Iniciar Sesión'}
             </button>
-
-            {/* LlaveMX — solo visual, sin integración real aún: el clic no hace nada. */}
-            <LlaveMxButton disabled={isLoading} className="w-full" label="Iniciar sesión con" />
           </form>
+
+          {/* Llave Morelos / Digital Morelos — RF-AUTH-002.
+              Rendered only once the backend confirms the integration is
+              configured (`llaveMxAvailable === true`), and never while the local
+              form is in flight: two ways to sign in, one of them mid-flight,
+              would let an official half-complete a round they did not mean to
+              start. */}
+          {llaveMxAvailable === true && (
+            <div className="mt-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-px flex-1 bg-[#E5E7EB]" />
+                <span className="text-[11px] font-medium text-[#9CA3AF] uppercase tracking-wider">o</span>
+                <div className="h-px flex-1 bg-[#E5E7EB]" />
+              </div>
+              <div className="flex justify-center">
+                <LlaveMxButton
+                  variant="light"
+                  loading={llaveMxStarting}
+                  disabled={isLoading}
+                  onClick={handleLlaveMxClick}
+                />
+              </div>
+              {llaveMxStarting && (
+                <p className="mt-2.5 text-center text-[12px] text-[#9CA3AF]">
+                  Te llevamos a Llave Morelos para confirmar tu identidad.
+                </p>
+              )}
+            </div>
+          )}
 
         </div>
       </div>
