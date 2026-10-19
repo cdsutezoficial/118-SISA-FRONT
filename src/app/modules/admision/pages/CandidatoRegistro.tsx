@@ -114,6 +114,17 @@ interface MunicipalityItem {
 interface MunicipalityListResponse {
   items: MunicipalityItem[]
 }
+interface PostalCodeLookupItem {
+  settlementName: string
+  localityName: string | null
+  stateName: string
+  municipalityName: string
+}
+interface PostalCodeLookupResponse {
+  postalCode: string
+  message: string
+  items: PostalCodeLookupItem[]
+}
 interface OptionItem {
   id: string
   label: string
@@ -547,6 +558,9 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   // ── Reference catalogs (anonymous GETs) ──
   const [estados, setEstados] = useState<StateItem[]>([])
   const [municipios, setMunicipios] = useState<Record<string, MunicipalityItem[]>>({})
+  const [postalLookupItems, setPostalLookupItems] = useState<PostalCodeLookupItem[]>([])
+  const [postalLookupMessage, setPostalLookupMessage] = useState('')
+  const [postalLookupStatus, setPostalLookupStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [canales, setCanales] = useState<OptionItem[]>([])
   const [tiposBachillerato, setTiposBachillerato] = useState<OptionItem[]>([])
   const [configsAdmision, setConfigsAdmision] = useState<OptionItem[]>([])
@@ -696,6 +710,80 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       .catch(() => {/* non-critical — select just won't populate */})
   }
 
+  const postalSettlementNames = postalLookupItems.map(item => item.settlementName)
+  const commonPostalValue = (
+    items: PostalCodeLookupItem[],
+    pick: (item: PostalCodeLookupItem) => string,
+  ): string => {
+    if (items.length === 0) return ''
+    const first = pick(items[0])
+    return items.every(item => pick(item) === first) ? first : ''
+  }
+  const selectedPostalLookupItem = postalLookupItems.find(item => item.settlementName === paso1.colonia) ?? null
+
+  function applyPostalLookupSelection(item: PostalCodeLookupItem) {
+    setPaso1(prev => ({
+      ...prev,
+      colonia: item.settlementName,
+      estadoDomicilio: item.stateName,
+      municipioDomicilio: item.municipalityName,
+      localidad: item.localityName ?? prev.localidad,
+    }))
+  }
+
+  useEffect(() => {
+    if (!cpValid) {
+      setPostalLookupItems([])
+      setPostalLookupMessage('')
+      setPostalLookupStatus('idle')
+      return
+    }
+
+    let cancelled = false
+    setPostalLookupStatus('loading')
+    setPostalLookupMessage('')
+    apiGet<PostalCodeLookupResponse>(`/postal-codes/${paso1.codigoPostal}`)
+      .then(res => {
+        if (cancelled) return
+        setPostalLookupItems(res.items)
+        setPostalLookupMessage(res.message)
+        setPostalLookupStatus('ready')
+
+        if (res.items.length === 0) {
+          setPaso1(prev => ({ ...prev, colonia: '' }))
+          return
+        }
+
+        const match = res.items.find(item => item.settlementName === paso1.colonia)
+        if (match) {
+          applyPostalLookupSelection(match)
+          return
+        }
+
+        if (res.items.length === 1) {
+          applyPostalLookupSelection(res.items[0])
+          return
+        }
+
+        setPaso1(prev => ({
+          ...prev,
+          colonia: '',
+          estadoDomicilio: commonPostalValue(res.items, item => item.stateName) || prev.estadoDomicilio,
+          municipioDomicilio: commonPostalValue(res.items, item => item.municipalityName) || prev.municipioDomicilio,
+          localidad: commonPostalValue(res.items, item => item.localityName ?? '') || prev.localidad,
+        }))
+      })
+      .catch(err => {
+        if (cancelled) return
+        setPostalLookupItems([])
+        setPostalLookupMessage(getApiErrorMessage(err))
+        setPostalLookupStatus('error')
+      })
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso1.codigoPostal])
+
   /**
    * Vuelve a pedir las carreras al abrir el desplegable, sin nada de ceremony.
    *
@@ -718,6 +806,9 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const estadoNames = estados.map(e => e.name)
   const municipioNames = (stateName: string): string[] =>
     (municipios[stateIdOf(stateName)] ?? []).map(m => m.name)
+  const domicilioStateLocked = postalLookupItems.length > 0 && commonPostalValue(postalLookupItems, item => item.stateName) !== ''
+  const domicilioMunicipalityLocked = postalLookupItems.length > 0 && commonPostalValue(postalLookupItems, item => item.municipalityName) !== ''
+  const domicilioLocalityLocked = selectedPostalLookupItem?.localityName != null || (postalLookupItems.length > 1 && commonPostalValue(postalLookupItems, item => item.localityName ?? '') !== '')
 
   // Prefill cascade whenever a state-name lands in the form (user pick, or the
   // LlaveMX-locked "Morelos" from `handleVerify`).
@@ -1465,36 +1556,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       {/* Domicilio Actual */}
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Domicilio Actual</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
-        <div className="col-span-12 md:col-span-6">
-          <TextField label="Calle" required value={paso1.calle} onChange={v => setPaso1({ ...paso1, calle: v })} error={e1.calle} />
-        </div>
-        <div className="col-span-6 md:col-span-3">
-          <TextField label="Número Exterior" required value={paso1.numeroExterior} onChange={v => setPaso1({ ...paso1, numeroExterior: v })} error={e1.numeroExterior} />
-        </div>
-        <div className="col-span-6 md:col-span-3">
-          <TextField label="Número Interior" value={paso1.numeroInterior} onChange={v => setPaso1({ ...paso1, numeroInterior: v })} placeholder="Opcional" />
-        </div>
-
-        <div className="col-span-12 md:col-span-6">
-          <TextField label="Colonia" required value={paso1.colonia} onChange={v => setPaso1({ ...paso1, colonia: v })} error={e1.colonia} />
-        </div>
-        <div className="col-span-12 md:col-span-3">
-          <ErrorLine error={e1.estadoDomicilio}>
-            <FieldLabel required>Estado</FieldLabel>
-            <SearchSelect options={estadoNames} value={paso1.estadoDomicilio} onChange={v => setPaso1({ ...paso1, estadoDomicilio: v, municipioDomicilio: '' })} placeholder="Selecciona un estado" hasError={!!e1.estadoDomicilio} />
-          </ErrorLine>
-        </div>
-        <div className="col-span-12 md:col-span-3">
-          <ErrorLine error={e1.municipioDomicilio}>
-            <FieldLabel required>Municipio</FieldLabel>
-            <SearchSelect options={municipioNames(paso1.estadoDomicilio)} value={paso1.municipioDomicilio} onChange={v => setPaso1({ ...paso1, municipioDomicilio: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoDomicilio === ''} hasError={!!e1.municipioDomicilio} />
-          </ErrorLine>
-        </div>
-
-        <div className="col-span-12 md:col-span-6">
-          <TextField label="Localidad" required value={paso1.localidad} onChange={v => setPaso1({ ...paso1, localidad: v })} error={e1.localidad} />
-        </div>
-        <div className="col-span-12 md:col-span-6">
+        <div className="col-span-12 md:col-span-4">
           <TextField
             label="Código Postal"
             required
@@ -1503,7 +1565,71 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             maxLength={5}
             placeholder="5 dígitos"
             error={e1.codigoPostal}
+            help={postalLookupStatus === 'loading' ? 'Buscando colonias en SEPOMEX...' : postalLookupMessage || undefined}
           />
+        </div>
+        <div className="col-span-12 md:col-span-8">
+          <TextField
+            label="Localidad"
+            required
+            value={paso1.localidad}
+            onChange={v => setPaso1({ ...paso1, localidad: v })}
+            error={e1.localidad}
+            readOnly={domicilioLocalityLocked && paso1.localidad !== ''}
+          />
+        </div>
+
+        <div className="col-span-12 md:col-span-6">
+          {postalLookupItems.length > 1 ? (
+            <ErrorLine error={e1.colonia}>
+              <FieldLabel required>Colonia</FieldLabel>
+              <SearchSelect
+                options={postalSettlementNames}
+                value={paso1.colonia}
+                onChange={v => {
+                  const match = postalLookupItems.find(item => item.settlementName === v)
+                  if (!match) {
+                    setPaso1({ ...paso1, colonia: v })
+                    return
+                  }
+                  applyPostalLookupSelection(match)
+                }}
+                placeholder="Selecciona una colonia"
+                hasError={!!e1.colonia}
+              />
+            </ErrorLine>
+          ) : (
+            <TextField
+              label="Colonia"
+              required
+              value={paso1.colonia}
+              onChange={v => setPaso1({ ...paso1, colonia: v })}
+              error={e1.colonia}
+              readOnly={postalLookupItems.length === 1 && paso1.colonia !== ''}
+            />
+          )}
+        </div>
+        <div className="col-span-12 md:col-span-3">
+          <ErrorLine error={e1.estadoDomicilio}>
+            <FieldLabel required>Estado</FieldLabel>
+            <SearchSelect options={estadoNames} value={paso1.estadoDomicilio} onChange={v => setPaso1({ ...paso1, estadoDomicilio: v, municipioDomicilio: '' })} placeholder="Selecciona un estado" disabled={domicilioStateLocked} hasError={!!e1.estadoDomicilio} />
+          </ErrorLine>
+        </div>
+        <div className="col-span-12 md:col-span-3">
+          <ErrorLine error={e1.municipioDomicilio}>
+            <FieldLabel required>Municipio</FieldLabel>
+            <SearchSelect options={municipioNames(paso1.estadoDomicilio)} value={paso1.municipioDomicilio} onChange={v => setPaso1({ ...paso1, municipioDomicilio: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoDomicilio === '' || domicilioMunicipalityLocked} hasError={!!e1.municipioDomicilio} />
+          </ErrorLine>
+        </div>
+
+        <div className="col-span-12 md:col-span-6">
+          <TextField label="Calle" required value={paso1.calle} onChange={v => setPaso1({ ...paso1, calle: v })} error={e1.calle} />
+        </div>
+        <div className="col-span-6 md:col-span-3">
+          <TextField label="Número Exterior" required value={paso1.numeroExterior} onChange={v => setPaso1({ ...paso1, numeroExterior: v })} error={e1.numeroExterior} />
+        </div>
+        <div className="col-span-6 md:col-span-3">
+          <TextField label="Número Interior" value={paso1.numeroInterior} onChange={v => setPaso1({ ...paso1, numeroInterior: v })} placeholder="Opcional" />
         </div>
       </div>
 
