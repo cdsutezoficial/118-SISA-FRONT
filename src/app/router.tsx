@@ -247,7 +247,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'descuentos',
-            element: <RequireRole allowedRoles={['FINANZAS']}><AplicarDescuento /></RequireRole>,
+            element: <RequireRole allowedRoles={['FINANZAS', 'SERVICIOS_ESCOLARES']}><AplicarDescuento /></RequireRole>,
           },
           {
             path: 'habilitacion',
