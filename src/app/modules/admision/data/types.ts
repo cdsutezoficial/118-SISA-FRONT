@@ -170,6 +170,12 @@ export interface FichaPaymentAccessBackend extends VentanaFechas {
    * TypeScript is exactly how the portal and the engine start disagreeing.
    */
   paymentExpired: boolean
+  /** Costo sin descuento; null si no se pudo cotizar. */
+  originalAmount?: number | null
+  /** Monto descontado (0 sin descuento). */
+  discountAmount?: number | null
+  /** Motivo del descuento, si lo hay. */
+  discountReason?: string | null
 }
 
 /** `GET /candidates/{id}` — ficha projection for route-refresh fallback. */
@@ -190,6 +196,12 @@ export interface CandidateFichaBackend extends VentanaFechas {
   paymentStatus: 'PENDING' | 'PAID'
   receiptNumber: string | null
   paidAt: string | null
+  /** Costo sin descuento; null si no se pudo cotizar. */
+  originalAmount?: number | null
+  /** Monto descontado (0 sin descuento). */
+  discountAmount?: number | null
+  /** Motivo del descuento, si lo hay. */
+  discountReason?: string | null
 }
 
 /**
