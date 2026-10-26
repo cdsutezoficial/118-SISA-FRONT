@@ -4,6 +4,29 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-10-25] La ficha muestra el descuento y el portal siempre cobra el precio vigente
+
+Commits: `3842a10`, `1f11e29`, `119681b`.
+
+### Qué cambió
+
+- `DescuentoAplicado.tsx` (nuevo): desglose de la ficha, "Costo − descuento" y el motivo
+  que capturó el personal. Lo usan `FichaPagoPendiente` y `FichaPagoConfirmado`.
+- `AplicarDescuento.tsx`: se conecta con finanzas. Busca al aspirante por folio o CURP,
+  ve sus cargos con el precio calculado al momento y registra o edita el descuento (uno por
+  cargo). Ya pagado el cargo, el descuento queda de solo lectura.
+- `PortalFichaPago.tsx` y `FichaConfirmacion.tsx`: al entrar o recargar piden el precio
+  vigente al back y no muestran nada hasta tenerlo. Antes se pintaba un instante el precio
+  guardado y luego cambiaba al nuevo.
+- `router.tsx`: ruta `descuentos`, solo para `FINANZAS` y `SERVICIOS_ESCOLARES` (`RequireRole`).
+
+### Depende de
+
+El PR del back de la misma rama (`feat/finance-pagos-unificado`), que agrega
+`GET /candidates/{id}/payment-access` y los endpoints de descuento de finanzas.
+
+---
+
 ## [2026-10-01] El aviso de "no se puede pagar" ya no convive con un botón de pagar
 
 Commit: `eeb3283`.
