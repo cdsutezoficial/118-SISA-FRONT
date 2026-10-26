@@ -18,7 +18,9 @@ Commits: `3842a10`, `1f11e29`, `119681b`.
 - `PortalFichaPago.tsx` y `FichaConfirmacion.tsx`: al entrar o recargar piden el precio
   vigente al back y no muestran nada hasta tenerlo. Antes se pintaba un instante el precio
   guardado y luego cambiaba al nuevo.
-- `router.tsx`: ruta `descuentos`, solo para `FINANZAS` y `SERVICIOS_ESCOLARES` (`RequireRole`).
+- `router.tsx`: ruta `descuentos` para `FINANZAS` y `SERVICIOS_ESCOLARES`, con `RequirePermission`
+  `BENEFITS_READ`. En el menú aparece en Finanzas y en Admisión (Servicios Escolares), con el
+  mismo permiso.
 
 ### Depende de
 

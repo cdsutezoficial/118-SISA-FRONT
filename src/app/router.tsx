@@ -245,9 +245,13 @@ const router = createBrowserRouter([
             path: 'publicar',
             element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><PublicarResultados /></RequireRole>,
           },
+          // Mismo cierre que `canales`: el `PermissionRegistry` exige `BENEFITS_READ`
+          // para listar los cargos con su descuento, así que sin el permiso la
+          // pantalla no se abre en vez de comerse el 403 al cargar. Registrar y
+          // editar (`BENEFITS_CREATE`/`_UPDATE`) los aplica el filtro del servidor.
           {
             path: 'descuentos',
-            element: <RequireRole allowedRoles={['FINANZAS', 'SERVICIOS_ESCOLARES']}><AplicarDescuento /></RequireRole>,
+            element: <RequireRole allowedRoles={['FINANZAS', 'SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['BENEFITS_READ']} redirectTo="/dashboard"><AplicarDescuento /></RequirePermission></RequireRole>,
           },
           {
             path: 'habilitacion',
