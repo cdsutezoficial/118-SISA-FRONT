@@ -296,13 +296,13 @@ function orderLevelUpdates(
 // el `@Pattern` de caracteres de control. Pegas 300 caracteres y el backend
 // respondía 400 sin que el navegador hubiera dicho nada.
 //
-// `totalLevelsValue` es el texto crudo del campo del total, para no usar como
-// referencia de comparación un total que todavía no es un entero válido.
 // `isEdit` activa la detección de ciclos, que sólo aplica cuando el plan ya
-// existe en el backend y sus niveles se actualizan uno por uno.
+// existe en el backend y sus niveles se actualizan uno por uno. El número de
+// nivel es una etiqueta libre (entero >= 1), no un índice: el usuario puede
+// numerar los niveles de un plan de 4 como 7, 8, 9 y 10. `totalLevels` sólo
+// expresa la cantidad de niveles y ya no limita la numeración.
 function validateLevels(
   levels: LevelRow[],
-  totalLevelsValue: string,
   isEdit: boolean,
   originalLevels: LevelRow[],
 ): PlanLevelError {
@@ -312,16 +312,12 @@ function validateLevels(
     }
   }
 
-  const totalLevelsNum = Number(totalLevelsValue)
   const seen = new Set<number>()
   for (const row of levels) {
     if (seen.has(row.levelNumber)) {
       return `El número de nivel ${row.levelNumber} está repetido.`
     }
     seen.add(row.levelNumber)
-    if (Number.isInteger(totalLevelsNum) && totalLevelsNum >= 1 && row.levelNumber > totalLevelsNum) {
-      return `El nivel ${row.levelNumber} excede el total de niveles definido (${totalLevelsNum}).`
-    }
   }
 
   // Edit mode only: the backend has no batch endpoint, so renumbered
@@ -557,7 +553,7 @@ export default function PlanForm() {
     // falla no sale ninguna petición. Las filas de niveles se validan aparte,
     // porque no son campos del schema: la numeración por `validateLevels` y la
     // descripción por `levelCellErrors`.
-    const invalidLevels = validateLevels(levels, values.totalLevels, isEdit, originalLevels)
+    const invalidLevels = validateLevels(levels, isEdit, originalLevels)
     const invalidCell = Object.keys(levelDescriptionErrors(levels)).length > 0
     if (!validate() || invalidLevels || invalidCell) {
       setLevelsTouched(true)
@@ -844,6 +840,19 @@ export default function PlanForm() {
                 className="col-span-12 sm:col-span-6"
               />
 
+              {/* Vigente desde */}
+              <div className="col-span-12 sm:col-span-6">
+                <FieldLabel required={!isView}>Vigente Desde</FieldLabel>
+                <DatePicker
+                  value={values.effectiveFrom}
+                  onChange={handleChange('effectiveFrom')}
+                  onBlur={handleBlur('effectiveFrom')}
+                  disabled={disabled}
+                  error={!!fieldError('effectiveFrom')}
+                />
+                {fieldError('effectiveFrom') && <FieldError>{fieldError('effectiveFrom')}</FieldError>}
+              </div>
+
               {/* Clave de titulación */}
               <TextField
                 label="Clave de Titulación"
@@ -857,19 +866,6 @@ export default function PlanForm() {
                 placeholder="Ej. IDGS-TIT-2024"
                 className="col-span-12 sm:col-span-6"
               />
-
-              {/* Vigente desde */}
-              <div className="col-span-12 sm:col-span-4">
-                <FieldLabel required={!isView}>Vigente Desde</FieldLabel>
-                <DatePicker
-                  value={values.effectiveFrom}
-                  onChange={handleChange('effectiveFrom')}
-                  onBlur={handleBlur('effectiveFrom')}
-                  disabled={disabled}
-                  error={!!fieldError('effectiveFrom')}
-                />
-                {fieldError('effectiveFrom') && <FieldError>{fieldError('effectiveFrom')}</FieldError>}
-              </div>
 
               {/* Total de niveles */}
               <TextField
@@ -890,7 +886,7 @@ export default function PlanForm() {
                 numeric
                 placeholder="Ej. 10"
                 help="Cantidad total de niveles que tendrá el plan (de 1 a 15)."
-                className="col-span-12 sm:col-span-4"
+                className="col-span-12 sm:col-span-6"
               />
             </div>
 
@@ -917,7 +913,7 @@ export default function PlanForm() {
                 numeric
                 placeholder="Ej. 7.0"
                 help="Escala de 0 a 10."
-                className="col-span-12 sm:col-span-4"
+                className="col-span-12 sm:col-span-5"
               />
 
               {/* Extraordinarios máximos por periodo */}
@@ -935,11 +931,11 @@ export default function PlanForm() {
                 numeric
                 placeholder="Ej. 2"
                 help="Número máximo de exámenes extraordinarios por periodo (de 0 a 5)."
-                className="col-span-12 sm:col-span-4"
+                className="col-span-12 sm:col-span-5"
               />
 
               {/* Requiere servicio social */}
-              <div className="col-span-12 sm:col-span-4">
+              <div className="col-span-12 sm:col-span-2">
                 <FieldLabel>Requiere Servicio Social</FieldLabel>
                 <div className="flex items-center gap-2 h-[38px]">
                   <Switch checked={requiresSocialService} disabled={disabled} onChange={handleRequiresSocialServiceChange} />

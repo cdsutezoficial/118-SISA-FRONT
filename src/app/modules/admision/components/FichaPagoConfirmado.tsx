@@ -3,6 +3,7 @@ import { Button } from '@app/core/components/form'
 import { ReadField } from '@app/core/components/ui'
 import { formatDate } from '@app/core/infra/utils'
 import { FolioMontoClave } from './FolioMontoClave'
+import { DescuentoAplicado, type DescuentoFicha } from './DescuentoAplicado'
 
 /**
  * Bloque de "pago de ficha confirmado" — la pantalla más importante del flujo,
@@ -39,6 +40,7 @@ export function FichaPagoConfirmado({
   onDescargarPdf,
   busyPdf = false,
   puedeDescargar = true,
+  descuento,
 }: {
   folio: string
   monto: number
@@ -64,6 +66,8 @@ export function FichaPagoConfirmado({
   onDescargarPdf: () => void
   busyPdf?: boolean
   puedeDescargar?: boolean
+  /** Descuento con el que se pagó (costo, monto y motivo), si lo hubo. */
+  descuento?: DescuentoFicha | null
 }) {
   return (
     <section className="mb-6 overflow-hidden rounded-xl border border-[#009574]/30 bg-white shadow-sm">
@@ -80,6 +84,8 @@ export function FichaPagoConfirmado({
           con el estado pendiente, para que el folio se vea igual antes y después
           de pagar: no cambia, y reconocerlo rápido es el punto. */}
       <FolioMontoClave folio={folio} monto={monto} etiquetaMonto="Monto pagado" />
+
+      <DescuentoAplicado descuento={descuento} />
 
       {/* 4 — qué lo respalda */}
       <div className="border-t border-[#E5E7EB] bg-[#F8F9FA] px-6 py-5">

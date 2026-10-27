@@ -82,7 +82,7 @@ export const SYSTEM_NAV: NavEntry[] = [
     children: [
       { icon: <Building2 size={16} />,     label: 'Áreas de Facturación',     base: 'areas',      path: '/areas',      roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_AREAS_READ'] },
       { icon: <CreditCard size={16} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
-      { icon: <BadgePercent size={16} />,  label: 'Aplicar Descuentos',      base: 'descuentos', path: '/admision/descuentos', roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
+      { icon: <BadgePercent size={16} />,  label: 'Aplicar Descuentos',      base: 'descuentos', path: '/admision/descuentos', roles: FINANZAS_ROLES, permissionKeys: ['BENEFITS_READ'] },
     ],
   },
   {
@@ -91,6 +91,7 @@ export const SYSTEM_NAV: NavEntry[] = [
       { icon: <LayoutDashboard size={16} />, label: 'Dashboard',                 base: 'admision-dash',   path: '/admision',                  roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
       { icon: <Ticket size={16} />,          label: 'Configuración de Admisión', base: 'configuracion-admision', path: '/configuracion-admision', roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
       { icon: <Users size={16} />,           label: 'Candidatos',                base: 'candidatos',       path: '/admision/candidatos',       roles: ADMISSION_ROLES, permissionKeys: ['CANDIDATES_READ'] },
+      { icon: <BadgePercent size={16} />,    label: 'Aplicar Descuentos',        base: 'descuentos',       path: '/admision/descuentos',       roles: ['SERVICIOS_ESCOLARES'], permissionKeys: ['BENEFITS_READ'] },
       { icon: <UserPlus size={16} />,        label: 'Registrar Candidato',       base: 'candidato-registrar', path: '/admision/candidatos/registrar', roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
       { icon: <ClipboardCheck size={16} />,  label: 'Selección de Candidatos',   base: 'seleccion',        path: '/admision/seleccion',        roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
       { icon: <IdCard size={16} />,          label: 'Generar Matrículas',        base: 'matriculas',       path: '/admision/matriculas',       roles: ADMISSION_ROLES, permissionKeys: ['PROGRAM_ADMISSION_CONFIGS_READ'] },
@@ -238,7 +239,7 @@ export function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { role, setRole, availableRoles, user, logout, hasAnyPermission } = useRole()
+  const { role, setRole, accountRoles, user, logout, hasAnyPermission } = useRole()
 
   // ─── Accordion state ───────────────────────────────────────────────────────
   // Default: 'config' group open + every group that contains the active route
@@ -512,22 +513,41 @@ export function Sidebar({
 
         {/* Bottom: role switcher for a real multi-role account + actions */}
         <div className="border-t border-[#E5E7EB] px-3 py-3 space-y-1 flex-shrink-0">
-          {availableRoles.length > 1 && (
+          {accountRoles.length > 1 && (
             <div className="mb-3">
               <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider px-3 mb-1.5">Cambiar rol</p>
               <div className="space-y-0.5">
-                {availableRoles.map(r => (
-                  <button
-                    key={r}
-                    onClick={() => { setRole(r); onMobileClose() }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] transition-colors ${
-                      role === r ? 'text-[#009574] font-semibold bg-[#e6f5f1]' : 'text-[#6B7280] hover:bg-[#F8F9FA] hover:text-[#333333]'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${role === r ? 'bg-[#009574]' : 'bg-[#E5E7EB]'}`} />
-                    {ROLE_LABELS[r]}
-                  </button>
-                ))}
+                {accountRoles.map(option => {
+                  if (option.role === null) {
+                    // Account role with no frontend module yet — listed, disabled.
+                    return (
+                      <div
+                        key={option.key}
+                        aria-disabled="true"
+                        className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-[13px] text-[#9CA3AF] cursor-not-allowed"
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0 bg-[#E5E7EB]" />
+                          <span className="truncate">{option.label}</span>
+                        </span>
+                        <span className="text-[10px] font-medium whitespace-nowrap flex-shrink-0">En desarrollo</span>
+                      </div>
+                    )
+                  }
+                  const target = option.role
+                  return (
+                    <button
+                      key={option.key}
+                      onClick={() => { setRole(target); onMobileClose() }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] transition-colors ${
+                        role === target ? 'text-[#009574] font-semibold bg-[#e6f5f1]' : 'text-[#6B7280] hover:bg-[#F8F9FA] hover:text-[#333333]'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${role === target ? 'bg-[#009574]' : 'bg-[#E5E7EB]'}`} />
+                      {option.label}
+                    </button>
+                  )
+                })}
               </div>
               <div className="h-px bg-[#E5E7EB] mt-3" />
             </div>

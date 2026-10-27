@@ -201,7 +201,7 @@ function NivelRow({ nivel, index, defaultOpen, planId, onChanged }: {
                     {
                       key: 'credits', header: 'Créditos', className: 'w-24 text-right',
                       render: s => (
-                        <><span className="tabular-nums font-medium text-[#333333]">{s.credits}</span><span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span></>
+                        <>{s.credits === 0 ? <span className="text-[#6B7280]">—</span> : <><span className="tabular-nums font-medium text-[#333333]">{s.credits}</span><span className="ml-1 text-[10px] text-[#6B7280] font-normal">cr.</span></>}</>
                       ),
                     },
                     {
@@ -235,7 +235,7 @@ function NivelRow({ nivel, index, defaultOpen, planId, onChanged }: {
                       <span className="font-mono text-[10px] bg-[#F8F9FA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[#333333]">{s.code}</span>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-[12px] font-semibold text-[#333333] tabular-nums">{s.credits} cr.</span>
+                      {s.credits === 0 ? <span className="text-[12px] text-[#6B7280]">—</span> : <span className="text-[12px] font-semibold text-[#333333] tabular-nums">{s.credits} cr.</span>}
                       <div className="flex items-center gap-0.5">
                         <ActionBtn icon={<Pencil size={13} />} tooltip="Editar" onClick={() => goEdit(s.id)} disabled={deletingId === s.id} />
                         <ActionBtn icon={<Trash2 size={13} />} tooltip="Eliminar" danger onClick={() => handleDelete(s)} disabled={deletingId === s.id} />

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Clock, FileText } from 'lucide-react'
 import { ReadField } from '@app/core/components/ui'
 import { FolioMontoClave } from './FolioMontoClave'
+import { DescuentoAplicado, type DescuentoFicha } from './DescuentoAplicado'
 
 /**
  * Estado PENDIENTE de la ficha — la contraparte de `FichaPagoConfirmado`.
@@ -37,17 +38,14 @@ import { FolioMontoClave } from './FolioMontoClave'
  * que gobierna el cobro va destacada en el bloque de folio, y la de inscripción va
  * como dato de contexto en el bloque de abajo: no compiten.
  *
- * POR QUÉ ESTA EXPLICACIÓN YA NO ES TEXTO FIJO
- * Decía, sin mirar nada, que la fecha "es la más corta entre el cierre del registro
- * y los días de plazo que corren desde que tu ficha se generó", que "el sistema la
- * revisa al iniciar el pago" y que "no es la fecha en que se cerró el registro: esa
- * ya pasó". Las tres eran afirmaciones que esta pantalla no puede comprobar, y la
- * tercera era falsa justo para quien se acaba de registrar: si el registro sigue
- * abierto, esa fecha no es un cierre que ya pasó sino una que todavía va a pasar.
- * Ahora el párrafo solo describe lo que el backend mandó —las dos fechas que
- * llegaron— y explica por qué pueden coincidir, que es el caso que más confunde
- * cuando las dos muestran el mismo número. No inventa de dónde salió la fecha ni
- * promete un plazo que puede cambiar.
+ * SIN PÁRRAFO "¿POR QUÉ ESTA FECHA?" (2026-10-23)
+ * Se quitó a pedido del PO: la fecha límite de pago ya va destacada y la de
+ * inscripción como dato de contexto; la explicación sobraba.
+ *
+ * DESCUENTO
+ * Si la ficha tiene un descuento, `DescuentoAplicado` muestra el costo, el monto
+ * descontado y el motivo. El monto a pagar ya es el final (tarifa vigente −
+ * descuento vigente), calculado por el backend.
  *
  * POR QUÉ HAY UN AVISO EXPLÍCITO
  * Una fecha sin consecuencia visible se lee como decorativa, que es como esta
@@ -66,6 +64,7 @@ export function FichaPagoPendiente({
   curp,
   carrera,
   periodo,
+  descuento,
   children,
 }: {
   folio: string
@@ -79,6 +78,8 @@ export function FichaPagoPendiente({
   curp?: string | null
   carrera?: string | null
   periodo?: string | null
+  /** Descuento aplicado a la ficha (costo, monto y motivo), si lo hay. */
+  descuento?: DescuentoFicha | null
   /** Ranura de acción: botón de pago, o el aviso de retorno 3DS degradado. */
   children?: ReactNode
 }) {
@@ -111,34 +112,7 @@ export function FichaPagoPendiente({
         }
       />
 
-      {/* 2b — qué significa esa fecha. Solo puede decir lo que las dos fechas
-          que llegaron muestran: si coinciden, si el pago cierra antes, o si no
-          vino la de inscripción. Nada de afirmar de dónde salió la fecha. */}
-      {fechaLimitePago && (
-        <div className="border-t border-amber-200 bg-amber-50/60 px-6 py-4">
-          <p className="text-[13px] leading-relaxed text-[#6B7280]">
-            <span className="font-bold text-[#333333]">¿Por qué esta fecha?</span>{' '}
-            {fechaLimiteInscripcion && fechaLimiteInscripcion === fechaLimitePago ? (
-              <>
-                Porque <span className="font-semibold text-amber-800">{fechaLimitePago}</span> es la fecha en que
-                tu ficha cierra para pagos, y en tu caso es el mismo día en que cierra la inscripción: por eso las
-                dos se ven iguales. La que manda aquí es la del pago.
-              </>
-            ) : fechaLimiteInscripcion ? (
-              <>
-                Porque <span className="font-semibold text-amber-800">{fechaLimitePago}</span> es el último día
-                para pagar tu ficha, y llega antes que el cierre de la inscripción ({fechaLimiteInscripcion}). Son
-                dos fechas distintas y la que se muestra destacada es la que llega primero.
-              </>
-            ) : (
-              <>
-                Porque <span className="font-semibold text-amber-800">{fechaLimitePago}</span> es el último día
-                para pagar tu ficha.
-              </>
-            )}
-          </p>
-        </div>
-      )}
+      <DescuentoAplicado descuento={descuento} />
 
       {/* 3 — de quién es la ficha */}
       {(nombre || curp || carrera || referencia || fechaLimiteInscripcion) && (

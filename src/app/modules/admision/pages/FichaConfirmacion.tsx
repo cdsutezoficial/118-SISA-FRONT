@@ -11,6 +11,7 @@ import { FichaPagoConfirmado } from '../components/FichaPagoConfirmado'
 import { FichaPagoPendiente } from '../components/FichaPagoPendiente'
 import { EvoPaymentPanel } from '../components/EvoPaymentPanel'
 import { PagoNoDisponibleNotice } from '../components/PagoNoDisponibleNotice'
+import type { DescuentoFicha } from '../components/DescuentoAplicado'
 import type { Candidate, CandidateFichaBackend, FichaRouteState } from '../data/types'
 
 /**
@@ -103,6 +104,19 @@ interface FichaDisplay {
    */
   recibo: string | null
   fechaPago: string | null
+  /** Costo, descuento y motivo cuando la ficha tiene un descuento; si no, null. */
+  descuento: DescuentoFicha | null
+}
+
+/** El desglose del descuento que manda el backend, o null si no hay descuento. */
+function descuentoDe(f: {
+  originalAmount?: number | null
+  discountAmount?: number | null
+  discountReason?: string | null
+}): DescuentoFicha | null {
+  const monto = Number(f.discountAmount ?? 0)
+  if (!(monto > 0) || f.originalAmount == null) return null
+  return { original: Number(f.originalAmount), monto, motivo: f.discountReason ?? null }
 }
 
 // Candidate ids are the UUIDs `POST /candidates` returns. Anything else is not a
@@ -147,6 +161,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
       // todavía no hay comprobante que mostrar.
       recibo: null,
       fechaPago: null,
+      descuento: null,
     }
   }
 
@@ -154,6 +169,10 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
   const [toast, setToast] = useState('')
   const [busyPdf, setBusyPdf] = useState(false)
   const [loadError, setLoadError] = useState('')
+  // El monto del route state es el del registro y puede estar viejo: no se pinta
+  // hasta que el GET (cotizado en vivo) responde, para que no parpadee del
+  // precio anterior al actual.
+  const [fichaActualizada, setFichaActualizada] = useState(false)
 
   /**
    * EVO Hosted Checkout, 3DS return handling and the single-fire confirm all
@@ -202,7 +221,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
     }
     apiGet<CandidateFichaBackend>(`/candidates/${candidateId}`)
       .then(f => {
-        setFicha(prev => ({
+        setFicha(prev => (prev?.estado === 'PAID' && f.paymentStatus !== 'PAID') ? prev : ({
           id: candidateId,
           folio: f.folio,
           nombre: `${f.firstName} ${f.lastName1} ${f.lastName2}`.trim(),
@@ -227,14 +246,16 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           // lo mostraba como "—".
           recibo: f.receiptNumber,
           fechaPago: f.paidAt,
+          descuento: descuentoDe(f),
         }))
       })
       .catch(() => {
         setLoadError('No se pudo cargar la ficha desde el servidor.')
       })
+      .finally(() => setFichaActualizada(true))
   }, [candidateId, esCandidatoReal])
 
-  if (!ficha) {
+  if (!ficha || (esCandidatoReal && !fichaActualizada)) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center px-6">
         <div className="max-w-md rounded-lg border border-[#E5E7EB] bg-white p-6 text-center">
@@ -387,9 +408,11 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           subtitulo={subtituloConfirmacion}
           onDescargarPdf={handleDescargarPdf}
           busyPdf={busyPdf}
+          descuento={ficha.descuento}
         />
       ) : (
         <FichaPagoPendiente
+          descuento={ficha.descuento}
           folio={ficha.folio}
           monto={ficha.monto}
           fechaLimitePago={ficha.fechaLimitePago}

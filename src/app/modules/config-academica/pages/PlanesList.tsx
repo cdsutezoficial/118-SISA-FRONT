@@ -85,7 +85,7 @@ export default function PlanesList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   // Load programs once for the filter dropdown (id → name/code mapping).
   useEffect(() => {
@@ -124,7 +124,7 @@ export default function PlanesList() {
         setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
-  }, [programFilter, statusFilter, debouncedSearch, page])
+  }, [programFilter, statusFilter, debouncedSearch, page, perPage])
 
   const startRow = totalElements === 0 ? 0 : (page - 1) * perPage + 1
   const endRow = Math.min(page * perPage, totalElements)
@@ -329,7 +329,7 @@ export default function PlanesList() {
         emptyTitle="No se encontraron planes de estudio"
         emptyHint={emptyHint}
         emptyIcon={<BookOpen size={36} className="text-[#E5E7EB]" />}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} suffix="registros" onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} suffix="registros" onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

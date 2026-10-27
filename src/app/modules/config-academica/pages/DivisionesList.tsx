@@ -59,7 +59,7 @@ export default function DivisionesList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300)
@@ -89,7 +89,7 @@ export default function DivisionesList() {
         setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
-  }, [statusFilter, debouncedSearch, page])
+  }, [statusFilter, debouncedSearch, page, perPage])
 
   async function handleToggleStatus(division: DivisionListItem) {
     const nextStatus: DivisionStatus = division.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
@@ -168,7 +168,7 @@ export default function DivisionesList() {
         loadingLabel="Cargando divisiones..."
         emptyTitle="No se encontraron divisiones"
         emptyHint={loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{
           view: row => navigate(`/divisiones/form?mode=view&id=${row.id}`),
           edit: row => navigate(`/divisiones/form?mode=edit&id=${row.id}`),
@@ -223,7 +223,7 @@ export default function DivisionesList() {
         loadingLabel="Cargando divisiones..."
         emptyTitle="No se encontraron divisiones"
         emptyHint={loadStatus === 'error' ? 'Vuelve a intentarlo en unos momentos.' : 'Intenta ajustar los filtros de búsqueda'}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )

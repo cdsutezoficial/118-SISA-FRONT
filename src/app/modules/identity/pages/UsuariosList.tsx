@@ -240,7 +240,7 @@ export default function UsuariosList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [toast, setToast] = useState(pendingToast ?? '')
-  const perPage = 10
+  const [perPage, setPerPage] = useState(10)
 
   // Debounce free-text search — the fetch effect below only reacts to
   // `debouncedSearch`, not every keystroke of `search`.
@@ -280,7 +280,7 @@ export default function UsuariosList() {
         }
       })
     return () => { cancelled = true }
-  }, [rolFilter, estadoFilter, debouncedSearch, page])
+  }, [rolFilter, estadoFilter, debouncedSearch, page, perPage])
 
   const hasFilters = !!rolFilter || !!estadoFilter || !!search
 
@@ -511,7 +511,7 @@ export default function UsuariosList() {
         loadingLabel="Cargando usuarios..."
         emptyTitle="No se encontraron usuarios"
         emptyHint={emptyHint}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} suffix="registros" />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} suffix="registros" />}
         actions={{
           view: row => navigate(`/usuarios/detalle?id=${row.id}`),
           extra: row => (
@@ -585,7 +585,7 @@ export default function UsuariosList() {
         loadingLabel="Cargando usuarios..."
         emptyTitle="No se encontraron usuarios"
         emptyHint={emptyHint}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} suffix="registros" />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} suffix="registros" />}
       />
     </PageContainer>
   )

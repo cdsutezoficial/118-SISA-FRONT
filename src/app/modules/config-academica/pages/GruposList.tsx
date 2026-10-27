@@ -137,7 +137,7 @@ export default function GruposList() {
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const fetchedPlanIdsRef = useRef<Set<string>>(new Set())
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   const programOptions: SelectOption[] = programs.map(p => ({ value: p.id, label: programLabel(p) }))
   // Generación filter — depends on Programa (disabled until one is picked),
@@ -219,7 +219,7 @@ export default function GruposList() {
         setErrorMsg(getApiErrorMessage(err))
       })
     return () => { cancelled = true }
-  }, [debouncedSearch, programFilter, generationFilter, page])
+  }, [debouncedSearch, programFilter, generationFilter, page, perPage])
 
   // Resolve plan levels for every generation present on the current page —
   // needed to render the Nivel column (see `levelLabel` below).
@@ -307,6 +307,7 @@ export default function GruposList() {
       totalElements={displayedGroups.length}
       perPage={perPage}
       onPageChange={setPage}
+      onPerPageChange={n => { setPerPage(n); setPage(1) }}
       suffix="registros"
     />
   )
@@ -467,6 +468,7 @@ export default function GruposList() {
             totalElements={displayedGroups.length}
             perPage={perPage}
             onPageChange={setPage}
+            onPerPageChange={n => { setPerPage(n); setPage(1) }}
             suffix="registros"
           />
         )}

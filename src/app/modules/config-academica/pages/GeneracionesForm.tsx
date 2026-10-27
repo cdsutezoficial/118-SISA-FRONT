@@ -356,7 +356,7 @@ export default function GeneracionesForm() {
             error={fieldError('number')}
             placeholder="Ej. 7"
             help="Consecutivo dentro de la carrera — no reinicia por año."
-            className="col-span-6 sm:col-span-3"
+            className="col-span-6 sm:col-span-6"
           />
           {/* Código — read-only, edit mode only (server-computed) */}
           {!isRegister && (

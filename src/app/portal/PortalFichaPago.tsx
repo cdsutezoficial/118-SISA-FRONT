@@ -4,7 +4,7 @@ import { Clock, CreditCard, Download, GraduationCap, Info, Loader2 } from 'lucid
 import { Button } from '@app/core/components/form'
 import { Toast } from '@app/core/components/ui'
 import { useRole } from '@app/core/infra/RoleContext'
-import { apiDownload, saveBlobDownload } from '@app/core/infra/apiClient'
+import { apiDownload, apiGet, saveBlobDownload } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
 import {
   clearEvoCheckoutSessionStorage,
@@ -13,6 +13,7 @@ import {
 } from '@app/modules/admision/hooks/useFichaPayment'
 import { FichaPagoConfirmado } from '@app/modules/admision/components/FichaPagoConfirmado'
 import { FichaPagoPendiente } from '@app/modules/admision/components/FichaPagoPendiente'
+import type { DescuentoFicha } from '@app/modules/admision/components/DescuentoAplicado'
 import { EvoPaymentPanel } from '@app/modules/admision/components/EvoPaymentPanel'
 import { PagoNoDisponibleNotice } from '@app/modules/admision/components/PagoNoDisponibleNotice'
 import type {
@@ -65,6 +66,10 @@ export default function PortalFichaPago() {
   const [acceso, setAcceso] = useState<FichaPaymentAccessBackend | null>(state?.acceso ?? null)
   const [toast, setToast] = useState('')
   const [busyPdf, setBusyPdf] = useState(false)
+  // Hasta que el backend responda no se pinta ningún monto: la copia guardada
+  // (route state / sessionStorage) puede traer un precio viejo, y mostrarla
+  // primero hacía que la pantalla parpadeara del precio anterior al actual.
+  const [precioActualizado, setPrecioActualizado] = useState(false)
 
   // Case 2 above: a 3DS return reloads the page without route state, so recover
   // the access payload from sessionStorage. Runs once on mount.
@@ -79,6 +84,36 @@ export default function PortalFichaPago() {
   }, [acceso, candidateIdFromUrl])
 
   const candidateId = acceso?.candidateId ?? candidateIdFromUrl
+
+  // Lo que llega por route state o por sessionStorage es una COPIA de cuando el
+  // aspirante buscó su ficha. Al recargar (o al volver del banco) se pide de
+  // nuevo al backend, que cotiza en vivo: tarifa vigente − descuento vigente.
+  // Así un cambio de costo o un descuento nuevo se ve con sólo recargar.
+  useEffect(() => {
+    if (!candidateId) return
+    let cancelado = false
+    apiGet<FichaPaymentAccessBackend>(`/candidates/${candidateId}/payment-access`)
+      .then(fresco => {
+        if (cancelado) return
+        // Un pago ya confirmado en esta pantalla no se "despaga" con una lectura
+        // que salió antes de la confirmación.
+        setAcceso(prev => (prev?.alreadyPaid && !fresco.alreadyPaid ? prev : fresco))
+        try {
+          sessionStorage.setItem(fichaAccessStorageKey(fresco.candidateId), JSON.stringify(fresco))
+        } catch {
+          // sessionStorage no disponible: la pantalla ya tiene los datos frescos
+        }
+      })
+      .catch(() => {
+        // Sin conexión o ficha inexistente: se queda con la copia que ya había.
+      })
+      .finally(() => {
+        if (!cancelado) setPrecioActualizado(true)
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [candidateId])
 
   const {
     startCheckout,
@@ -150,7 +185,7 @@ export default function PortalFichaPago() {
   // payment without the access payload, since that is where the amount lives.
   const retornoEnCurso = !acceso && candidateIdFromUrl !== ''
 
-  if (!acceso && !retornoEnCurso) {
+  if ((!acceso && !retornoEnCurso) || (candidateId !== '' && !precioActualizado)) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
         <div className="flex items-center gap-2 text-[#6B7280] text-[13px]">
@@ -167,6 +202,11 @@ export default function PortalFichaPago() {
   const folioComprobante = confirmData?.receiptNumber ?? acceso?.receiptNumber
   const referencia = acceso?.referenceNumber ?? confirmData?.referenceNumber ?? ''
   const monto = confirmData ? Number(confirmData.amount) : (acceso?.amount ?? 0)
+  // Desglose del descuento (costo, monto y motivo) que el backend calculó en vivo.
+  const descuento: DescuentoFicha | null =
+    acceso && Number(acceso.discountAmount ?? 0) > 0 && acceso.originalAmount != null
+      ? { original: Number(acceso.originalAmount), monto: Number(acceso.discountAmount), motivo: acceso.discountReason ?? null }
+      : null
 
   return (
     <div className="min-h-screen bg-[#F8F9FA]">
@@ -218,6 +258,7 @@ export default function PortalFichaPago() {
             email={{}}
             onDescargarPdf={handleDescargarPdf}
             busyPdf={busyPdf}
+            descuento={descuento}
           />
         ) : (
           <>
@@ -228,6 +269,7 @@ export default function PortalFichaPago() {
                 Los datos de contacto se quedan dentro del bloque de apoyo:
                 esta vista no expone el correo, que `payment-access` no devuelve. */}
             <FichaPagoPendiente
+              descuento={descuento}
               folio={folio}
               monto={monto}
               fechaLimitePago={

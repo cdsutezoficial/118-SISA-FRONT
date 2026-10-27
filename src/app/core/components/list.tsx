@@ -1,7 +1,9 @@
 import { type ReactNode, Fragment, useRef, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Loader2, Search, AlertCircle, Plus, Eye, Pencil, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { ActionBtn, Switch } from '@app/core/components/ui'
+import { useScreenPopover } from '@app/core/infra/hooks'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary: #009574, hover: #007a5e
@@ -239,23 +241,80 @@ export function EmptyState({ title, hint, icon }: { title: string; hint: string;
   )
 }
 
+// ─── RowsPerPageSelect ─────────────────────────────────────────────────────────
+// Selector "Filas por página" que muestran `Pagination` y `MobilePagination`
+// cuando se les pasa `onPerPageChange`. La lista dueña es quien decide qué
+// hacer al cambiar (por convención `setPerPage(n); setPage(1)`), así que aquí
+// no hay estado propio.
+function RowsPerPageSelect({ value, onChange, options }: {
+  value: number
+  onChange: (n: number) => void
+  options: number[]
+}) {
+  const { open, setOpen, triggerRef, panelRef, pos, openPanel } = useScreenPopover<HTMLButtonElement, HTMLUListElement>()
+
+  return (
+    <div className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
+      <span className="whitespace-nowrap">Filas por página</span>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => (open ? setOpen(false) : openPanel())}
+        className={`flex items-center justify-between gap-2 pl-2.5 pr-2 py-1.5 text-[13px] border border-[#E5E7EB] rounded-md bg-white text-[#333333] hover:border-[#d1d5db] focus:outline-none focus:ring-2 focus:ring-[#009574]/30 focus:border-[#009574] transition-colors ${open ? 'ring-2 ring-[#009574]/30 border-[#009574]' : ''}`}
+      >
+        <span className="tabular-nums">{value}</span>
+        <ChevronDown size={14} className={`text-[#6B7280] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && pos && createPortal(
+        <ul
+          ref={panelRef}
+          className="fixed z-[120] min-w-[88px] bg-white border border-[#E5E7EB] rounded-md shadow-lg py-1"
+          style={{ left: pos.left, top: pos.top }}
+        >
+          {options.map(n => (
+            <li key={n}>
+              <button
+                type="button"
+                onMouseDown={() => { onChange(n); setOpen(false) }}
+                className={`w-full text-left px-3 py-2 text-[13px] tabular-nums transition-colors hover:bg-[#e6f5f1] ${value === n ? 'bg-[#e6f5f1] text-[#009574] font-semibold' : 'text-[#333333]'}`}
+              >
+                {n}
+              </button>
+            </li>
+          ))}
+        </ul>,
+        document.body,
+      )}
+    </div>
+  )
+}
+
 // ─── Pagination ────────────────────────────────────────────────────────────────
 // Paginación desktop (compacta, dentro de la tabla) — el patrón del Módulo 01.
-export function Pagination({ page, totalPages, totalElements, perPage, onPageChange, suffix }: {
+export function Pagination({ page, totalPages, totalElements, perPage, onPageChange, suffix, perPageOptions, onPerPageChange }: {
   page: number
   totalPages: number
   totalElements: number
   perPage: number
   onPageChange: (p: number) => void
   suffix?: string
+  /** Opciones del selector "Filas por página"; por defecto 10/20/50/100. */
+  perPageOptions?: number[]
+  /** Con esto presente se muestra el selector junto al contador. */
+  onPerPageChange?: (n: number) => void
 }) {
   const startRow = totalElements === 0 ? 0 : (page - 1) * perPage + 1
   const endRow = Math.min(page * perPage, totalElements)
+  const options = perPageOptions ?? [10, 20, 50, 100]
   return (
-    <div className="px-4 py-3 border-t border-[#E5E7EB] flex items-center justify-between">
-      <span className="text-[12px] text-[#6B7280]">
-        {totalElements === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${totalElements}${suffix ? ` ${suffix}` : ''}`}
-      </span>
+    <div className="px-4 py-3 border-t border-[#E5E7EB] flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-[12px] text-[#6B7280]">
+          {totalElements === 0 ? 'Sin registros' : `Mostrando ${startRow}–${endRow} de ${totalElements}${suffix ? ` ${suffix}` : ''}`}
+        </span>
+        {onPerPageChange && <RowsPerPageSelect value={perPage} onChange={onPerPageChange} options={options} />}
+      </div>
       <div className="flex items-center gap-1">
         <button onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1}
           className="p-1.5 rounded border border-[#E5E7EB] text-[#6B7280] disabled:opacity-40 disabled:cursor-not-allowed hover:enabled:bg-[#F8F9FA]">
@@ -273,7 +332,7 @@ export function Pagination({ page, totalPages, totalElements, perPage, onPageCha
 
 // ─── MobilePagination ──────────────────────────────────────────────────────────
 // Paginación móvil (cards) — "Anterior / pág / Siguiente".
-export function MobilePagination({ page, totalPages, totalElements, perPage, onPageChange, suffix }: {
+export function MobilePagination({ page, totalPages, totalElements, perPage, onPageChange, suffix, perPageOptions, onPerPageChange }: {
   page: number
   totalPages: number
   totalElements: number
@@ -281,15 +340,23 @@ export function MobilePagination({ page, totalPages, totalElements, perPage, onP
   onPageChange: (p: number) => void
   /** Sufijo de "de {n} resultado" (p.ej. "registros"). */
   suffix?: string
+  /** Opciones del selector "Filas por página"; por defecto 10/20/50/100. */
+  perPageOptions?: number[]
+  /** Con esto presente se muestra el selector junto al contador. */
+  onPerPageChange?: (n: number) => void
 }) {
   const startRow = totalElements === 0 ? 0 : (page - 1) * perPage + 1
   const endRow = Math.min(page * perPage, totalElements)
+  const options = perPageOptions ?? [10, 20, 50, 100]
   if (totalElements === 0) return null
   return (
     <div className="flex flex-col items-center gap-3 pt-2">
-      <p className="text-[12px] text-[#6B7280]">
-        Mostrando {startRow}–{endRow} de {totalElements}{suffix ? ` ${suffix}` : ''}
-      </p>
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+        <p className="text-[12px] text-[#6B7280]">
+          Mostrando {startRow}–{endRow} de {totalElements}{suffix ? ` ${suffix}` : ''}
+        </p>
+        {onPerPageChange && <RowsPerPageSelect value={perPage} onChange={onPerPageChange} options={options} />}
+      </div>
       <div className="flex items-center gap-2">
         <button onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1}
           className="flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] bg-white text-[#333333] disabled:opacity-40 disabled:cursor-not-allowed">

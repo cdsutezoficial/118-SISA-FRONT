@@ -2,21 +2,29 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { ShieldCheck, GraduationCap, Lock, AlertCircle } from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
+import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
+import {
+  consumeLlaveMxCallback,
+  fetchLlaveMxAvailability,
+  fetchLlaveMxPrefill,
+  startLlaveMxFlow,
+  type LlaveMxPrefill,
+} from '@app/core/infra/llaveMx'
 import {
   FieldLabel,
   FieldHelp,
+  FieldError,
   SearchSelect,
   SearchSelectField,
   Switch,
   RadioCard,
-  inputCls,
   ReadField,
   DatePicker,
   type SelectOption,
 } from '@app/core/components/ui'
 import { FormPage, FormHeader, SelectField, TextField, TimeField } from '@app/core/components/form'
 import { Breadcrumb } from '@app/core/components/list'
-import { ADMISSION_ERROR_CODES, apiGet, apiPost, type ApiError } from '@app/core/infra/apiClient'
+import { ADMISSION_ERROR_CODES, apiGet, apiPost, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
 import type {
   Candidate,
@@ -56,6 +64,25 @@ import type {
 
 export type ScreenOrigin = 'staff' | 'public'
 
+/**
+ * sessionStorage key backing the "identity verified" hint (see the state
+ * comment at its declaration). Tab-scoped on purpose — see there.
+ */
+const LLAVE_MX_VERIFIED_KEY = 'sisa.candidato.llaveMxVerified'
+
+/**
+ * Clave de comparación tolerante para nombres de catálogo y datos del proveedor:
+ * sin mayúsculas, sin acentos y sin espacios de sobra, para que "Morelos",
+ * "MORELOS" y "Morelos " sean lo mismo. Solo para emparejar — nunca para mostrar.
+ */
+function normalizeLookup(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
 interface CandidatoRegistroProps {
   origin: ScreenOrigin
 }
@@ -86,6 +113,17 @@ interface MunicipalityItem {
 }
 interface MunicipalityListResponse {
   items: MunicipalityItem[]
+}
+interface PostalCodeLookupItem {
+  settlementName: string
+  localityName: string | null
+  stateName: string
+  municipalityName: string
+}
+interface PostalCodeLookupResponse {
+  postalCode: string
+  message: string
+  items: PostalCodeLookupItem[]
 }
 interface OptionItem {
   id: string
@@ -286,15 +324,152 @@ const emptyPaso3: Paso3State = {
   promedio: '', cct: '', cctConfirmacion: '',
 }
 
+// ─── Validación por campo ("qué campo falta") ────────────────────────────────
+// La ficha se valida al pulsar "Siguiente" en un paso cuyo destino está
+// bloqueado (paso 4 Confirmación): se marcan en rojo los campos faltantes y no
+// se avanza hasta completar. Estos mapas alimentan el marcado por campo y el
+// salto al primer faltante.
+
+type FieldErrors = Record<string, string | undefined>
+
+const REQ_MSG = 'Campo obligatorio.'
+
+/** Obligatorio vacío: aparece solo después del primer intento de avanzar al paso bloqueado. */
+function missing(v: string, attempted: boolean, msg = REQ_MSG): string | undefined {
+  return attempted && v.trim() === '' ? msg : undefined
+}
+
+/** Obligatorio con formato: vacío tras intento → obligatorio; inválido → mensaje de formato (en vivo o tras intento). */
+function req(v: string, valid: boolean, formatMsg: string, attempted: boolean): string | undefined {
+  if (attempted && v.trim() === '') return REQ_MSG
+  if (!valid && (attempted || v.trim() !== '')) return formatMsg
+  return undefined
+}
+
+function paso1Errors(p1: Paso1State, attempted: boolean): FieldErrors {
+  const e: FieldErrors = {}
+  // Los campos obligatorios —incluidos los que LlaveMX bloquea (Nombre(s),
+  // Apellidos, CURP, Fecha, Sexo)— se marcan igual en ambos modos, para que el
+  // faltante sea visible aunque el campo esté bloqueado.
+  const m = (v: string, msg?: string) => missing(v, attempted, msg)
+  const r = (v: string, valid: boolean, msg: string) => req(v, valid, msg, attempted)
+
+  e.nombres = m(p1.nombres)
+  e.apellidoPaterno = m(p1.apellidoPaterno)
+  e.curp = r(p1.curp, p1.curp.trim().length === 18, 'La CURP debe tener 18 caracteres.')
+  e.fechaNacimiento = m(p1.fechaNacimiento)
+  e.sexo = m(p1.sexo)
+  e.nacionalidad = m(p1.nacionalidad, 'Selecciona tu nacionalidad.')
+  if (p1.nacionalidad === 'Mexicana') {
+    e.estadoNacimiento = m(p1.estadoNacimiento)
+    e.municipioNacimiento = m(p1.municipioNacimiento)
+  } else if (p1.nacionalidad === 'Extranjera') {
+    e.paisNacimiento = m(p1.paisNacimiento)
+    e.estadoNacimiento = m(p1.estadoNacimiento)
+    e.ciudadNacimiento = m(p1.ciudadNacimiento)
+  }
+  e.estadoCivil = m(p1.estadoCivil)
+  e.lenguaNatal = m(p1.lenguaNatal)
+
+  // Domicilio Actual
+  e.calle = m(p1.calle)
+  e.numeroExterior = m(p1.numeroExterior)
+  e.colonia = m(p1.colonia)
+  e.estadoDomicilio = m(p1.estadoDomicilio)
+  e.municipioDomicilio = m(p1.municipioDomicilio)
+  e.localidad = m(p1.localidad)
+  e.codigoPostal = r(p1.codigoPostal, /^\d{5}$/.test(p1.codigoPostal), 'Debe tener 5 dígitos.')
+
+  // Contacto
+  e.email = r(p1.email, /\S+@\S+\.\S+/.test(p1.email), 'Ingresa un correo electrónico válido.')
+  e.telefonoCasa = r(p1.telefonoCasa, /^\d{10}$/.test(p1.telefonoCasa.replace(/\s/g, '')), 'Ingresa 10 dígitos numéricos.')
+  e.celular = r(p1.celular, /^\d{10}$/.test(p1.celular.replace(/\s/g, '')), 'Ingresa 10 dígitos numéricos.')
+  return e
+}
+
+function paso2Errors(p2: Paso2State, attempted: boolean): FieldErrors {
+  const e: FieldErrors = {}
+  const m = (v: string, msg?: string) => missing(v, attempted, msg)
+  const r = (v: string, valid: boolean, msg: string) => req(v, valid, msg, attempted)
+
+  e.ingresoMensualFamiliar = r(
+    p2.ingresoMensualFamiliar,
+    p2.ingresoMensualFamiliar.trim() !== '' && !Number.isNaN(Number(p2.ingresoMensualFamiliar)) && Number(p2.ingresoMensualFamiliar) >= 0,
+    'Ingresa un monto válido.',
+  )
+  if (p2.tieneEnfermedadPreexistente) e.descripcionEnfermedad = m(p2.descripcionEnfermedad)
+  if (p2.tieneDiscapacidad) e.descripcionDiscapacidad = m(p2.descripcionDiscapacidad)
+  if (p2.padresHablanLenguaIndigena) e.lenguaIndigenaPadres = m(p2.lenguaIndigenaPadres)
+  if (p2.hablaLenguaIndigena) e.lenguaIndigenaPropia = m(p2.lenguaIndigenaPropia)
+  if (p2.trabaja) {
+    e.tipoTrabajo = m(p2.tipoTrabajo)
+    e.telefonoTrabajo = r(p2.telefonoTrabajo, /^\d{10}$/.test(p2.telefonoTrabajo.replace(/\s/g, '')), 'Ingresa 10 dígitos numéricos.')
+    e.ingresoMensual = r(
+      p2.ingresoMensual,
+      p2.ingresoMensual.trim() !== '' && !Number.isNaN(Number(p2.ingresoMensual)) && Number(p2.ingresoMensual) >= 0,
+      'Ingresa un monto válido.',
+    )
+    e.nombreEmpresa = m(p2.nombreEmpresa)
+    e.puesto = m(p2.puesto)
+    e.horaInicio = m(p2.horaInicio)
+    e.horaFin = m(p2.horaFin)
+  }
+  return e
+}
+
+function paso3Errors(p3: Paso3State, attempted: boolean): FieldErrors {
+  const e: FieldErrors = {}
+  const m = (v: string, msg?: string) => missing(v, attempted, msg)
+  const r = (v: string, valid: boolean, msg: string) => req(v, valid, msg, attempted)
+
+  e.modalidad = m(p3.modalidad, 'Selecciona una modalidad.')
+  e.programa = m(p3.admissionConfigId, 'Selecciona una carrera.')
+  e.canal = m(p3.outreachChannelId, 'Selecciona un canal.')
+  if (p3.isFirstChoice === null && attempted) e.isFirstChoice = 'Selecciona si es tu primera o segunda opción.'
+  e.nombrePreparatoria = m(p3.nombrePreparatoria)
+  e.tipoBachillerato = m(p3.schoolTypeId, 'Selecciona un tipo de bachillerato.')
+  if (p3.estudioEnMexico) {
+    e.estadoPreparatoria = m(p3.estadoPreparatoria)
+    e.municipioPreparatoria = m(p3.municipioPreparatoria)
+  } else {
+    e.paisPreparatoria = m(p3.paisPreparatoria)
+    e.estadoPreparatoria = m(p3.estadoPreparatoria)
+    e.ciudadPreparatoria = m(p3.ciudadPreparatoria)
+  }
+  e.promedio = r(p3.promedio, (() => {
+    const n = Number(p3.promedio)
+    return p3.promedio.trim() !== '' && !Number.isNaN(n) && n >= 0 && n <= 10
+  })(), 'Debe estar entre 0 y 10.')
+  e.cct = m(p3.cct)
+  e.cctConfirmacion =
+    p3.cct !== '' && p3.cctConfirmacion !== '' && p3.cct !== p3.cctConfirmacion
+      ? 'Las claves no coinciden.'
+      : m(p3.cctConfirmacion)
+  return e
+}
+
+/**
+ * Envuelve controles que no pintan su propio mensaje de error (SearchSelect,
+ * DatePicker, RadioCard…) y agrega el mensaje debajo cuando existe.
+ */
+function ErrorLine({ error, children }: { error?: string; children: ReactNode }) {
+  return (
+    <>
+      {children}
+      {error && <FieldError>{error}</FieldError>}
+    </>
+  )
+}
+
 // ─── Shared field helpers ─────────────────────────────────────────────────────
 
 /** LlaveMX-locked, read-only field — Nombre(s)/Apellidos/CURP/Fecha de Nacimiento/Sexo/Estado de Nacimiento. */
-function LockedField({ label, value, required = true }: { label: string; value: string; required?: boolean }) {
+function LockedField({ label, value, required = true, error = false }: { label: string; value: string; required?: boolean; error?: boolean }) {
   return (
     <div>
       <FieldLabel required={required}>{label}</FieldLabel>
-      <div className={`${inputCls(true, false)} flex items-center gap-1.5`}>
-        <Lock size={11} className="text-[#9CA3AF] flex-shrink-0" />
+      <div className={`flex items-center gap-1.5 w-full px-3 py-2 text-[13px] border rounded-md cursor-not-allowed ${error ? 'border-red-400 ring-2 ring-red-200 bg-[#F8F9FA] text-[#6B7280]' : 'border-[#E5E7EB] bg-[#F8F9FA] text-[#6B7280]'}`}>
+        <Lock size={11} className={`flex-shrink-0 ${error ? 'text-red-400' : 'text-[#9CA3AF]'}`} />
         <span>{value || '—'}</span>
       </div>
     </div>
@@ -345,9 +520,37 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const [paso2, setPaso2] = useState<Paso2State>(emptyPaso2)
   const [paso3, setPaso3] = useState<Paso3State>(emptyPaso3)
   const [identityStatus, setIdentityStatus] = useState<'idle' | 'manual'>('idle')
+  /**
+   * LlaveMX identity verified for THIS tab's ticket.
+   *
+   * Session-scoped on purpose, and the reasoning is the security model rather
+   * than tidiness: the proof of verification is the HttpOnly ticket cookie, which
+   * JavaScript can neither read nor forge. So this boolean is only ever a hint
+   * for what to render — it must never outlive the tab that earned it, which is
+   * what `sessionStorage` gives. Persisting it to `localStorage` would let a
+   * later applicant on a shared machine inherit someone else's "verified" badge
+   * on screen while the backend correctly refuses the POST.
+   */
+  const [llaveMxVerified, setLlaveMxVerified] = useState(() => sessionStorage.getItem(LLAVE_MX_VERIFIED_KEY) === 'true')
+  const [llaveMxAvailable, setLlaveMxAvailable] = useState<boolean | null>(null)
+  const [llaveMxStarting, setLlaveMxStarting] = useState(false)
+  const [llaveMxError, setLlaveMxError] = useState('')
+  /**
+   * Prellenado crudo que LlaveMX acaba de devolver, pendiente de volcar en
+   * `paso1`.
+   *
+   * Vive aparte del formulario porque el mapeo del estado de nacimiento necesita
+   * el catálogo de estados, que llega por su propio request: se guarda aquí y el
+   * efecto de abajo lo aplica en cuanto puede resolverlo.
+   */
+  const [llaveMxPrefill, setLlaveMxPrefill] = useState<LlaveMxPrefill | null>(null)
   const [folio, setFolio] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  /** true tras pulsar "Siguiente" hacia el paso bloqueado con campos faltantes: marca en rojo. */
+  const [attempted, setAttempted] = useState(false)
+  /** Paso controlado del Wizard (para saltar al primer paso con faltantes). */
+  const [wizardStep, setWizardStep] = useState(0)
   // Ficha price comes from the backend's active ENROLLMENT concept, never from
   // a constant here: Paso 4 quotes what the candidate will actually be charged.
   const [fichaAmount, setFichaAmount] = useState<FichaAmountQuote | null>(null)
@@ -355,6 +558,9 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   // ── Reference catalogs (anonymous GETs) ──
   const [estados, setEstados] = useState<StateItem[]>([])
   const [municipios, setMunicipios] = useState<Record<string, MunicipalityItem[]>>({})
+  const [postalLookupItems, setPostalLookupItems] = useState<PostalCodeLookupItem[]>([])
+  const [postalLookupMessage, setPostalLookupMessage] = useState('')
+  const [postalLookupStatus, setPostalLookupStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [canales, setCanales] = useState<OptionItem[]>([])
   const [tiposBachillerato, setTiposBachillerato] = useState<OptionItem[]>([])
   const [configsAdmision, setConfigsAdmision] = useState<OptionItem[]>([])
@@ -392,6 +598,109 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     return () => { cancelled = true }
   }, [])
 
+  // ── LlaveMX identity verification (RF-AUTH-003) ──
+  //
+  // Only the public mount offers it. On the staff mount an official registers an
+  // applicant on their behalf, and forcing them through their own LlaveMX round
+  // would prove the wrong person's identity — the applicant's — while storing the
+  // official's ticket against it.
+  useEffect(() => {
+    if (origin !== 'public') {
+      setLlaveMxAvailable(false)
+      return
+    }
+
+    let cancelled = false
+
+    const outcome = consumeLlaveMxCallback()
+    if (outcome.kind === 'candidate-verified') {
+      // The marker only says "the round finished". The proof is the HttpOnly
+      // ticket cookie the backend set on its callback response, which
+      // `POST /candidates` will re-validate; there is nothing for this tab to
+      // check itself and nothing it should try to.
+      setLlaveMxVerified(true)
+      try { sessionStorage.setItem(LLAVE_MX_VERIFIED_KEY, 'true') } catch { /* storage disabled — the hint is cosmetic */ }
+
+      // Pulling the proven fields is part of finishing the verification, not an
+      // extra: name, CURP, birth date and sex are exactly what the applicant no
+      // longer has to key in.
+      fetchLlaveMxPrefill()
+        .then(prefill => { if (!cancelled) setLlaveMxPrefill(prefill) })
+        .catch(err => {
+          if (cancelled) return
+          // The ticket is gone (expired, or the tab lost the cookie), so the
+          // green badge would be lying and `POST /candidates` would reject the
+          // ficha anyway. Drop the hint and ask for the round again.
+          setLlaveMxVerified(false)
+          try { sessionStorage.removeItem(LLAVE_MX_VERIFIED_KEY) } catch { /* storage disabled */ }
+          setLlaveMxError(getApiErrorMessage(
+            err,
+            'Tu verificación con Llave Morelos ya venció. Vuelve a verificar tu identidad.',
+          ))
+        })
+    } else if (outcome.kind === 'error') {
+      setLlaveMxError(outcome.message)
+    }
+
+    fetchLlaveMxAvailability().then(ok => { if (!cancelled) setLlaveMxAvailable(ok) })
+    return () => { cancelled = true }
+  }, [origin])
+
+  /**
+   * Vuelca el prellenado de LlaveMX en el paso 1, una sola vez.
+   *
+   * Se aplica en cuanto llega, salvo el estado de nacimiento, que espera al
+   * catálogo: el proveedor manda texto libre ("MORELOS", "Ciudad de Mexico") y
+   * el catálogo tiene su propia forma ("Morelos"), así que sin la lista no hay
+   * forma de mapearlo. Si el catálogo falla, se aplica igual y el campo queda
+   * editable, que es mejor que dejar la ficha a medias.
+   *
+   * Cada campo se escribe solo si el proveedor mandó algo (`|| prev`), y el
+   * estado únicamente si empata con el catálogo: un nombre que el selector no
+   * conoce se vería tan vacío como no escribir nada. El municipio se deja al
+   * selector a propósito — los catálogos de municipios son por estado y muy
+   * sensibles a la forma, así que casi nunca empataría.
+   */
+  useEffect(() => {
+    if (!llaveMxPrefill) return
+    if (llaveMxPrefill.estadoNacimiento !== '' && catalogsStatus === 'loading') return
+
+    const estadoNacimiento = estados.find(
+      e => normalizeLookup(e.name) === normalizeLookup(llaveMxPrefill.estadoNacimiento),
+    )?.name ?? ''
+
+    setPaso1(prev => ({
+      ...prev,
+      nombres: llaveMxPrefill.nombres || prev.nombres,
+      apellidoPaterno: llaveMxPrefill.apellidoPaterno || prev.apellidoPaterno,
+      apellidoMaterno: llaveMxPrefill.apellidoMaterno || prev.apellidoMaterno,
+      curp: llaveMxPrefill.curp || prev.curp,
+      fechaNacimiento: llaveMxPrefill.fechaNacimiento || prev.fechaNacimiento,
+      sexo: llaveMxPrefill.sexo || prev.sexo,
+      estadoNacimiento: estadoNacimiento || prev.estadoNacimiento,
+      // Un estado mexicano solo lo emite una identidad mexicana. El Aspirante
+      // puede cambiarlo, pero ahorrarle el clic es justamente el punto.
+      nacionalidad: estadoNacimiento && prev.nacionalidad === '' ? 'Mexicana' : prev.nacionalidad,
+      email: llaveMxPrefill.email || prev.email,
+      celular: llaveMxPrefill.celular || prev.celular,
+    }))
+    setLlaveMxPrefill(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [llaveMxPrefill, estados, catalogsStatus])
+
+
+  async function handleVerifyWithLlaveMx() {
+    setLlaveMxStarting(true)
+    setLlaveMxError('')
+    try {
+      // Leaves the tab; there is no success branch to write here.
+      await startLlaveMxFlow('candidate')
+    } catch (err) {
+      setLlaveMxStarting(false)
+      setLlaveMxError(getApiErrorMessage(err, 'No se pudo iniciar la verificación con Llave Morelos.'))
+    }
+  }
+
   // Load a state's municipalities on demand (cascade) and cache by stateId.
   const stateIdOf = (name: string): string => estados.find(e => e.name === name)?.id ?? ''
   function loadMunicipios(stateId: string) {
@@ -400,6 +709,80 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       .then(res => setMunicipios(prev => (prev[stateId] ? prev : { ...prev, [stateId]: res.items })))
       .catch(() => {/* non-critical — select just won't populate */})
   }
+
+  const postalSettlementNames = postalLookupItems.map(item => item.settlementName)
+  const commonPostalValue = (
+    items: PostalCodeLookupItem[],
+    pick: (item: PostalCodeLookupItem) => string,
+  ): string => {
+    if (items.length === 0) return ''
+    const first = pick(items[0])
+    return items.every(item => pick(item) === first) ? first : ''
+  }
+  const selectedPostalLookupItem = postalLookupItems.find(item => item.settlementName === paso1.colonia) ?? null
+
+  function applyPostalLookupSelection(item: PostalCodeLookupItem) {
+    setPaso1(prev => ({
+      ...prev,
+      colonia: item.settlementName,
+      estadoDomicilio: item.stateName,
+      municipioDomicilio: item.municipalityName,
+      localidad: item.localityName ?? prev.localidad,
+    }))
+  }
+
+  useEffect(() => {
+    if (!cpValid) {
+      setPostalLookupItems([])
+      setPostalLookupMessage('')
+      setPostalLookupStatus('idle')
+      return
+    }
+
+    let cancelled = false
+    setPostalLookupStatus('loading')
+    setPostalLookupMessage('')
+    apiGet<PostalCodeLookupResponse>(`/postal-codes/${paso1.codigoPostal}`)
+      .then(res => {
+        if (cancelled) return
+        setPostalLookupItems(res.items)
+        setPostalLookupMessage(res.message)
+        setPostalLookupStatus('ready')
+
+        if (res.items.length === 0) {
+          setPaso1(prev => ({ ...prev, colonia: '' }))
+          return
+        }
+
+        const match = res.items.find(item => item.settlementName === paso1.colonia)
+        if (match) {
+          applyPostalLookupSelection(match)
+          return
+        }
+
+        if (res.items.length === 1) {
+          applyPostalLookupSelection(res.items[0])
+          return
+        }
+
+        setPaso1(prev => ({
+          ...prev,
+          colonia: '',
+          estadoDomicilio: commonPostalValue(res.items, item => item.stateName) || prev.estadoDomicilio,
+          municipioDomicilio: commonPostalValue(res.items, item => item.municipalityName) || prev.municipioDomicilio,
+          localidad: commonPostalValue(res.items, item => item.localityName ?? '') || prev.localidad,
+        }))
+      })
+      .catch(err => {
+        if (cancelled) return
+        setPostalLookupItems([])
+        setPostalLookupMessage(getApiErrorMessage(err))
+        setPostalLookupStatus('error')
+      })
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso1.codigoPostal])
 
   /**
    * Vuelve a pedir las carreras al abrir el desplegable, sin nada de ceremony.
@@ -423,6 +806,9 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   const estadoNames = estados.map(e => e.name)
   const municipioNames = (stateName: string): string[] =>
     (municipios[stateIdOf(stateName)] ?? []).map(m => m.name)
+  const domicilioStateLocked = postalLookupItems.length > 0 && commonPostalValue(postalLookupItems, item => item.stateName) !== ''
+  const domicilioMunicipalityLocked = postalLookupItems.length > 0 && commonPostalValue(postalLookupItems, item => item.municipalityName) !== ''
+  const domicilioLocalityLocked = selectedPostalLookupItem?.localityName != null || (postalLookupItems.length > 1 && commonPostalValue(postalLookupItems, item => item.localityName ?? '') !== '')
 
   // Prefill cascade whenever a state-name lands in the form (user pick, or the
   // LlaveMX-locked "Morelos" from `handleVerify`).
@@ -492,13 +878,30 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       ? { value: selectedConfig.id, label: selectedConfig.label }
       : null
 
-  const isVerified = false
+  const isVerified = llaveMxVerified
   /** Captura manual activa: los campos de identidad son editables sin pasar por LlaveMX. */
   const isManual = identityStatus === 'manual'
+
+  /**
+   * Si un campo de identidad se captura a mano.
+   *
+   * Con la captura manual activa, todos. Y con LlaveMX verificado, los que el
+   * proveedor NO mandó: dejarlos bloqueados y vacíos sería un callejón sin
+   * salida — nadie puede escribir en ellos y la ficha nunca pasa la validación.
+   * Un campo verificado con valor sigue bloqueado; uno sin valor vuelve a ser
+   * del Aspirante.
+   */
+  const identityEditable = (value: string) => isManual || (isVerified && !value)
 
   function handleGoManual() {
     if (identityStatus !== 'idle') return
     setIdentityStatus('manual')
+  }
+
+  /** Vuelve a la opción de LlaveMX (solo visual — no hay integración real). */
+  function handleVolverLlaveMx() {
+    if (identityStatus !== 'manual') return
+    setIdentityStatus('idle')
   }
 
   // ── Paso 1 validation (Datos Generales + Domicilio + Contacto) ──
@@ -572,6 +975,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     : paso3.paisPreparatoria.trim() !== '' && paso3.estadoPreparatoria.trim() !== '' && paso3.ciudadPreparatoria.trim() !== ''
 
   const paso3Valid =
+    paso3.modalidad !== '' &&
     paso3.admissionConfigId !== '' &&
     paso3.outreachChannelId !== '' &&
     paso3.isFirstChoice !== null &&
@@ -700,7 +1104,12 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         cct: paso3.cct,
         cctConfirmacion: paso3.cctConfirmacion,
       },
-      llaveMxVerified: false,
+      // Advisory only. The backend re-validates the HttpOnly
+      // `sisa.llave.verified` ticket cookie on this very request and is the only
+      // thing that decides whether `llaveMxVerified` sticks — a `true` forged in
+      // DevTools buys nothing. The honest flag keeps the response's own value
+      // meaningful instead of echoing what we hoped for.
+      llaveMxVerified: isVerified,
     }
 
     try {
@@ -855,9 +1264,49 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     }
   }
 
+  // ── Errores por campo ───────────────────────────────────────────────────────
+  // `e{1,2,3}` pinta el error de cada campo (vacío solo tras `attempted`, y los
+  // formatos inválidos en vivo como antes). `e{1,2,3}All` detecta el primer
+  // paso con faltantes al pulsar "Siguiente" hacia el paso bloqueado.
+  const e1 = paso1Errors(paso1, attempted)
+  const e2 = paso2Errors(paso2, attempted)
+  const e3 = paso3Errors(paso3, attempted)
+  const e1All = paso1Errors(paso1, true)
+  const e2All = paso2Errors(paso2, true)
+  const e3All = paso3Errors(paso3, true)
+  const missing1 = Object.keys(e1All).filter(k => e1All[k]).length
+  const missing2 = Object.keys(e2All).filter(k => e2All[k]).length
+  const missing3 = Object.keys(e3All).filter(k => e3All[k]).length
+
+  /** Salta al primer paso con faltantes y hace scroll al primer campo en rojo. */
+  function scrollToFirstMissing(stepIndex: number) {
+    requestAnimationFrame(() => {
+      const root = document.querySelector(`[data-ficha-step="${stepIndex}"]`)
+      const firstErr = root?.querySelector('.text-red-500') as HTMLElement | null
+      if (!firstErr) return
+      firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      const control = root?.querySelector('input, button') as HTMLElement | null
+      control?.focus({ preventScroll: true })
+    })
+  }
+
+  /**
+   * "Siguiente" hacia el paso 4 (Confirmación, bloqueado por gating): si faltan
+   * campos se marcan en rojo y se salta al primer paso con faltantes; solo se
+   * avanza cuando los pasos 1-3 están completos.
+   */
+  function handleInvalidStep() {
+    setAttempted(true)
+    const first = missing1 > 0 ? 0 : missing2 > 0 ? 1 : missing3 > 0 ? 2 : -1
+    if (first >= 0) {
+      setWizardStep(first)
+      scrollToFirstMissing(first)
+    }
+  }
+
   // ── Paso 1 content: Datos Generales + Domicilio Actual + Contacto ──
   const paso1Render = (
-    <div>
+    <div data-ficha-step="0">
       {/* Verificación de Identidad — LlaveMX u captura manual. */}
       <div className="border-2 border-[#009574] rounded-lg p-5 mb-6 bg-[#e6f5f1]/40">
         <div className="flex items-start gap-3">
@@ -866,20 +1315,64 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           </div>
           <div className="flex-1">
             <p className="text-[14px] font-semibold text-[#333333]">Verificación de Identidad</p>
-            {identityStatus === 'idle' && (
+            {identityStatus === 'idle' && !llaveMxVerified && (
               <div>
-                <p className="text-[13px] text-[#6B7280] mt-1">
-                  La integración con LlaveMX aún no está disponible. Captura tus datos manualmente para continuar con el registro.
-                </p>
-                <div className="mt-4">
-                  <button
-                    type="button"
-                    onClick={handleGoManual}
-                    className="text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
-                  >
-                    Ingresa tus datos manualmente
-                  </button>
+                {llaveMxAvailable === true ? (
+                  <>
+                    <p className="text-[13px] text-[#6B7280] mt-1">
+                      Confirma tu identidad con Llave Morelos para registrarte. Solo te pediremos los datos que la llave no trae.
+                    </p>
+                    <div className="mt-4 flex justify-start">
+                      <LlaveMxButton
+                        variant="light"
+                        loading={llaveMxStarting}
+                        onClick={handleVerifyWithLlaveMx}
+                      />
+                    </div>
+                    {llaveMxStarting && (
+                      <p className="mt-2.5 text-[12px] text-[#9CA3AF]">
+                        Te llevamos a Llave Morelos para confirmar tu identidad.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[13px] text-[#6B7280] mt-1">
+                      {llaveMxAvailable === null
+                        ? 'Consultando la disponibilidad de Llave Morelos...'
+                        : 'La integración con LlaveMX aún no está disponible. Captura tus datos manualmente para continuar con el registro.'}
+                    </p>
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={handleGoManual}
+                        className="text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
+                      >
+                        Ingresa tus datos manualmente
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {llaveMxVerified && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#e6f5f1] text-[#007a5e] border border-[#9ad9c6]">
+                    <ShieldCheck size={13} />Identidad verificada con Llave Morelos
+                  </span>
                 </div>
+                <p className="text-[13px] text-[#6B7280] mt-2">
+                  Listo, ya puedes continuar con el resto de la ficha.
+                </p>
+              </div>
+            )}
+
+            {llaveMxError && (
+              <div className="mt-4 flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5 text-[13px] text-red-700">
+                <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                {llaveMxError}
               </div>
             )}
 
@@ -893,6 +1386,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
                 <p className="text-[13px] text-[#6B7280] mt-2">
                   Estás capturando tus datos a mano.
                 </p>
+                <button
+                  type="button"
+                  onClick={handleVolverLlaveMx}
+                  className="mt-2 text-[13px] text-[#009574] hover:text-[#007a5e] font-medium transition-colors"
+                >
+                  Volver a LlaveMX
+                </button>
               </div>
             )}
 
@@ -904,21 +1404,21 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Datos Generales</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12 md:col-span-4">
-          {isManual ? (
-            <TextField label="Nombre(s)" required value={paso1.nombres} onChange={v => setPaso1({ ...paso1, nombres: v })} />
+{identityEditable(paso1.nombres) ? (
+            <TextField label="Nombre(s)" required value={paso1.nombres} onChange={v => setPaso1({ ...paso1, nombres: v })} error={e1.nombres} />
           ) : (
-            <LockedField label="Nombre(s)" value={paso1.nombres} />
+            <LockedField label="Nombre(s)" value={paso1.nombres} error={!!e1.nombres} />
           )}
         </div>
         <div className="col-span-12 md:col-span-4">
-          {isManual ? (
-            <TextField label="Primer Apellido" required value={paso1.apellidoPaterno} onChange={v => setPaso1({ ...paso1, apellidoPaterno: v })} />
+{identityEditable(paso1.apellidoPaterno) ? (
+            <TextField label="Primer Apellido" required value={paso1.apellidoPaterno} onChange={v => setPaso1({ ...paso1, apellidoPaterno: v })} error={e1.apellidoPaterno} />
           ) : (
-            <LockedField label="Primer Apellido" value={paso1.apellidoPaterno} />
+            <LockedField label="Primer Apellido" value={paso1.apellidoPaterno} error={!!e1.apellidoPaterno} />
           )}
         </div>
         <div className="col-span-12 md:col-span-4">
-          {isManual ? (
+          {identityEditable(paso1.apellidoMaterno) ? (
             <TextField label="Segundo Apellido" value={paso1.apellidoMaterno} onChange={v => setPaso1({ ...paso1, apellidoMaterno: v })} />
           ) : (
             <LockedField label="Segundo Apellido" value={paso1.apellidoMaterno} required={false} />
@@ -926,7 +1426,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         </div>
 
         <div className="col-span-12 md:col-span-6">
-          {isManual ? (
+          {identityEditable(paso1.curp) ? (
             <TextField
               label="CURP"
               required
@@ -935,24 +1435,26 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               maxLength={18}
               placeholder="18 caracteres"
               mono
-              error={paso1.curp !== '' && !curpValid ? 'La CURP debe tener 18 caracteres.' : undefined}
+              error={e1.curp}
             />
           ) : (
-            <LockedField label="CURP" value={paso1.curp} />
+            <LockedField label="CURP" value={paso1.curp} error={!!e1.curp} />
           )}
         </div>
         <div className="col-span-6 md:col-span-3">
-          {isManual ? (
+          {identityEditable(paso1.fechaNacimiento) ? (
             <div>
               <FieldLabel required>Fecha de Nacimiento</FieldLabel>
-              <DatePicker value={paso1.fechaNacimiento} onChange={v => setPaso1({ ...paso1, fechaNacimiento: v })} />
+              <ErrorLine error={e1.fechaNacimiento}>
+                <DatePicker value={paso1.fechaNacimiento} onChange={v => setPaso1({ ...paso1, fechaNacimiento: v })} error={!!e1.fechaNacimiento} />
+              </ErrorLine>
             </div>
           ) : (
-            <LockedField label="Fecha de Nacimiento" value={paso1.fechaNacimiento} />
+            <LockedField label="Fecha de Nacimiento" value={paso1.fechaNacimiento} error={!!e1.fechaNacimiento} />
           )}
         </div>
         <div className="col-span-6 md:col-span-3">
-          {isManual ? (
+          {identityEditable(paso1.sexo) ? (
             <SelectField
               label="Sexo"
               required
@@ -960,9 +1462,10 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               value={paso1.sexo}
               onChange={v => setPaso1({ ...paso1, sexo: v })}
               placeholder="Seleccionar…"
+              error={e1.sexo}
             />
           ) : (
-            <LockedField label="Sexo" value={paso1.sexo} />
+            <LockedField label="Sexo" value={paso1.sexo} error={!!e1.sexo} />
           )}
         </div>
 
@@ -973,43 +1476,50 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               selected={paso1.nacionalidad === 'Mexicana'}
               title="Mexicana"
               onSelect={() => setPaso1({ ...paso1, nacionalidad: 'Mexicana' })}
+              error={!!e1.nacionalidad}
             />
             <RadioCard
               selected={paso1.nacionalidad === 'Extranjera'}
               title="Extranjera"
               onSelect={() => setPaso1({ ...paso1, nacionalidad: 'Extranjera' })}
+              error={!!e1.nacionalidad}
             />
           </div>
+          {e1.nacionalidad && <FieldError>{e1.nacionalidad}</FieldError>}
         </div>
 
         {paso1.nacionalidad === 'Mexicana' && (
           <>
             <div className="col-span-12 md:col-span-6">
-              {isManual ? (
+              {identityEditable(paso1.estadoNacimiento) ? (
                 <>
-                  <FieldLabel required>Estado de Nacimiento</FieldLabel>
-                  <SearchSelect options={estadoNames} value={paso1.estadoNacimiento} onChange={v => setPaso1({ ...paso1, estadoNacimiento: v, municipioNacimiento: '' })} placeholder="Selecciona un estado" />
+                  <ErrorLine error={e1.estadoNacimiento}>
+                    <FieldLabel required>Estado de Nacimiento</FieldLabel>
+                    <SearchSelect options={estadoNames} value={paso1.estadoNacimiento} onChange={v => setPaso1({ ...paso1, estadoNacimiento: v, municipioNacimiento: '' })} placeholder="Selecciona un estado" hasError={!!e1.estadoNacimiento} />
+                  </ErrorLine>
                 </>
               ) : (
-                <LockedField label="Estado de Nacimiento" value={paso1.estadoNacimiento} />
+                <LockedField label="Estado de Nacimiento" value={paso1.estadoNacimiento} error={!!e1.estadoNacimiento} />
               )}
             </div>
             <div className="col-span-12 md:col-span-6">
-              <FieldLabel required>Municipio de Nacimiento</FieldLabel>
-              <SearchSelect options={municipioNames(paso1.estadoNacimiento)} value={paso1.municipioNacimiento} onChange={v => setPaso1({ ...paso1, municipioNacimiento: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoNacimiento === ''} />
+              <ErrorLine error={e1.municipioNacimiento}>
+                <FieldLabel required>Municipio de Nacimiento</FieldLabel>
+                <SearchSelect options={municipioNames(paso1.estadoNacimiento)} value={paso1.municipioNacimiento} onChange={v => setPaso1({ ...paso1, municipioNacimiento: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoNacimiento === ''} hasError={!!e1.municipioNacimiento} />
+              </ErrorLine>
             </div>
           </>
         )}
         {paso1.nacionalidad === 'Extranjera' && (
           <>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="País de Nacimiento" required value={paso1.paisNacimiento} onChange={v => setPaso1({ ...paso1, paisNacimiento: v })} placeholder="País" />
+              <TextField label="País de Nacimiento" required value={paso1.paisNacimiento} onChange={v => setPaso1({ ...paso1, paisNacimiento: v })} placeholder="País" error={e1.paisNacimiento} />
             </div>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="Estado de Nacimiento" required value={paso1.estadoNacimiento} onChange={v => setPaso1({ ...paso1, estadoNacimiento: v })} placeholder="Estado o provincia" />
+              <TextField label="Estado de Nacimiento" required value={paso1.estadoNacimiento} onChange={v => setPaso1({ ...paso1, estadoNacimiento: v })} placeholder="Estado o provincia" error={e1.estadoNacimiento} />
             </div>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="Ciudad de Nacimiento" required value={paso1.ciudadNacimiento} onChange={v => setPaso1({ ...paso1, ciudadNacimiento: v })} placeholder="Ciudad" />
+              <TextField label="Ciudad de Nacimiento" required value={paso1.ciudadNacimiento} onChange={v => setPaso1({ ...paso1, ciudadNacimiento: v })} placeholder="Ciudad" error={e1.ciudadNacimiento} />
             </div>
           </>
         )}
@@ -1022,6 +1532,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             value={paso1.estadoCivil}
             onChange={v => setPaso1({ ...paso1, estadoCivil: v as EstadoCivil })}
             placeholder="Seleccionar…"
+            error={e1.estadoCivil}
           />
         </div>
         <div className="col-span-12 md:col-span-4">
@@ -1032,6 +1543,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             value={paso1.lenguaNatal}
             onChange={v => setPaso1({ ...paso1, lenguaNatal: v as LenguaNatal })}
             placeholder="Seleccionar…"
+            error={e1.lenguaNatal}
           />
         </div>
         <div className="col-span-12 md:col-span-4 flex items-end">
@@ -1044,32 +1556,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       {/* Domicilio Actual */}
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Domicilio Actual</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
-        <div className="col-span-12 md:col-span-6">
-          <TextField label="Calle" required value={paso1.calle} onChange={v => setPaso1({ ...paso1, calle: v })} />
-        </div>
-        <div className="col-span-6 md:col-span-3">
-          <TextField label="Número Exterior" required value={paso1.numeroExterior} onChange={v => setPaso1({ ...paso1, numeroExterior: v })} />
-        </div>
-        <div className="col-span-6 md:col-span-3">
-          <TextField label="Número Interior" value={paso1.numeroInterior} onChange={v => setPaso1({ ...paso1, numeroInterior: v })} placeholder="Opcional" />
-        </div>
-
-        <div className="col-span-12 md:col-span-6">
-          <TextField label="Colonia" required value={paso1.colonia} onChange={v => setPaso1({ ...paso1, colonia: v })} />
-        </div>
-        <div className="col-span-12 md:col-span-3">
-          <FieldLabel required>Estado</FieldLabel>
-          <SearchSelect options={estadoNames} value={paso1.estadoDomicilio} onChange={v => setPaso1({ ...paso1, estadoDomicilio: v, municipioDomicilio: '' })} placeholder="Selecciona un estado" />
-        </div>
-        <div className="col-span-12 md:col-span-3">
-          <FieldLabel required>Municipio</FieldLabel>
-          <SearchSelect options={municipioNames(paso1.estadoDomicilio)} value={paso1.municipioDomicilio} onChange={v => setPaso1({ ...paso1, municipioDomicilio: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoDomicilio === ''} />
-        </div>
-
-        <div className="col-span-12 md:col-span-6">
-          <TextField label="Localidad" required value={paso1.localidad} onChange={v => setPaso1({ ...paso1, localidad: v })} />
-        </div>
-        <div className="col-span-12 md:col-span-6">
+        <div className="col-span-12 md:col-span-4">
           <TextField
             label="Código Postal"
             required
@@ -1077,8 +1564,72 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             onChange={v => setPaso1({ ...paso1, codigoPostal: v.replace(/\D/g, '').slice(0, 5) })}
             maxLength={5}
             placeholder="5 dígitos"
-            error={paso1.codigoPostal !== '' && !cpValid ? 'Debe tener 5 dígitos.' : undefined}
+            error={e1.codigoPostal}
+            help={postalLookupStatus === 'loading' ? 'Buscando colonias en SEPOMEX...' : postalLookupMessage || undefined}
           />
+        </div>
+        <div className="col-span-12 md:col-span-8">
+          <TextField
+            label="Localidad"
+            required
+            value={paso1.localidad}
+            onChange={v => setPaso1({ ...paso1, localidad: v })}
+            error={e1.localidad}
+            readOnly={domicilioLocalityLocked && paso1.localidad !== ''}
+          />
+        </div>
+
+        <div className="col-span-12 md:col-span-6">
+          {postalLookupItems.length > 1 ? (
+            <ErrorLine error={e1.colonia}>
+              <FieldLabel required>Colonia</FieldLabel>
+              <SearchSelect
+                options={postalSettlementNames}
+                value={paso1.colonia}
+                onChange={v => {
+                  const match = postalLookupItems.find(item => item.settlementName === v)
+                  if (!match) {
+                    setPaso1({ ...paso1, colonia: v })
+                    return
+                  }
+                  applyPostalLookupSelection(match)
+                }}
+                placeholder="Selecciona una colonia"
+                hasError={!!e1.colonia}
+              />
+            </ErrorLine>
+          ) : (
+            <TextField
+              label="Colonia"
+              required
+              value={paso1.colonia}
+              onChange={v => setPaso1({ ...paso1, colonia: v })}
+              error={e1.colonia}
+              readOnly={postalLookupItems.length === 1 && paso1.colonia !== ''}
+            />
+          )}
+        </div>
+        <div className="col-span-12 md:col-span-3">
+          <ErrorLine error={e1.estadoDomicilio}>
+            <FieldLabel required>Estado</FieldLabel>
+            <SearchSelect options={estadoNames} value={paso1.estadoDomicilio} onChange={v => setPaso1({ ...paso1, estadoDomicilio: v, municipioDomicilio: '' })} placeholder="Selecciona un estado" disabled={domicilioStateLocked} hasError={!!e1.estadoDomicilio} />
+          </ErrorLine>
+        </div>
+        <div className="col-span-12 md:col-span-3">
+          <ErrorLine error={e1.municipioDomicilio}>
+            <FieldLabel required>Municipio</FieldLabel>
+            <SearchSelect options={municipioNames(paso1.estadoDomicilio)} value={paso1.municipioDomicilio} onChange={v => setPaso1({ ...paso1, municipioDomicilio: v })} placeholder="Selecciona un municipio" disabled={paso1.estadoDomicilio === '' || domicilioMunicipalityLocked} hasError={!!e1.municipioDomicilio} />
+          </ErrorLine>
+        </div>
+
+        <div className="col-span-12 md:col-span-6">
+          <TextField label="Calle" required value={paso1.calle} onChange={v => setPaso1({ ...paso1, calle: v })} error={e1.calle} />
+        </div>
+        <div className="col-span-6 md:col-span-3">
+          <TextField label="Número Exterior" required value={paso1.numeroExterior} onChange={v => setPaso1({ ...paso1, numeroExterior: v })} error={e1.numeroExterior} />
+        </div>
+        <div className="col-span-6 md:col-span-3">
+          <TextField label="Número Interior" value={paso1.numeroInterior} onChange={v => setPaso1({ ...paso1, numeroInterior: v })} placeholder="Opcional" />
         </div>
       </div>
 
@@ -1093,7 +1644,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             value={paso1.email}
             onChange={v => setPaso1({ ...paso1, email: v })}
             placeholder="Para notificaciones del proceso"
-            error={paso1.email !== '' && !emailValid ? 'Ingresa un correo electrónico válido.' : undefined}
+            error={e1.email}
           />
         </div>
         <div className="col-span-12 md:col-span-4">
@@ -1104,7 +1655,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             onChange={v => setPaso1({ ...paso1, telefonoCasa: v })}
             maxLength={10}
             placeholder="10 dígitos"
-            error={paso1.telefonoCasa !== '' && !telefonoCasaValid ? 'Ingresa 10 dígitos numéricos.' : undefined}
+            error={e1.telefonoCasa}
           />
         </div>
         <div className="col-span-12 md:col-span-4">
@@ -1115,7 +1666,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             onChange={v => setPaso1({ ...paso1, celular: v })}
             maxLength={10}
             placeholder="10 dígitos"
-            error={paso1.celular !== '' && !telefonoValid ? 'Ingresa 10 dígitos numéricos.' : undefined}
+            error={e1.celular}
           />
         </div>
       </div>
@@ -1124,24 +1675,24 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
 
   // ── Paso 2 content: Información Complementaria + Ingresos ──
   const paso2Render = (
-    <div>
+    <div data-ficha-step="1">
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-2">Información Complementaria</p>
       <div className="mb-8">
         <SwitchField label="¿Tienes alguna enfermedad o diagnóstico preexistente?" checked={paso2.tieneEnfermedadPreexistente} onChange={v => setPaso2({ ...paso2, tieneEnfermedadPreexistente: v })} />
         {paso2.tieneEnfermedadPreexistente && (
-          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="Nombre de la enfermedad o diagnóstico" required value={paso2.descripcionEnfermedad} onChange={v => setPaso2({ ...paso2, descripcionEnfermedad: v })} />
+          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="Nombre de la enfermedad o diagnóstico" required value={paso2.descripcionEnfermedad} onChange={v => setPaso2({ ...paso2, descripcionEnfermedad: v })} error={e2.descripcionEnfermedad} />
         )}
         <SwitchField label="¿Tienes alguna discapacidad?" checked={paso2.tieneDiscapacidad} onChange={v => setPaso2({ ...paso2, tieneDiscapacidad: v })} />
         {paso2.tieneDiscapacidad && (
-          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="¿Cuál discapacidad?" required value={paso2.descripcionDiscapacidad} onChange={v => setPaso2({ ...paso2, descripcionDiscapacidad: v })} />
+          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="¿Cuál discapacidad?" required value={paso2.descripcionDiscapacidad} onChange={v => setPaso2({ ...paso2, descripcionDiscapacidad: v })} error={e2.descripcionDiscapacidad} />
         )}
         <SwitchField label="¿Tu mamá o papá hablan alguna lengua indígena?" checked={paso2.padresHablanLenguaIndigena} onChange={v => setPaso2({ ...paso2, padresHablanLenguaIndigena: v })} />
         {paso2.padresHablanLenguaIndigena && (
-          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="¿Cuál lengua?" required value={paso2.lenguaIndigenaPadres} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPadres: v })} />
+          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="¿Cuál lengua?" required value={paso2.lenguaIndigenaPadres} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPadres: v })} error={e2.lenguaIndigenaPadres} />
         )}
         <SwitchField label="¿Hablas alguna lengua indígena?" checked={paso2.hablaLenguaIndigena} onChange={v => setPaso2({ ...paso2, hablaLenguaIndigena: v })} />
         {paso2.hablaLenguaIndigena && (
-          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="¿Cuál lengua?" required value={paso2.lenguaIndigenaPropia} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPropia: v })} />
+          <TextField className="-mt-1 pb-2.5 border-b border-[#E5E7EB]" label="¿Cuál lengua?" required value={paso2.lenguaIndigenaPropia} onChange={v => setPaso2({ ...paso2, lenguaIndigenaPropia: v })} error={e2.lenguaIndigenaPropia} />
         )}
         <SwitchField label="¿Te identificas como indígena?" checked={paso2.seIdentificaIndigena} onChange={v => setPaso2({ ...paso2, seIdentificaIndigena: v })} />
         <SwitchField label="¿Te identificas como No binario?" checked={paso2.seIdentificaNoBinario} onChange={v => setPaso2({ ...paso2, seIdentificaNoBinario: v })} />
@@ -1168,7 +1719,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             prefix="$"
             inputMode="numeric"
             placeholder="0.00"
-            error={paso2.ingresoMensualFamiliar !== '' && !ingresoFamiliarValid ? 'Ingresa un monto válido.' : undefined}
+            error={e2.ingresoMensualFamiliar}
           />
         </div>
         <div className="col-span-12 md:col-span-6 flex items-end">
@@ -1180,7 +1731,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         {paso2.trabaja && (
           <>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="Tipo de Trabajo" required value={paso2.tipoTrabajo} onChange={v => setPaso2({ ...paso2, tipoTrabajo: v })} />
+              <TextField label="Tipo de Trabajo" required value={paso2.tipoTrabajo} onChange={v => setPaso2({ ...paso2, tipoTrabajo: v })} error={e2.tipoTrabajo} />
             </div>
             <div className="col-span-12 md:col-span-4">
               <TextField
@@ -1190,25 +1741,25 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
                 onChange={v => setPaso2({ ...paso2, telefonoTrabajo: v })}
                 maxLength={10}
                 placeholder="10 dígitos"
-                error={paso2.telefonoTrabajo !== '' && !telefonoTrabajoValid ? 'Ingresa 10 dígitos numéricos.' : undefined}
+                error={e2.telefonoTrabajo}
               />
             </div>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="Ingreso Mensual" required value={paso2.ingresoMensual} onChange={v => setPaso2({ ...paso2, ingresoMensual: sanitizeAmount(v) })} prefix="$" inputMode="numeric" placeholder="0.00" />
+              <TextField label="Ingreso Mensual" required value={paso2.ingresoMensual} onChange={v => setPaso2({ ...paso2, ingresoMensual: sanitizeAmount(v) })} prefix="$" inputMode="numeric" placeholder="0.00" error={e2.ingresoMensual} />
             </div>
 
             <div className="col-span-12 md:col-span-6">
-              <TextField label="Nombre de la Empresa" required value={paso2.nombreEmpresa} onChange={v => setPaso2({ ...paso2, nombreEmpresa: v })} />
+              <TextField label="Nombre de la Empresa" required value={paso2.nombreEmpresa} onChange={v => setPaso2({ ...paso2, nombreEmpresa: v })} error={e2.nombreEmpresa} />
             </div>
             <div className="col-span-12 md:col-span-6">
-              <TextField label="Puesto" required value={paso2.puesto} onChange={v => setPaso2({ ...paso2, puesto: v })} />
+              <TextField label="Puesto" required value={paso2.puesto} onChange={v => setPaso2({ ...paso2, puesto: v })} error={e2.puesto} />
             </div>
 
             <div className="col-span-6 md:col-span-3">
-              <TimeField label="Hora de Inicio" required value={paso2.horaInicio} onChange={v => setPaso2({ ...paso2, horaInicio: v })} />
+              <TimeField label="Hora de Inicio" required value={paso2.horaInicio} onChange={v => setPaso2({ ...paso2, horaInicio: v })} error={e2.horaInicio} />
             </div>
             <div className="col-span-6 md:col-span-3">
-              <TimeField label="Hora de Fin" required value={paso2.horaFin} onChange={v => setPaso2({ ...paso2, horaFin: v })} />
+              <TimeField label="Hora de Fin" required value={paso2.horaFin} onChange={v => setPaso2({ ...paso2, horaFin: v })} error={e2.horaFin} />
             </div>
           </>
         )}
@@ -1218,41 +1769,48 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
 
   // ── Paso 3 content: Selección de Carrera + Antecedentes Escolares ──
   const paso3Render = (
-    <div>
+    <div data-ficha-step="2">
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Selección de Carrera</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
         <div className="col-span-12 md:col-span-4">
           <SelectField
             label="Modalidad (filtro)"
+            required
             options={MODALIDAD_FILTROS.map(v => ({ value: v, label: v === '' ? 'Todas' : v }))}
             value={paso3.modalidad}
             onChange={v => setPaso3({ ...paso3, modalidad: v as '' | 'Todas' | ModalidadPrograma, admissionConfigId: '', programa: '' })}
             placeholder="Seleccionar…"
+            error={e3.modalidad}
           />
         </div>
         <div className="col-span-12 md:col-span-8 space-y-2">
           <div>
-            <FieldLabel required>Carrera</FieldLabel>
-            <SearchSelectField
-              options={selectedProgramOption ? [...programaOptions, selectedProgramOption] : programaOptions}
-              value={paso3.admissionConfigId}
-              onChange={v => {
-                const config = resolveConfig(v)
-                setPaso3(prev => ({ ...prev, admissionConfigId: v, programa: config?.label ?? '' }))
-              }}
-              onOpen={refreshAdmissionConfigs}
-              placeholder={programaOptions.length === 0 && !selectedProgramOption ? 'No hay carreras para esa modalidad' : 'Selecciona una carrera'}
-              searchPlaceholder="Buscar carrera…"
-            />
+            <ErrorLine error={e3.programa}>
+              <FieldLabel required>Carrera</FieldLabel>
+              <SearchSelectField
+                options={selectedProgramOption ? [...programaOptions, selectedProgramOption] : programaOptions}
+                value={paso3.admissionConfigId}
+                onChange={v => {
+                  const config = resolveConfig(v)
+                  setPaso3(prev => ({ ...prev, admissionConfigId: v, programa: config?.label ?? '' }))
+                }}
+                onOpen={refreshAdmissionConfigs}
+                placeholder={programaOptions.length === 0 && !selectedProgramOption ? 'No hay carreras para esa modalidad' : 'Selecciona una carrera'}
+                searchPlaceholder="Buscar carrera…"
+                hasError={!!e3.programa}
+              />
+            </ErrorLine>
           </div>
         </div>
 
         <div className="col-span-12 md:col-span-6">
-          <FieldLabel required>Medio de Difusión por el que se enteró</FieldLabel>
-          <SearchSelectField options={canalOptions} value={paso3.outreachChannelId} onChange={v => {
-            const canal = canales.find(c => c.id === v)
-            setPaso3(prev => ({ ...prev, outreachChannelId: v, canal: canal?.label ?? '' }))
-          }} placeholder="Selecciona un canal" />
+          <ErrorLine error={e3.canal}>
+            <FieldLabel required>Medio de Difusión por el que se enteró</FieldLabel>
+            <SearchSelectField options={canalOptions} value={paso3.outreachChannelId} onChange={v => {
+              const canal = canales.find(c => c.id === v)
+              setPaso3(prev => ({ ...prev, outreachChannelId: v, canal: canal?.label ?? '' }))
+            }} placeholder="Selecciona un canal" hasError={!!e3.canal} />
+          </ErrorLine>
         </div>
 
         <div className="col-span-12">
@@ -1262,27 +1820,32 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
               selected={paso3.isFirstChoice === true}
               title="Es mi primera opción"
               onSelect={() => setPaso3({ ...paso3, isFirstChoice: true })}
+              error={!!e3.isFirstChoice}
             />
             <RadioCard
               selected={paso3.isFirstChoice === false}
               title="Es mi segunda opción"
               onSelect={() => setPaso3({ ...paso3, isFirstChoice: false })}
+              error={!!e3.isFirstChoice}
             />
           </div>
+          {e3.isFirstChoice && <FieldError>{e3.isFirstChoice}</FieldError>}
         </div>
       </div>
 
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Antecedentes Escolares</p>
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12 md:col-span-8">
-          <TextField label="Nombre de la Preparatoria de Procedencia" required value={paso3.nombrePreparatoria} onChange={v => setPaso3({ ...paso3, nombrePreparatoria: v })} />
+          <TextField label="Nombre de la Preparatoria de Procedencia" required value={paso3.nombrePreparatoria} onChange={v => setPaso3({ ...paso3, nombrePreparatoria: v })} error={e3.nombrePreparatoria} />
         </div>
         <div className="col-span-12 md:col-span-4">
-          <FieldLabel required>Tipo de Bachillerato</FieldLabel>
-          <SearchSelectField options={bachilleratoOptions} value={paso3.schoolTypeId} onChange={v => {
-            const tipo = tiposBachillerato.find(t => t.id === v)
-            setPaso3(prev => ({ ...prev, schoolTypeId: v, tipoBachillerato: (tipo?.label ?? '') as TipoBachillerato }))
-          }} placeholder="Selecciona un tipo" />
+          <ErrorLine error={e3.tipoBachillerato}>
+            <FieldLabel required>Tipo de Bachillerato</FieldLabel>
+            <SearchSelectField options={bachilleratoOptions} value={paso3.schoolTypeId} onChange={v => {
+              const tipo = tiposBachillerato.find(t => t.id === v)
+              setPaso3(prev => ({ ...prev, schoolTypeId: v, tipoBachillerato: (tipo?.label ?? '') as TipoBachillerato }))
+            }} placeholder="Selecciona un tipo" hasError={!!e3.tipoBachillerato} />
+          </ErrorLine>
         </div>
 
         <div className="col-span-12">
@@ -1292,24 +1855,28 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         {paso3.estudioEnMexico ? (
           <>
             <div className="col-span-12 md:col-span-6">
-              <FieldLabel required>Estado de la Preparatoria</FieldLabel>
-              <SearchSelect options={estadoNames} value={paso3.estadoPreparatoria} onChange={v => setPaso3({ ...paso3, estadoPreparatoria: v, municipioPreparatoria: '' })} placeholder="Selecciona un estado" />
+              <ErrorLine error={e3.estadoPreparatoria}>
+                <FieldLabel required>Estado de la Preparatoria</FieldLabel>
+                <SearchSelect options={estadoNames} value={paso3.estadoPreparatoria} onChange={v => setPaso3({ ...paso3, estadoPreparatoria: v, municipioPreparatoria: '' })} placeholder="Selecciona un estado" hasError={!!e3.estadoPreparatoria} />
+              </ErrorLine>
             </div>
             <div className="col-span-12 md:col-span-6">
-              <FieldLabel required>Municipio de la Preparatoria</FieldLabel>
-              <SearchSelect options={municipioNames(paso3.estadoPreparatoria)} value={paso3.municipioPreparatoria} onChange={v => setPaso3({ ...paso3, municipioPreparatoria: v })} placeholder="Selecciona un municipio" disabled={paso3.estadoPreparatoria === ''} />
+              <ErrorLine error={e3.municipioPreparatoria}>
+                <FieldLabel required>Municipio de la Preparatoria</FieldLabel>
+                <SearchSelect options={municipioNames(paso3.estadoPreparatoria)} value={paso3.municipioPreparatoria} onChange={v => setPaso3({ ...paso3, municipioPreparatoria: v })} placeholder="Selecciona un municipio" disabled={paso3.estadoPreparatoria === ''} hasError={!!e3.municipioPreparatoria} />
+              </ErrorLine>
             </div>
           </>
         ) : (
           <>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="País de la Preparatoria" required value={paso3.paisPreparatoria} onChange={v => setPaso3({ ...paso3, paisPreparatoria: v })} />
+              <TextField label="País de la Preparatoria" required value={paso3.paisPreparatoria} onChange={v => setPaso3({ ...paso3, paisPreparatoria: v })} error={e3.paisPreparatoria} />
             </div>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="Estado de la Preparatoria" required value={paso3.estadoPreparatoria} onChange={v => setPaso3({ ...paso3, estadoPreparatoria: v })} />
+              <TextField label="Estado de la Preparatoria" required value={paso3.estadoPreparatoria} onChange={v => setPaso3({ ...paso3, estadoPreparatoria: v })} error={e3.estadoPreparatoria} />
             </div>
             <div className="col-span-12 md:col-span-4">
-              <TextField label="Ciudad de la Preparatoria" required value={paso3.ciudadPreparatoria} onChange={v => setPaso3({ ...paso3, ciudadPreparatoria: v })} />
+              <TextField label="Ciudad de la Preparatoria" required value={paso3.ciudadPreparatoria} onChange={v => setPaso3({ ...paso3, ciudadPreparatoria: v })} error={e3.ciudadPreparatoria} />
             </div>
           </>
         )}
@@ -1322,11 +1889,11 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             value={paso3.promedio}
             onChange={v => setPaso3({ ...paso3, promedio: v })}
             placeholder="0–10"
-            error={paso3.promedio !== '' && !promedioValid ? 'Debe estar entre 0 y 10.' : undefined}
+            error={e3.promedio}
           />
         </div>
         <div className="col-span-12 md:col-span-4">
-          <TextField label="Clave de Centro de Trabajo (CCT)" required value={paso3.cct} onChange={v => setPaso3({ ...paso3, cct: v.toUpperCase() })} placeholder="Ej. 17DCT0001A" />
+          <TextField label="Clave de Centro de Trabajo (CCT)" required value={paso3.cct} onChange={v => setPaso3({ ...paso3, cct: v.toUpperCase() })} placeholder="Ej. 17DCT0001A" error={e3.cct} />
         </div>
         <div className="col-span-12 md:col-span-4">
           <TextField
@@ -1335,7 +1902,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             value={paso3.cctConfirmacion}
             onChange={v => setPaso3({ ...paso3, cctConfirmacion: v.toUpperCase() })}
             placeholder="Repite la clave"
-            error={cctMismatch ? 'Las claves no coinciden.' : undefined}
+            error={e3.cctConfirmacion}
           />
         </div>
       </div>
@@ -1528,7 +2095,14 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           No se pudieron cargar los catálogos (carreras, estados, canales). Verifica que el servidor esté disponible e intenta de nuevo.
         </div>
       )}
-      <Wizard steps={steps} onComplete={handleComplete} finishLabel="Finalizar Registro" />
+      <Wizard
+        steps={steps}
+        onComplete={handleComplete}
+        finishLabel="Finalizar Registro"
+        onInvalidStepAttempt={handleInvalidStep}
+        step={wizardStep}
+        onStepChange={setWizardStep}
+      />
     </div>
   )
 

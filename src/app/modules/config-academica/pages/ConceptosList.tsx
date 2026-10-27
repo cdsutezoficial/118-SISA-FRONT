@@ -114,7 +114,7 @@ export default function ConceptosList() {
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const perPage = 20
+  const [perPage, setPerPage] = useState(20)
 
   // Debounce free-text search — the fetch effect below only reacts to
   // `debouncedSearch`, not every keystroke of `search`.
@@ -153,7 +153,7 @@ export default function ConceptosList() {
         }
       })
     return () => { cancelled = true }
-  }, [statusFilter, debouncedSearch, page])
+  }, [statusFilter, debouncedSearch, page, perPage])
 
   async function handleToggleStatus(concept: PaymentConceptListItem) {
     const nextStatus: PaymentConceptStatus = concept.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
@@ -260,7 +260,7 @@ export default function ConceptosList() {
         emptyTitle="No se encontraron conceptos de pago"
         emptyHint={emptyHint}
         emptyIcon={<ClipboardList size={36} className="text-[#E5E7EB]" />}
-        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        footer={<Pagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
         actions={{
           view: row => navigate(`/conceptos/form?mode=view&id=${row.id}`),
           edit: row => navigate(`/conceptos/form?mode=edit&id=${row.id}`),
@@ -326,7 +326,7 @@ export default function ConceptosList() {
         emptyTitle="No se encontraron conceptos de pago"
         emptyHint={emptyHint}
         emptyIcon={<ClipboardList size={36} className="text-[#E5E7EB]" />}
-        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} />}
+        pagination={<MobilePagination page={page} totalPages={totalPages} totalElements={totalElements} perPage={perPage} onPageChange={setPage} onPerPageChange={n => { setPerPage(n); setPage(1) }} />}
       />
     </PageContainer>
   )
