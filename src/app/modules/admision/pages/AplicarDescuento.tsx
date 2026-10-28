@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Search, Info } from 'lucide-react'
+import { Search, Info, Pencil, ArrowLeft } from 'lucide-react'
 import { FieldLabel, FieldError, inputCls, Toast, ReadField, RadioCard } from '@app/core/components/ui'
 import { FormPage, FormHeader, FormCard, FormActions, Button } from '@app/core/components/form'
 import { Breadcrumb, SearchInput } from '@app/core/components/list'
 import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@app/core/infra/apiClient'
 import { useRole } from '@app/core/infra/RoleContext'
 import { STATUS_META, type CandidateListPage, type CandidateListRow } from '../data/types'
+import { DesgloseCobro } from '../components/DesgloseCobro'
 
 /**
  * Screen 14 — Aplicar Descuento (real backend, 2026-10-22).
@@ -22,9 +23,12 @@ import { STATUS_META, type CandidateListPage, type CandidateListRow } from '../d
  *    (`POST /finance/benefits` with `paymentId`). The anchor and the concept
  *    come from the charge — this screen never sends a concept code.
  *
- * Rules (PO, 2026-10-23):
- * - ONE discount per charge. A charge that already has one opens it for
- *   EDITING (`PUT /finance/benefits/{id}`); there is no "add another".
+ * Rules:
+ * - ONE discount per charge. A charge that already has one shows it read-only
+ *   with an "Editar" button; editing opens the same form over that discount and
+ *   saves with `PUT /finance/benefits/{id}`. There is no "add another".
+ * - After saving (new or edited) the screen goes back to reading the discount
+ *   as the backend now has it.
  * - Once the charge is paid the discount can no longer be edited (read only).
  * - A discount on a charge already PAID is allowed once: the difference
  *   becomes saldo a favor for the applicant.
@@ -100,16 +104,39 @@ function selectable(r: ChargeRow): boolean {
   return r.charge.status === 'PENDING' || r.charge.status === 'PAID'
 }
 
-/** What the screen does with the selected charge. */
-type Modo = 'NUEVO' | 'EDITAR' | 'SOLO_LECTURA'
+/**
+ * What the screen does with the selected charge: register its first discount,
+ * read the one it has, or edit it after pressing "Editar".
+ */
+type Modo = 'NUEVO' | 'VER' | 'EDITAR'
 
-function modoDe(r: ChargeRow): Modo {
+function modoDe(r: ChargeRow, editando: boolean): Modo {
   if (!r.discount) return 'NUEVO'
-  return r.discountEditable ? 'EDITAR' : 'SOLO_LECTURA'
+  return editando && r.discountEditable ? 'EDITAR' : 'VER'
 }
 
 const money = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
+
+const DISCOUNT_STATUS_LABEL: Record<ChargeDiscount['status'], string> = {
+  ACTIVE: 'Vigente',
+  USED: 'Aplicado',
+  CANCELLED: 'Cancelado',
+  EXPIRED: 'Vencido',
+}
+
+function describeDiscount(d: ChargeDiscount): string {
+  if (d.mode === 'FULL') return 'Sin costo (100 %)'
+  if (d.mode === 'PERCENT') return `Porcentaje — ${d.percent ?? '—'} %`
+  return `Monto fijo — ${money(d.amount)}`
+}
+
+/** YYYY-MM-DD → DD/MM/YYYY, without going through Date (which would shift it to UTC). */
+function formatDay(iso: string | null): string {
+  if (!iso) return '—'
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
 
 /** Today as YYYY-MM-DD in the browser's (México) zone — not UTC, which is already tomorrow after 18:00. */
 function localIsoDate(d: Date = new Date()): string {
@@ -135,6 +162,7 @@ export default function AplicarDescuento() {
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [loadingCharges, setLoadingCharges] = useState(false)
   const [chargeId, setChargeId] = useState('')
+  const [editando, setEditando] = useState(false)
 
   const [tipo, setTipo] = useState<TipoDescuento | ''>('')
   const [valor, setValor] = useState('')
@@ -148,11 +176,12 @@ export default function AplicarDescuento() {
 
   const selectedRow = charges.find(r => r.charge.paymentId === chargeId) ?? null
   const selected = selectedRow?.charge ?? null
-  const modo: Modo | null = selectedRow ? modoDe(selectedRow) : null
+  const modo: Modo | null = selectedRow ? modoDe(selectedRow, editando) : null
   const pagado = selected?.status === 'PAID'
 
   function resetForm() {
     setChargeId('')
+    setEditando(false)
     setTipo('')
     setValor('')
     setMotivo('')
@@ -198,9 +227,10 @@ export default function AplicarDescuento() {
     }
   }
 
-  /** Opens a charge: with a discount, the form is that discount (to edit or view). */
+  /** Opens a charge: with a discount it is shown read-only; without one, the form to register it. */
   function selectCharge(r: ChargeRow) {
     setChargeId(r.charge.paymentId)
+    setEditando(false)
     setErrors({})
     const d = r.discount
     if (d) {
@@ -221,6 +251,18 @@ export default function AplicarDescuento() {
   useEffect(() => {
     if (candidate) void loadCharges(candidate.id)
   }, [candidate])
+
+  /** "Editar": the form opens over the discount the charge already has. */
+  function startEdit() {
+    if (!selectedRow?.discount || !selectedRow.discountEditable) return
+    selectCharge(selectedRow)
+    setEditando(true)
+  }
+
+  /** "Cancelar" while editing: drop the changes and read the saved discount again. */
+  function cancelEdit() {
+    if (selectedRow) selectCharge(selectedRow)
+  }
 
   /** Preview of what the discount does to the selected charge's live tariff. */
   function preview(): { descuento: number; total: number; saldoAFavor: number } | null {
@@ -254,7 +296,7 @@ export default function AplicarDescuento() {
   }
 
   async function handleAplicar() {
-    if (modo === 'SOLO_LECTURA') return
+    if (modo !== 'NUEVO' && modo !== 'EDITAR') return
     const e = validate()
     setErrors(e)
     if (Object.keys(e).length > 0 || !selected || !candidate || !selectedRow) return
@@ -415,24 +457,66 @@ export default function AplicarDescuento() {
             {errors.cargo && <FieldError>{errors.cargo}</FieldError>}
           </FormCard>
 
-          {selected && (
+          {selected && selectedRow && modo === 'VER' && selectedRow.discount && (
             <FormCard>
-              <h2 className="text-[14px] font-semibold text-[#333333] mb-4">
-                {modo === 'NUEVO' ? 'Registrar descuento' : modo === 'EDITAR' ? 'Editar descuento' : 'Descuento aplicado'} — {selected.conceptName}
-              </h2>
-              {modo === 'SOLO_LECTURA' && (
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <h2 className="text-[14px] font-semibold text-[#333333]">Descuento aplicado — {selected.conceptName}</h2>
+                {selectedRow.discountEditable && (
+                  <Button variant="secondary" size="sm" onClick={startEdit}>
+                    <Pencil size={13} />Editar
+                  </Button>
+                )}
+              </div>
+
+              {!selectedRow.discountEditable && (
                 <div className="flex items-start gap-3 rounded-lg px-4 py-3 mb-4 bg-[#F8F9FA] border border-[#E5E7EB] text-[13px] text-[#6B7280]">
                   <Info size={18} className="flex-shrink-0 mt-0.5" />
                   <p>Este cargo ya está pagado (o el descuento ya se aplicó), así que el descuento ya no se puede editar.</p>
                 </div>
               )}
+
+              <DesgloseCobro
+                concepto={selected.conceptName}
+                costo={selected.originalAmount}
+                descuento={selected.discountAmount}
+                motivo={selectedRow.discount.reason}
+                total={selected.amountDue}
+                pagado={pagado}
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
+                <ReadField label="Tipo de descuento" value={describeDiscount(selectedRow.discount)} />
+                <ReadField
+                  label="Vigencia"
+                  value={`${formatDay(selectedRow.discount.validFrom)} – ${formatDay(selectedRow.discount.validTo)}`}
+                />
+                <ReadField label="Estado" value={DISCOUNT_STATUS_LABEL[selectedRow.discount.status]} />
+                <ReadField label="Registrado por" value={selectedRow.discount.grantedByName} />
+              </div>
+              <div className="mt-6">
+                <ReadField label="Motivo" value={selectedRow.discount.reason} />
+              </div>
+
+              {selectedRow.creditAmount > 0 && (
+                <p className="mt-4 text-[13px] font-semibold text-[#007a5e]">
+                  Saldo a favor generado: {money(selectedRow.creditAmount)}
+                </p>
+              )}
+            </FormCard>
+          )}
+
+          {selected && (modo === 'NUEVO' || modo === 'EDITAR') && (
+            <FormCard>
+              <h2 className="text-[14px] font-semibold text-[#333333] mb-4">
+                {modo === 'NUEVO' ? 'Registrar descuento' : 'Editar descuento'} — {selected.conceptName}
+              </h2>
               {modo === 'NUEVO' && pagado && (
                 <div className="flex items-start gap-3 rounded-lg px-4 py-3 mb-4 bg-amber-50 border border-amber-200 text-[13px] text-amber-800">
                   <Info size={18} className="flex-shrink-0 mt-0.5" />
                   <p>Este cargo ya está pagado. La diferencia del descuento quedará como <strong>saldo a favor</strong> del aspirante y después ya no se podrá editar.</p>
                 </div>
               )}
-              <fieldset disabled={modo === 'SOLO_LECTURA'} className="grid grid-cols-12 gap-4">
+              <div className="grid grid-cols-12 gap-4">
                 <div className="col-span-12">
                   <FieldLabel required>Tipo de descuento</FieldLabel>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -487,36 +571,46 @@ export default function AplicarDescuento() {
                   />
                   {errors.motivo && <FieldError>{errors.motivo}</FieldError>}
                 </div>
-              </fieldset>
+              </div>
 
-              {pv && modo !== 'SOLO_LECTURA' && (
-                <div className={`flex items-start gap-3 rounded-lg px-4 py-3.5 mt-5 ${tipo === 'FULL' ? 'bg-blue-50 border border-blue-200' : 'bg-[#e6f5f1] border border-[#009574]/30'}`}>
-                  <Info size={18} className={`flex-shrink-0 mt-0.5 ${tipo === 'FULL' ? 'text-blue-500' : 'text-[#009574]'}`} />
-                  <div className={`text-[13px] ${tipo === 'FULL' ? 'text-blue-700' : 'text-[#007a5e]'}`}>
-                    <p>
-                      Con la tarifa de hoy: {money(selected.originalAmount)} − {money(pv.descuento)} = <strong>{money(pv.total)}</strong>.
-                    </p>
-                    <p className="mt-1">
-                      {pagado
-                        ? `Ya pagó ${money(selected.amountPaid)}: se generará un saldo a favor de ${money(pv.saldoAFavor)}.`
-                        : tipo === 'FULL'
-                          ? 'Al pagar, el cargo quedará exento (pago de $0 con recibo) sin pasar por la pasarela.'
-                          : 'El monto final se recalcula cuando el aspirante pague, con la tarifa vigente en ese momento.'}
-                    </p>
-                  </div>
+              {pv && (
+                <div className="mt-5">
+                  <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-2">Así quedaría con la tarifa de hoy</p>
+                  <DesgloseCobro
+                    concepto={selected.conceptName}
+                    costo={selected.originalAmount}
+                    descuento={pv.descuento}
+                    motivo={motivo.trim() || null}
+                    total={pv.total}
+                  />
+                  <p className={`mt-2 text-[12px] ${tipo === 'FULL' ? 'text-blue-700' : 'text-[#6B7280]'}`}>
+                    {pagado
+                      ? `Ya pagó ${money(selected.amountPaid)}: se generará un saldo a favor de ${money(pv.saldoAFavor)}.`
+                      : tipo === 'FULL'
+                        ? 'Al pagar, el cargo quedará exento (pago de $0 con recibo) sin pasar por la pasarela.'
+                        : 'El monto final se recalcula cuando el aspirante pague, con la tarifa vigente en ese momento.'}
+                  </p>
                 </div>
               )}
             </FormCard>
           )}
 
-          <FormActions
-            isView={false}
-            onBack={() => navigate('/admision')}
-            onPrimary={() => void handleAplicar()}
-            primaryLabel={saving ? 'Guardando...' : modo === 'EDITAR' ? 'Guardar cambios' : 'Registrar descuento'}
-            isSubmitting={saving}
-            primaryDisabled={!selected || modo === 'SOLO_LECTURA'}
-          />
+          {modo === 'VER' ? (
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+              <Button variant="secondary" onClick={() => navigate('/admision')} className="w-full sm:w-auto">
+                <ArrowLeft size={14} />Regresar
+              </Button>
+            </div>
+          ) : (
+            <FormActions
+              isView={false}
+              onBack={() => (modo === 'EDITAR' ? cancelEdit() : navigate('/admision'))}
+              onPrimary={() => void handleAplicar()}
+              primaryLabel={saving ? 'Guardando...' : modo === 'EDITAR' ? 'Guardar cambios' : 'Registrar descuento'}
+              isSubmitting={saving}
+              primaryDisabled={!selected}
+            />
+          )}
         </>
       )}
     </FormPage>

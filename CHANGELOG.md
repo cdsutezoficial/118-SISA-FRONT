@@ -4,6 +4,34 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-10-28] Desglose del pago en el detalle del candidato y descuento que se ve, se edita y se guarda
+
+### Qué cambió
+
+- `DesgloseCobro.tsx` (nuevo): desglose en tres columnas — costo del concepto (con su
+  nombre), descuento (con su motivo) y total a pagar, o "Pagado". Sin descuento dice
+  "Sin descuento" en lugar de "$0.00".
+- `CandidatoDetalle.tsx`, pestaña Pagos: la ficha muestra ese desglose, el estado junto al
+  título y abajo referencia, fecha de pago, recibo y orden EVO. Un monto que no se pudo
+  cotizar se muestra como "—".
+- `AplicarDescuento.tsx`:
+  - Un cargo con descuento se abre **en modo lectura** (desglose, tipo, vigencia, estado,
+    quién lo registró y motivo) con un botón **Editar**. Ya no parece que se pueda agregar
+    un segundo descuento: cada cargo tiene uno y se edita.
+  - Editar abre el formulario con los datos actuales; **Cancelar** descarta y **Guardar
+    cambios** guarda. Al registrar o guardar, la pantalla vuelve a la vista del descuento
+    como quedó en el back.
+  - La vista previa usa el mismo desglose.
+  - El campo del valor solo acepta números con hasta 2 decimales: el porcentaje no pasa
+    de 100 y el monto fijo no pasa de lo que cuesta el concepto.
+
+### Depende de
+
+El PR del back de la rama `feat/descuento-detalle-candidato`, que agrega el desglose a
+`GET /candidates/{id}/detail`.
+
+---
+
 ## [2026-10-25] La ficha muestra el descuento y el portal siempre cobra el precio vigente
 
 Commits: `3842a10`, `1f11e29`, `119681b`.

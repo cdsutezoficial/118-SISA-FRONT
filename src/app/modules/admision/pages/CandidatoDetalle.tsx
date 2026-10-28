@@ -7,6 +7,7 @@ import { Breadcrumb, PageContainer, BadgePill, ErrorBanner, type BadgeStyle } fr
 import { apiGet, getApiErrorMessage } from '@app/core/infra/apiClient'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { CambiarProgramaModal } from '../components/CambiarProgramaModal'
+import { DesgloseCobro } from '../components/DesgloseCobro'
 import {
   type CandidateDetailBackend,
   type CandidateDetailPaymentBackend,
@@ -49,10 +50,6 @@ function formatDate(value: string | null | undefined): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' })
-}
-
-function formatCurrency(amount: number): string {
-  return amount.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 }
 
 // ─── Screen ─────────────────────────────────────────────────────────────────
@@ -112,22 +109,26 @@ export default function CandidatoDetalle() {
   function renderPaymentSection(title: string, payment: CandidateDetailPaymentBackend | null, pendingHint?: string) {
     return (
       <FormCard>
-        <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest mb-6">{title}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-widest">{title}</p>
+          {payment && <BadgePill value={payment.paymentStatus} map={paymentBadgeMap} />}
+        </div>
         {!payment ? (
           <p className="text-[13px] text-[#6B7280]">
             {pendingHint ?? 'No hay un pago registrado para este concepto todavía.'}
           </p>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-              <div>
-                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Estado</p>
-                <BadgePill value={payment.paymentStatus} map={paymentBadgeMap} />
-              </div>
+            <DesgloseCobro
+              concepto={payment.conceptName}
+              costo={payment.originalAmount ?? payment.amount}
+              descuento={payment.discountAmount}
+              motivo={payment.discountReason}
+              total={payment.amount}
+              pagado={payment.paymentStatus === 'PAID'}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
               <ReadField label="Referencia" value={payment.referenceNumber} mono />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <ReadField label="Monto" value={formatCurrency(payment.amount)} />
               <ReadField label="Fecha de Pago" value={formatDate(payment.paidAt)} />
               <ReadField label="Recibo" value={payment.receiptNumber ?? '—'} mono />
               <ReadField label="Orden EVO" value={payment.orderId ?? '—'} mono />
