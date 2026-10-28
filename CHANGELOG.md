@@ -4,6 +4,30 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-10-28] Servicios Escolares edita la ficha del candidato
+
+Rama: `feat/editar-ficha-candidato`. Plan: `118-SISA-CLAUDE/docs/design/pendientes/editar-ficha-candidato/`.
+
+### Qué cambió
+
+- `CandidatosList.tsx`: acción **Editar** (lápiz) en la tabla y en la tarjeta móvil, visible
+  solo con `CANDIDATES_UPDATE`.
+- `router.tsx`: ruta `candidatos/editar?id=` para `SERVICIOS_ESCOLARES` con `RequirePermission`
+  `CANDIDATES_UPDATE`.
+- `CandidatoRegistro.tsx` con `mode="edit"`: precarga la ficha desde
+  `GET /candidates/{id}/edit`, sin el bloque de LlaveMX (todo editable), carrera visible pero
+  bloqueada, paso 4 "Revisión" sin monto ni avisos de pago, y "Guardar cambios" con
+  `PUT /candidates/{id}`.
+- **Extranjeros:** el registro ahora envía el estado de nacimiento y el de la preparatoria en
+  el extranjero, que antes se pedían y no se mandaban.
+
+### Depende de
+
+El PR del back de la misma rama (`GET /candidates/{id}/edit`, `PUT /candidates/{id}` y el
+permiso `CANDIDATES_UPDATE`).
+
+---
+
 ## [2026-10-25] La ficha muestra el descuento y el portal siempre cobra el precio vigente
 
 Commits: `3842a10`, `1f11e29`, `119681b`.
