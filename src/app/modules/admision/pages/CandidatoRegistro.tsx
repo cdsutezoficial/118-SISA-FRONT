@@ -1045,6 +1045,8 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         estadoCivil: paso1.estadoCivil as EstadoCivil,
         lenguaNatal: paso1.lenguaNatal as LenguaNatal,
         tieneHijos: paso1.tieneHijos,
+        // El estado de un extranjero es texto libre; el de un mexicano viaja como birthStateId.
+        estadoNacimiento: mex ? '' : paso1.estadoNacimiento,
       },
       domicilio: {
         calle: paso1.calle,
@@ -1103,6 +1105,8 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         promedio: promedioNum,
         cct: paso3.cct,
         cctConfirmacion: paso3.cctConfirmacion,
+        // Igual que en nacimiento: texto libre solo para una prepa en el extranjero.
+        estadoPreparatoria: paso3.estudioEnMexico ? '' : paso3.estadoPreparatoria,
       },
       // Advisory only. The backend re-validates the HttpOnly
       // `sisa.llave.verified` ticket cookie on this very request and is the only
