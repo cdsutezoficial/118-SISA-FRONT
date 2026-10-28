@@ -554,3 +554,99 @@ export interface CandidateDetailBackend {
   admissionPayment: CandidateDetailPaymentBackend
   inductionPayment: CandidateDetailPaymentBackend | null
 }
+
+// ─── Edición de la ficha por Servicios Escolares (Fase 7 · T2) ───────────────
+// `GET /candidates/{id}/edit` devuelve la ficha con la MISMA forma y formatos
+// que el `POST /candidates` (fecha dd/MM/yyyy, horas HH:mm, sexo y estado civil
+// con las etiquetas del formulario) y con los IDs de catálogo, para que el
+// formulario la precargue y la reenvíe en el `PUT /candidates/{id}`.
+
+export interface CandidateEditFormResponse {
+  candidateId: string
+  folio: string
+  status: CandidateStatus
+  llaveMxVerified: boolean
+  programName: string | null
+  /** `PRESENCIAL` | `MIXTA` (modalidad del programa de la config actual). */
+  modality: string | null
+  /** El cambio de carrera llega con la recotización (rama 2); hoy siempre `false`. */
+  programChangeAllowed: boolean
+  datosGenerales: {
+    curp: string
+    nombres: string
+    apellidoPaterno: string
+    apellidoMaterno: string | null
+    fechaNacimiento: string | null
+    sexo: string | null
+    nacionalidad: string | null
+    birthStateId: string | null
+    birthMunicipalityId: string | null
+    paisNacimiento: string | null
+    ciudadNacimiento: string | null
+    estadoCivil: string | null
+    lenguaNatal: string | null
+    tieneHijos: boolean
+    /** Solo extranjeros (texto libre). */
+    estadoNacimiento: string | null
+  }
+  domicilio: {
+    calle: string | null
+    numeroExterior: string | null
+    numeroInterior: string | null
+    colonia: string | null
+    localidad: string | null
+    codigoPostal: string | null
+    stateId: string | null
+    municipalityId: string | null
+  } | null
+  contacto: {
+    personalEmail: string | null
+    telefonoCasa: string | null
+    celular: string | null
+  }
+  informacionComplementaria: {
+    tieneEnfermedadPreexistente: boolean
+    descripcionEnfermedad: string | null
+    tieneDiscapacidad: boolean
+    descripcionDiscapacidad: string | null
+    padresHablanLenguaIndigena: boolean
+    lenguaIndigenaPadres: string | null
+    hablaLenguaIndigena: boolean
+    lenguaIndigenaPropia: string | null
+    seIdentificaIndigena: boolean
+    seIdentificaNoBinario: boolean
+    perteneceComunidadLgbttiq: boolean
+    esAfrodescendiente: boolean
+    seIdentificaAfrodescendiente: boolean | null
+  }
+  ingresos: {
+    ingresoMensualFamiliar: number | null
+    trabaja: boolean
+    tipoTrabajo: string | null
+    telefonoTrabajo: string | null
+    ingresoMensual: number | null
+    nombreEmpresa: string | null
+    puesto: string | null
+    horaInicio: string | null
+    horaFin: string | null
+  }
+  seleccionCarrera: {
+    admissionConfigId: string
+    outreachChannelId: string | null
+    isFirstChoice: boolean
+  }
+  antecedentesEscolares: {
+    nombrePreparatoria: string | null
+    schoolTypeId: string | null
+    estudioBachilleratoEnMexico: boolean
+    schoolStateId: string | null
+    schoolMunicipalityId: string | null
+    paisPreparatoria: string | null
+    ciudadPreparatoria: string | null
+    promedio: number | null
+    cct: string | null
+    cctConfirmacion: string | null
+    /** Solo prepa en el extranjero (texto libre). */
+    estadoPreparatoria: string | null
+  } | null
+}
