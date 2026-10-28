@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { Plus as PlusIcon, CreditCard, Eye as EyeIcon } from 'lucide-react'
+import { Plus as PlusIcon, CreditCard, Eye as EyeIcon, Pencil } from 'lucide-react'
 import { Toast, ActionBtn } from '@app/core/components/ui'
 import {
   PageContainer,
@@ -22,6 +22,7 @@ import {
 import { apiGet, getApiErrorMessage } from '@app/core/infra/apiClient'
 import { programLabel } from '@app/core/infra/programLabel'
 import { usePendingToast } from '@app/core/infra/hooks'
+import { useRole } from '@app/core/infra/RoleContext'
 import {
   STATUS_META,
   type CandidateStatus,
@@ -99,6 +100,10 @@ export default function CandidatosList() {
   const navigate = useNavigate()
   const pendingToast = usePendingToast()
   const [toast, setToast] = useState(pendingToast ?? '')
+  // Editar la ficha es solo de Servicios Escolares (Fase 7 · T2).
+  const { hasPermission } = useRole()
+  const canEditFicha = hasPermission('CANDIDATES_UPDATE')
+  const goToEdit = (row: CandidateListRow) => navigate(`/admision/candidatos/editar?id=${row.id}`)
   const [candidates, setCandidates] = useState<CandidateListRow[]>([])
   const [programs, setPrograms] = useState<ProgramSummary[]>([])
   const [periods, setPeriods] = useState<PeriodSummary[]>([])
@@ -247,6 +252,8 @@ export default function CandidatosList() {
         actions={{
           view: row => navigate(`/admision/candidatos/detalle?id=${row.id}`),
           viewTooltip: 'Ver detalle',
+          edit: canEditFicha ? goToEdit : undefined,
+          editTooltip: 'Editar ficha',
           extra: row => (
             <>
               {row.status === 'REGISTERED' && (
@@ -281,6 +288,9 @@ export default function CandidatosList() {
                 label="Ver detalle"
                 onClick={() => navigate(`/admision/candidatos/detalle?id=${row.id}`)}
               />
+              {canEditFicha && (
+                <CardActionButton icon={<Pencil size={13} />} label="Editar" onClick={() => goToEdit(row)} />
+              )}
               {row.status === 'REGISTERED' && (
                 <CardActionButton icon={<CreditCard size={13} />} label="Pago Ficha" onClick={() => navigate(`/admision/candidatos/pago-ficha?id=${row.id}`)} />
               )}
