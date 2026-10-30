@@ -4,6 +4,16 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-10-29] "Aplicar Descuentos" solo en el menú de Finanzas
+
+Rama: `fix/menu-descuentos-finanzas`.
+
+- `Sidebar.tsx`: se quitó "Aplicar Descuentos" del grupo Admisión; queda solo en Finanzas,
+  visible para `FINANZAS` y `SERVICIOS_ESCOLARES` con el mismo permiso `BENEFITS_READ`.
+  Antes Servicios Escolares la veía en Admisión y un administrador la veía repetida.
+
+---
+
 ## [2026-10-28] Desglose del pago en el detalle del candidato y descuento que se ve, se edita y se guarda
 
 ### Qué cambió
