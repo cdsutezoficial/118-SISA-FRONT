@@ -176,6 +176,28 @@ export interface FichaPaymentAccessBackend extends VentanaFechas {
   discountAmount?: number | null
   /** Motivo del descuento, si lo hay. */
   discountReason?: string | null
+  /**
+   * La diferencia que dejó un cambio de carrera con la ficha ya pagada. La ficha
+   * sigue pagada (`alreadyPaid`); esto es lo que falta y se paga con el mismo
+   * botón. `null` cuando no hay nada pendiente.
+   */
+  programChange?: ProgramChangeDue | null
+}
+
+export interface ProgramChangeDue {
+  referenceNumber: string
+  /** La carrera nueva. */
+  programName: string | null
+  /** Lo que cuesta la carrera nueva. */
+  newAmount: number
+  /** Lo que ya había pagado, abonado a la carrera nueva. */
+  carried: number
+  /** Lo que falta pagar. */
+  toPay: number
+  /** yyyy-MM-dd, último día para pagarla. */
+  dueOn: string | null
+  /** El plazo ya pasó: no se ofrece el pago. */
+  expired: boolean
 }
 
 /** `GET /candidates/{id}` — ficha projection for route-refresh fallback. */
@@ -562,4 +584,269 @@ export interface CandidateDetailBackend {
   outreachChannelName: string | null
   admissionPayment: CandidateDetailPaymentBackend
   inductionPayment: CandidateDetailPaymentBackend | null
+  /** Secciones capturadas en la ficha, ya con nombres de catálogo. */
+  datosGenerales: {
+    birthDate: string | null
+    gender: 'M' | 'F' | 'NB' | null
+    nationality: string | null
+    birthStateName: string | null
+    birthMunicipalityName: string | null
+    maritalStatus: string | null
+    nativeLanguage: string | null
+    hasChildren: boolean
+  } | null
+  domicilio: {
+    street: string | null
+    exteriorNumber: string | null
+    interiorNumber: string | null
+    neighborhood: string | null
+    locality: string | null
+    postalCode: string | null
+    stateName: string | null
+    municipalityName: string | null
+  } | null
+  informacionComplementaria: {
+    hasPreexistingCondition: boolean
+    conditionDescription: string | null
+    hasDisability: boolean
+    disabilityDescription: string | null
+    parentsSpeakIndigenousLanguage: boolean
+    parentsIndigenousLanguage: string | null
+    speaksIndigenousLanguage: boolean
+    indigenousLanguage: string | null
+    selfIdentifiesIndigenous: boolean
+    selfIdentifiesNonBinary: boolean
+    belongsToLgbttiqCommunity: boolean
+    isAfrodescendant: boolean
+    selfIdentifiesAfrodescendant: boolean
+  } | null
+  ingresos: {
+    monthlyFamilyIncome: number | null
+    isEmployed: boolean
+    employmentType: string | null
+    workPhone: string | null
+    monthlyIncome: number | null
+    companyName: string | null
+    jobTitle: string | null
+    workStartTime: string | null
+    workEndTime: string | null
+  } | null
+  seleccionCarrera: {
+    modalityName: string | null
+    outreachChannelName: string | null
+    isFirstChoice: boolean
+    periodName: string | null
+  } | null
+  antecedentesEscolares: {
+    schoolName: string | null
+    schoolTypeName: string | null
+    studiedInMexico: boolean
+    schoolStateName: string | null
+    schoolMunicipalityName: string | null
+    foreignCountry: string | null
+    schoolCity: string | null
+    gpa: number | null
+    cct: string | null
+  } | null
+}
+
+// ─── Pagos del candidato (`GET /candidates/{id}/account`) ────────────────────
+
+/** Para qué sirve el cobro hoy. */
+export type CandidateChargeRole = 'CURRENT_FICHA' | 'PENDING_DIFFERENCE' | 'HISTORY' | 'OTHER'
+
+export type FinancePaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'EXEMPT' | 'OVERDUE' | 'CANCELLED'
+
+export interface CandidateChargeEntry {
+  amount: number
+  /** `CASH` | `ONLINE` | `CARD` | `CREDIT` (saldo a favor). */
+  method: string | null
+  channel: string | null
+  receiptNumber: string | null
+  reference: string | null
+  paidAt: string | null
+}
+
+export interface CandidateCharge {
+  paymentId: string
+  role: CandidateChargeRole
+  conceptCode: string
+  referenceNumber: string | null
+  programName: string | null
+  status: FinancePaymentStatus
+  originalAmount: number | null
+  discountAmount: number | null
+  discountReason: string | null
+  amountDue: number | null
+  amountPaid: number
+  balance: number | null
+  dueAt: string | null
+  createdAt: string | null
+  entries: CandidateChargeEntry[]
+}
+
+export interface CandidateCredit {
+  amount: number
+  status: 'AVAILABLE' | 'APPLIED' | 'REFUNDED'
+  originReference: string | null
+  appliedToReference: string | null
+  createdAt: string | null
+}
+
+export interface CandidateProgramChangeItem {
+  fromProgramName: string | null
+  toProgramName: string | null
+  wasPaid: boolean
+  previousAmount: number | null
+  paidAmount: number
+  newAmount: number
+  toPay: number
+  creditLeft: number
+  changedAt: string
+}
+
+export interface CandidateAccountBackend {
+  candidateId: string
+  /** Saldo a favor que puede usar hoy. */
+  availableCredit: number
+  charges: CandidateCharge[]
+  credits: CandidateCredit[]
+  programChanges: CandidateProgramChangeItem[]
+}
+
+// ─── Edición de la ficha por Servicios Escolares (Fase 7 · T2) ───────────────
+// `GET /candidates/{id}/edit` devuelve la ficha con la MISMA forma y formatos
+// que el `POST /candidates` (fecha dd/MM/yyyy, horas HH:mm, sexo y estado civil
+// con las etiquetas del formulario) y con los IDs de catálogo, para que el
+// formulario la precargue y la reenvíe en el `PUT /candidates/{id}`.
+
+export interface CandidateEditFormResponse {
+  candidateId: string
+  folio: string
+  status: CandidateStatus
+  llaveMxVerified: boolean
+  programName: string | null
+  /** `PRESENCIAL` | `MIXTA` (modalidad del programa de la config actual). */
+  modality: string | null
+  /** Si se puede cambiar la carrera (no inscrito, ficha no vencida, sin pago en curso). */
+  programChangeAllowed: boolean
+  /** Por qué no se puede cambiar la carrera; null si se puede. */
+  programChangeBlockedReason: string | null
+  /** La diferencia que dejó un cambio de carrera anterior y falta pagar. */
+  pendingProgramChange: {
+    referenceNumber: string
+    newAmount: number
+    carried: number
+    toPay: number
+    /** ISO instant. */
+    dueAt: string | null
+  } | null
+  datosGenerales: {
+    curp: string
+    nombres: string
+    apellidoPaterno: string
+    apellidoMaterno: string | null
+    fechaNacimiento: string | null
+    sexo: string | null
+    nacionalidad: string | null
+    birthStateId: string | null
+    birthMunicipalityId: string | null
+    paisNacimiento: string | null
+    ciudadNacimiento: string | null
+    estadoCivil: string | null
+    lenguaNatal: string | null
+    tieneHijos: boolean
+    /** Solo extranjeros (texto libre). */
+    estadoNacimiento: string | null
+  }
+  domicilio: {
+    calle: string | null
+    numeroExterior: string | null
+    numeroInterior: string | null
+    colonia: string | null
+    localidad: string | null
+    codigoPostal: string | null
+    stateId: string | null
+    municipalityId: string | null
+  } | null
+  contacto: {
+    personalEmail: string | null
+    telefonoCasa: string | null
+    celular: string | null
+  }
+  informacionComplementaria: {
+    tieneEnfermedadPreexistente: boolean
+    descripcionEnfermedad: string | null
+    tieneDiscapacidad: boolean
+    descripcionDiscapacidad: string | null
+    padresHablanLenguaIndigena: boolean
+    lenguaIndigenaPadres: string | null
+    hablaLenguaIndigena: boolean
+    lenguaIndigenaPropia: string | null
+    seIdentificaIndigena: boolean
+    seIdentificaNoBinario: boolean
+    perteneceComunidadLgbttiq: boolean
+    esAfrodescendiente: boolean
+    seIdentificaAfrodescendiente: boolean | null
+  }
+  ingresos: {
+    ingresoMensualFamiliar: number | null
+    trabaja: boolean
+    tipoTrabajo: string | null
+    telefonoTrabajo: string | null
+    ingresoMensual: number | null
+    nombreEmpresa: string | null
+    puesto: string | null
+    horaInicio: string | null
+    horaFin: string | null
+  }
+  seleccionCarrera: {
+    admissionConfigId: string
+    outreachChannelId: string | null
+    isFirstChoice: boolean
+  }
+  antecedentesEscolares: {
+    nombrePreparatoria: string | null
+    schoolTypeId: string | null
+    estudioBachilleratoEnMexico: boolean
+    schoolStateId: string | null
+    schoolMunicipalityId: string | null
+    paisPreparatoria: string | null
+    ciudadPreparatoria: string | null
+    promedio: number | null
+    cct: string | null
+    cctConfirmacion: string | null
+    /** Solo prepa en el extranjero (texto libre). */
+    estadoPreparatoria: string | null
+  } | null
+}
+
+// `GET /candidates/{id}/program-change-preview?admissionConfigId=` — lo que
+// pasaría con el cobro si el candidato cambia a esa carrera. No guarda nada.
+export interface ProgramChangePreview {
+  candidateId: string
+  fromConfigId: string
+  fromProgramName: string | null
+  toConfigId: string
+  toProgramName: string | null
+  /** `UNPAID`: se mueve el mismo cargo con su descuento. `PAID`: cargo nuevo, se abona lo pagado. */
+  mode: 'UNPAID' | 'PAID'
+  /** Sin pagar: lo que debe hoy. Pagada: con cuánto se cobró la ficha. */
+  previousAmount: number | null
+  alreadyPaid: number
+  /** Saldo a favor que ya tenía y también se aplica. */
+  otherCredit: number
+  newOriginalAmount: number
+  newDiscountAmount: number
+  newAmount: number
+  /** Lo que debe pagar después del cambio. */
+  toPay: number
+  /** Saldo a favor que le queda. */
+  creditLeft: number
+  /** La carrera nueva tiene lugar (solo cuenta si ya pagó). */
+  quotaAvailable: boolean
+  /** yyyy-MM-dd. */
+  newPaymentDeadline: string | null
+  /** Sin pagar: el plazo en la carrera nueva ya pasó y la ficha vencerá. */
+  paymentWindowClosed: boolean
 }

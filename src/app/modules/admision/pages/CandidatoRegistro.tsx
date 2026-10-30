@@ -1,6 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
-import { ShieldCheck, GraduationCap, Lock, AlertCircle } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router'
+import {
+  ShieldCheck, GraduationCap, Lock, AlertCircle, ArrowDown, ArrowLeftRight, ArrowRight,
+  CircleCheck, Clock, LoaderCircle, PiggyBank, Receipt, TriangleAlert, Wallet,
+} from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
 import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 import {
@@ -24,7 +27,7 @@ import {
 } from '@app/core/components/ui'
 import { FormPage, FormHeader, SelectField, TextField, TimeField } from '@app/core/components/form'
 import { Breadcrumb } from '@app/core/components/list'
-import { ADMISSION_ERROR_CODES, apiGet, apiPost, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
+import { ADMISSION_ERROR_CODES, apiGet, apiPost, apiPut, getApiErrorMessage, type ApiError } from '@app/core/infra/apiClient'
 import { formatDate } from '@app/core/infra/utils'
 import type {
   Candidate,
@@ -34,6 +37,8 @@ import type {
   TipoBachillerato,
   ModalidadPrograma,
   FichaAdmisionCompleta,
+  CandidateEditFormResponse,
+  ProgramChangePreview,
 } from '../data/types'
 
 /**
@@ -85,6 +90,13 @@ function normalizeLookup(value: string): string {
 
 interface CandidatoRegistroProps {
   origin: ScreenOrigin
+  /**
+   * `edit` = Servicios Escolares corrige la ficha de un candidato existente
+   * (`?id=`), Fase 7 · T2: se precarga desde `GET /candidates/{id}/edit`, no
+   * se muestra LlaveMX ni nada de pago, y se guarda con `PUT /candidates/{id}`.
+   * Solo tiene sentido con `origin="staff"`.
+   */
+  mode?: 'create' | 'edit'
 }
 
 // ─── Backend catalog DTOs & catalogs ──────────────────────────────────────────
@@ -511,15 +523,252 @@ function SummarySection({ title, children }: { title: string; children: ReactNod
   )
 }
 
+const money = (n: number | null | undefined) =>
+  n == null ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+type Tone = 'amber' | 'green' | 'blue' | 'red'
+
+const TONES: Record<Tone, { box: string; icon: string; label: string; amount: string }> = {
+  amber: { box: 'bg-amber-50 border-amber-200', icon: 'bg-amber-100 text-amber-700', label: 'text-amber-800', amount: 'text-amber-900' },
+  green: { box: 'bg-[#e6f5f1] border-[#009574]/30', icon: 'bg-[#009574]/15 text-[#007a5e]', label: 'text-[#007a5e]', amount: 'text-[#00543f]' },
+  blue: { box: 'bg-sky-50 border-sky-200', icon: 'bg-sky-100 text-sky-700', label: 'text-sky-800', amount: 'text-sky-900' },
+  red: { box: 'bg-red-50 border-red-200', icon: 'bg-red-100 text-red-700', label: 'text-red-800', amount: 'text-red-900' },
+}
+
+/** Una línea del desglose: signo, concepto y monto. */
+function BreakdownRow({ label, value, sign, hint }: { label: string; value: number | null; sign?: '+' | '−'; hint?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-2 border-b border-dashed border-[#E5E7EB] last:border-b-0">
+      <div className="min-w-0">
+        <span className="text-[#4B5563]">{label}</span>
+        {hint && <span className="block text-[11px] text-[#9CA3AF]">{hint}</span>}
+      </div>
+      <span className={`tabular-nums whitespace-nowrap ${sign === '−' ? 'text-[#009574]' : 'text-[#333333]'}`}>
+        {sign === '−' ? '− ' : ''}{money(value)}
+      </span>
+    </div>
+  )
+}
+
+/** Tarjeta de una carrera (actual o nueva) con su monto. */
+function ProgramCard({ caption, name, amount, amountCaption, highlighted = false }: {
+  caption: string
+  name: string | null
+  amount: number | null
+  amountCaption: string
+  highlighted?: boolean
+}) {
+  return (
+    <div className={`flex-1 min-w-0 rounded-lg border px-4 py-3 ${highlighted
+      ? 'border-[#009574] bg-white shadow-sm ring-1 ring-[#009574]/20'
+      : 'border-[#E5E7EB] bg-[#F9FAFB]'}`}
+    >
+      <p className={`text-[10px] font-bold uppercase tracking-wider ${highlighted ? 'text-[#009574]' : 'text-[#9CA3AF]'}`}>{caption}</p>
+      <p className={`mt-1 text-[13px] font-semibold leading-snug ${highlighted ? 'text-[#333333]' : 'text-[#6B7280]'}`}>{name ?? '—'}</p>
+      <div className="mt-3 flex items-baseline justify-between gap-2">
+        <span className="text-[11px] text-[#9CA3AF]">{amountCaption}</span>
+        <span className={`tabular-nums text-[16px] font-bold ${highlighted ? 'text-[#333333]' : 'text-[#9CA3AF] line-through decoration-1'}`}>
+          {money(amount)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Qué pasa con el cobro si Servicios Escolares cambia la carrera, antes de
+ * guardar. Los números los calcula el backend (vista previa): sin pagar, el
+ * mismo cobro pasa a la carrera nueva con su descuento; pagada, lo pagado se
+ * abona a la carrera nueva y queda la diferencia o un saldo a favor.
+ */
+function ProgramChangeSummary({ status, preview, error }: {
+  status: 'idle' | 'loading' | 'ready' | 'error'
+  preview: ProgramChangePreview | null
+  error: string
+}) {
+  if (status === 'loading') {
+    return (
+      <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-6 flex items-center justify-center gap-2 text-[13px] text-[#6B7280]">
+        <LoaderCircle size={16} className="animate-spin" />
+        Calculando el cambio de carrera…
+      </div>
+    )
+  }
+  if (status === 'error') {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-[13px] text-red-700 flex items-start gap-2">
+        <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+        {error}
+      </div>
+    )
+  }
+  if (!preview) return null
+
+  const paid = preview.mode === 'PAID'
+  const deadline = preview.newPaymentDeadline
+    ? formatDate(new Date(`${preview.newPaymentDeadline}T00:00:00`))
+    : null
+
+  // El resultado que más importa, en grande: cuánto paga, cuánto le queda o si no debe nada.
+  let tone: Tone
+  let ResultIcon = CircleCheck
+  let resultLabel: string
+  let resultAmount: number | null
+  let resultNote: string
+  if (paid && !preview.quotaAvailable) {
+    tone = 'red'
+    ResultIcon = TriangleAlert
+    resultLabel = 'No se puede cambiar'
+    resultAmount = null
+    resultNote = 'La carrera nueva ya no tiene lugar disponible.'
+  } else if (paid && preview.toPay > 0) {
+    tone = 'amber'
+    ResultIcon = Wallet
+    resultLabel = 'Debe pagar la diferencia'
+    resultAmount = preview.toPay
+    resultNote = `Sigue con su ficha pagada y paga la diferencia en el portal de la ficha${deadline ? `, a más tardar el ${deadline}` : ''}.`
+  } else if (paid && preview.creditLeft > 0) {
+    tone = 'blue'
+    ResultIcon = PiggyBank
+    resultLabel = 'Le queda saldo a favor'
+    resultAmount = preview.creditLeft
+    resultNote = 'La carrera nueva cuesta menos que lo que ya pagó. No tiene que pagar nada.'
+  } else if (paid) {
+    tone = 'green'
+    resultLabel = 'Queda pagada'
+    resultAmount = 0
+    resultNote = 'Lo que ya pagó cubre exactamente la carrera nueva.'
+  } else {
+    tone = preview.paymentWindowClosed ? 'amber' : 'green'
+    ResultIcon = preview.paymentWindowClosed ? TriangleAlert : Receipt
+    resultLabel = 'Nuevo monto de la ficha'
+    resultAmount = preview.toPay
+    resultNote = preview.paymentWindowClosed
+      ? 'El plazo de pago de esa carrera ya pasó: la ficha vencerá sin poder pagarse.'
+      : 'Lo paga con la misma ficha, en el portal, como antes.'
+  }
+  const t = TONES[tone]
+
+  // Sin pagar: cuánto cambia lo que debe respecto de antes.
+  const delta = !paid && preview.previousAmount != null ? preview.toPay - preview.previousAmount : null
+
+  return (
+    <div className="rounded-xl border border-[#E5E7EB] bg-white overflow-hidden text-[13px]">
+      {/* Encabezado */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-[#F9FAFB] border-b border-[#E5E7EB]">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#009574]/10 text-[#009574]">
+            <ArrowLeftRight size={14} />
+          </span>
+          <p className="font-semibold text-[#333333]">Cambio de carrera</p>
+        </div>
+        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${paid
+          ? 'bg-[#009574]/10 text-[#007a5e]'
+          : 'bg-[#F3F4F6] text-[#4B5563]'}`}
+        >
+          {paid ? 'Ficha pagada' : 'Ficha sin pagar'}
+        </span>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Antes → después */}
+        <div className="flex flex-col md:flex-row md:items-stretch gap-2 md:gap-3">
+          <ProgramCard
+            caption="Carrera actual"
+            name={preview.fromProgramName}
+            amount={preview.previousAmount}
+            amountCaption={paid ? 'Se pagó con' : 'Debía'}
+          />
+          <div className="flex items-center justify-center">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#009574] text-white shadow-sm">
+              <ArrowDown size={16} className="md:hidden" />
+              <ArrowRight size={16} className="hidden md:block" />
+            </span>
+          </div>
+          <ProgramCard
+            caption="Carrera nueva"
+            name={preview.toProgramName}
+            amount={paid ? preview.newAmount : preview.toPay}
+            amountCaption={paid ? 'Cuesta (completa)' : 'Deberá'}
+            highlighted
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {/* Desglose */}
+          <div className="md:col-span-3 rounded-lg border border-[#E5E7EB] px-4 py-2">
+            <p className="pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">Cómo se calcula</p>
+            {paid ? (
+              <>
+                <BreakdownRow label="Costo de la carrera nueva" value={preview.newAmount} hint="Sin descuento: el que tenía ya se usó al pagar." />
+                <BreakdownRow label="Lo que ya pagó" value={preview.alreadyPaid} sign="−" />
+                {preview.otherCredit > 0 && <BreakdownRow label="Saldo a favor que ya tenía" value={preview.otherCredit} sign="−" />}
+              </>
+            ) : (
+              <>
+                <BreakdownRow label="Costo de la carrera nueva" value={preview.newOriginalAmount} />
+                {preview.newDiscountAmount > 0 && (
+                  <BreakdownRow label="Descuento que se respeta" value={preview.newDiscountAmount} sign="−" />
+                )}
+              </>
+            )}
+            <div className="flex items-baseline justify-between gap-4 pt-2 pb-1 mt-1 border-t border-[#D1D5DB]">
+              <span className="font-semibold text-[#333333]">{paid && preview.toPay <= 0 ? 'Saldo a favor' : 'A pagar'}</span>
+              <span className="tabular-nums font-bold text-[#333333]">
+                {money(paid && preview.toPay <= 0 ? preview.creditLeft : preview.toPay)}
+              </span>
+            </div>
+            {delta != null && delta !== 0 && (
+              <p className="pb-1 text-[11px] text-[#6B7280]">
+                {delta > 0 ? `${money(delta)} más que antes` : `${money(-delta)} menos que antes`}
+              </p>
+            )}
+          </div>
+
+          {/* Resultado */}
+          <div className={`md:col-span-2 rounded-lg border px-4 py-4 flex flex-col ${t.box}`}>
+            <div className="flex items-center gap-2">
+              <span className={`flex h-8 w-8 items-center justify-center rounded-full ${t.icon}`}>
+                <ResultIcon size={16} />
+              </span>
+              <p className={`font-semibold ${t.label}`}>{resultLabel}</p>
+            </div>
+            {resultAmount != null && (
+              <p className={`mt-3 tabular-nums text-[28px] font-bold leading-none ${t.amount}`}>{money(resultAmount)}</p>
+            )}
+            <p className={`mt-3 text-[12px] leading-relaxed ${t.label}`}>{resultNote}</p>
+            {paid && preview.toPay > 0 && deadline && (
+              <p className={`mt-2 flex items-center gap-1.5 text-[12px] font-semibold ${t.label}`}>
+                <Clock size={13} /> Vence el {deadline}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {paid && (
+          <p className="text-[11px] text-[#9CA3AF]">
+            El pago anterior queda como historial con su carrera y su tarifa. El candidato conserva su estado.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
+export default function CandidatoRegistro({ origin, mode = 'create' }: CandidatoRegistroProps) {
   const navigate = useNavigate()
+  const isEdit = mode === 'edit'
+  const [searchParams] = useSearchParams()
+  const editId = isEdit ? searchParams.get('id') ?? '' : ''
 
   const [paso1, setPaso1] = useState<Paso1State>(emptyPaso1)
   const [paso2, setPaso2] = useState<Paso2State>(emptyPaso2)
   const [paso3, setPaso3] = useState<Paso3State>(emptyPaso3)
-  const [identityStatus, setIdentityStatus] = useState<'idle' | 'manual'>('idle')
+  // En edición no hay verificación de identidad: quien captura es Servicios
+  // Escolares, así que todos los campos de identidad quedan editables.
+  const [identityStatus, setIdentityStatus] = useState<'idle' | 'manual'>(isEdit ? 'manual' : 'idle')
   /**
    * LlaveMX identity verified for THIS tab's ticket.
    *
@@ -687,6 +936,193 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     setLlaveMxPrefill(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [llaveMxPrefill, estados, catalogsStatus])
+
+  // ── Modo edición: precarga de la ficha guardada (Fase 7 · T2) ──
+  //
+  // El back devuelve IDs de catálogo y el formulario trabaja con NOMBRES, así
+  // que se espera a los catálogos y se piden de una vez los municipios de cada
+  // estado involucrado para poder traducir los IDs antes de pintar.
+  const [editStatus, setEditStatus] = useState<'loading' | 'ready' | 'error'>(isEdit ? 'loading' : 'ready')
+  const [editError, setEditError] = useState('')
+  const [editFolio, setEditFolio] = useState('')
+  const [editOriginalConfigId, setEditOriginalConfigId] = useState('')
+  const [editProgramChangeAllowed, setEditProgramChangeAllowed] = useState(false)
+  const [editProgramChangeBlockedReason, setEditProgramChangeBlockedReason] = useState<string | null>(null)
+  const [editPendingChange, setEditPendingChange] = useState<CandidateEditFormResponse['pendingProgramChange']>(null)
+
+  useEffect(() => {
+    if (!isEdit) return
+    if (!editId) {
+      setEditStatus('error')
+      setEditError('Falta el id del candidato a editar.')
+      return
+    }
+    if (catalogsStatus === 'loading') return
+    if (catalogsStatus === 'error') {
+      setEditStatus('error')
+      setEditError('No se pudieron cargar los catálogos de la ficha. Intenta de nuevo más tarde.')
+      return
+    }
+
+    let cancelled = false
+    setEditStatus('loading')
+    ;(async () => {
+      try {
+        const data = await apiGet<CandidateEditFormResponse>(`/candidates/${editId}/edit`)
+        const dg = data.datosGenerales
+        const dom = data.domicilio
+        const ae = data.antecedentesEscolares
+        const sc = data.seleccionCarrera
+
+        const stateIds = [...new Set(
+          [dg.birthStateId, dom?.stateId, ae?.schoolStateId].filter((v): v is string => !!v),
+        )]
+        const lists = await Promise.all(stateIds.map(stateId =>
+          apiGet<MunicipalityListResponse>('/municipalities', { stateId })
+            .then(res => [stateId, res.items] as const)
+            .catch(() => [stateId, [] as MunicipalityItem[]] as const),
+        ))
+        if (cancelled) return
+        const muniCache: Record<string, MunicipalityItem[]> = Object.fromEntries(lists)
+        setMunicipios(prev => ({ ...muniCache, ...prev }))
+
+        const str = (v: string | null | undefined) => v ?? ''
+        const num = (v: number | null | undefined) => (v == null ? '' : String(v))
+        const stateName = (id: string | null | undefined) => estados.find(e => e.id === id)?.name ?? ''
+        const muniName = (stateId: string | null | undefined, id: string | null | undefined) =>
+          (muniCache[stateId ?? ''] ?? []).find(m => m.id === id)?.name ?? ''
+        const mex = dg.nacionalidad !== 'Extranjera'
+        const enMexico = ae?.estudioBachilleratoEnMexico ?? true
+
+        setPaso1({
+          nombres: str(dg.nombres),
+          apellidoPaterno: str(dg.apellidoPaterno),
+          apellidoMaterno: str(dg.apellidoMaterno),
+          curp: str(dg.curp),
+          fechaNacimiento: str(dg.fechaNacimiento),
+          sexo: str(dg.sexo),
+          estadoNacimiento: mex ? stateName(dg.birthStateId) : str(dg.estadoNacimiento),
+          nacionalidad: (dg.nacionalidad === 'Mexicana' || dg.nacionalidad === 'Extranjera') ? dg.nacionalidad : '',
+          municipioNacimiento: mex ? muniName(dg.birthStateId, dg.birthMunicipalityId) : '',
+          paisNacimiento: str(dg.paisNacimiento),
+          ciudadNacimiento: str(dg.ciudadNacimiento),
+          estadoCivil: str(dg.estadoCivil) as EstadoCivil | '',
+          lenguaNatal: str(dg.lenguaNatal) as LenguaNatal | '',
+          tieneHijos: dg.tieneHijos,
+          calle: str(dom?.calle),
+          numeroExterior: str(dom?.numeroExterior),
+          numeroInterior: str(dom?.numeroInterior),
+          colonia: str(dom?.colonia),
+          estadoDomicilio: stateName(dom?.stateId),
+          municipioDomicilio: muniName(dom?.stateId, dom?.municipalityId),
+          localidad: str(dom?.localidad),
+          codigoPostal: str(dom?.codigoPostal),
+          email: str(data.contacto.personalEmail),
+          telefonoCasa: str(data.contacto.telefonoCasa),
+          celular: str(data.contacto.celular),
+        })
+
+        const ic = data.informacionComplementaria
+        const ing = data.ingresos
+        setPaso2({
+          tieneEnfermedadPreexistente: ic.tieneEnfermedadPreexistente,
+          descripcionEnfermedad: str(ic.descripcionEnfermedad),
+          tieneDiscapacidad: ic.tieneDiscapacidad,
+          descripcionDiscapacidad: str(ic.descripcionDiscapacidad),
+          padresHablanLenguaIndigena: ic.padresHablanLenguaIndigena,
+          lenguaIndigenaPadres: str(ic.lenguaIndigenaPadres),
+          hablaLenguaIndigena: ic.hablaLenguaIndigena,
+          lenguaIndigenaPropia: str(ic.lenguaIndigenaPropia),
+          seIdentificaIndigena: ic.seIdentificaIndigena,
+          seIdentificaNoBinario: ic.seIdentificaNoBinario,
+          perteneceComunidadLgbttiq: ic.perteneceComunidadLgbttiq,
+          esAfrodescendiente: ic.esAfrodescendiente,
+          seIdentificaAfrodescendiente: !!ic.seIdentificaAfrodescendiente,
+          ingresoMensualFamiliar: num(ing.ingresoMensualFamiliar),
+          trabaja: ing.trabaja,
+          tipoTrabajo: str(ing.tipoTrabajo),
+          telefonoTrabajo: str(ing.telefonoTrabajo),
+          ingresoMensual: num(ing.ingresoMensual),
+          nombreEmpresa: str(ing.nombreEmpresa),
+          puesto: str(ing.puesto),
+          horaInicio: str(ing.horaInicio),
+          horaFin: str(ing.horaFin),
+        })
+
+        setPaso3({
+          modalidad: data.modality ? MODALIDAD_CODE_TO_LABEL[data.modality] ?? '' : '',
+          programa: str(data.programName),
+          admissionConfigId: sc.admissionConfigId,
+          canal: canales.find(c => c.id === sc.outreachChannelId)?.label ?? '',
+          outreachChannelId: str(sc.outreachChannelId),
+          isFirstChoice: sc.isFirstChoice,
+          nombrePreparatoria: str(ae?.nombrePreparatoria),
+          tipoBachillerato: (tiposBachillerato.find(t => t.id === ae?.schoolTypeId)?.label ?? '') as TipoBachillerato | '',
+          schoolTypeId: str(ae?.schoolTypeId),
+          estudioEnMexico: enMexico,
+          estadoPreparatoria: enMexico ? stateName(ae?.schoolStateId) : str(ae?.estadoPreparatoria),
+          municipioPreparatoria: enMexico ? muniName(ae?.schoolStateId, ae?.schoolMunicipalityId) : '',
+          paisPreparatoria: str(ae?.paisPreparatoria),
+          ciudadPreparatoria: str(ae?.ciudadPreparatoria),
+          promedio: num(ae?.promedio),
+          cct: str(ae?.cct),
+          cctConfirmacion: str(ae?.cctConfirmacion),
+        })
+
+        // La carrera actual puede no venir en las opciones (solo trae las que
+        // siguen vendiendo fichas): se siembra el snapshot para que se pinte.
+        setLastKnownConfig({ id: sc.admissionConfigId, label: str(data.programName), code: data.modality })
+        setEditFolio(data.folio)
+        setEditOriginalConfigId(sc.admissionConfigId)
+        setEditProgramChangeAllowed(data.programChangeAllowed)
+        setEditProgramChangeBlockedReason(data.programChangeBlockedReason ?? null)
+        setEditPendingChange(data.pendingProgramChange)
+        setEditStatus('ready')
+      } catch (err) {
+        if (cancelled) return
+        setEditStatus('error')
+        setEditError(getApiErrorMessage(err, 'No se pudo cargar la ficha del candidato.'))
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, editId, catalogsStatus])
+
+  // ── Modo edición: vista previa del cambio de carrera ──
+  // Si Servicios Escolares elige otra carrera, el backend calcula qué pasa con el
+  // cobro (precio nuevo, diferencia o saldo a favor, cupo) antes de guardar.
+  const programChanged = isEdit && editOriginalConfigId !== '' && paso3.admissionConfigId !== ''
+    && paso3.admissionConfigId !== editOriginalConfigId
+  const [changePreview, setChangePreview] = useState<ProgramChangePreview | null>(null)
+  const [changePreviewStatus, setChangePreviewStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [changePreviewError, setChangePreviewError] = useState('')
+
+  useEffect(() => {
+    if (!programChanged) {
+      setChangePreview(null)
+      setChangePreviewStatus('idle')
+      return
+    }
+    let cancelled = false
+    setChangePreviewStatus('loading')
+    apiGet<ProgramChangePreview>(`/candidates/${editId}/program-change-preview`, { admissionConfigId: paso3.admissionConfigId })
+      .then(preview => {
+        if (cancelled) return
+        setChangePreview(preview)
+        setChangePreviewStatus('ready')
+      })
+      .catch(err => {
+        if (cancelled) return
+        setChangePreview(null)
+        setChangePreviewError(getApiErrorMessage(err, 'No se pudo calcular el cambio de carrera.'))
+        setChangePreviewStatus('error')
+      })
+    return () => { cancelled = true }
+  }, [programChanged, paso3.admissionConfigId, editId])
+
+  // No se guarda un cambio de carrera sin su vista previa, ni a una carrera sin lugar.
+  const programChangeBlocked = programChanged
+    && (changePreviewStatus !== 'ready' || (changePreview?.mode === 'PAID' && !changePreview.quotaAvailable))
 
 
   async function handleVerifyWithLlaveMx() {
@@ -993,7 +1429,8 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   // cotizable y bloquea el paso 4 en vez de inventar un precio.
   useEffect(() => {
     const configId = paso3.admissionConfigId
-    if (configId === '') {
+    // En edición no se cobra nada: la ficha ya tiene su cargo.
+    if (isEdit || configId === '') {
       setFichaAmount(null)
       return
     }
@@ -1008,7 +1445,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   // ── Paso 4 validation (Confirmación) ──
   // The payment method is no longer a choice: the ficha is online-only, so
   // there is nothing left to validate beyond having a quotable amount.
-  const paso4Valid = !submitting && fichaAmount !== null
+  const paso4Valid = isEdit ? !submitting && !programChangeBlocked : !submitting && fichaAmount !== null
 
   const nombreCompleto = `${paso1.nombres} ${paso1.apellidoPaterno} ${paso1.apellidoMaterno}`.trim()
 
@@ -1045,6 +1482,8 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         estadoCivil: paso1.estadoCivil as EstadoCivil,
         lenguaNatal: paso1.lenguaNatal as LenguaNatal,
         tieneHijos: paso1.tieneHijos,
+        // El estado de un extranjero es texto libre; el de un mexicano viaja como birthStateId.
+        estadoNacimiento: mex ? '' : paso1.estadoNacimiento,
       },
       domicilio: {
         calle: paso1.calle,
@@ -1103,6 +1542,8 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         promedio: promedioNum,
         cct: paso3.cct,
         cctConfirmacion: paso3.cctConfirmacion,
+        // Igual que en nacimiento: texto libre solo para una prepa en el extranjero.
+        estadoPreparatoria: paso3.estudioEnMexico ? '' : paso3.estadoPreparatoria,
       },
       // Advisory only. The backend re-validates the HttpOnly
       // `sisa.llave.verified` ticket cookie on this very request and is the only
@@ -1113,6 +1554,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     }
 
     try {
+      if (isEdit) {
+        await apiPut<CandidateEditFormResponse>(`/candidates/${editId}`, payload)
+        setSubmitting(false)
+        navigate('/admision/candidatos', { state: { toast: `Ficha ${editFolio} actualizada exitosamente.` } })
+        return
+      }
+
       const res = await apiPost<CandidateRegistrationResponse>('/candidates', payload)
       setSubmitting(false)
       setFolio(res.folio)
@@ -1258,7 +1706,8 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         setSubmitError(apiErr.message ?? 'No pudimos completar tu registro en este momento. Inténtalo de nuevo en un momento.')
       } else if (apiErr.status === 400) setSubmitError(apiErr.message ?? 'Revisa los datos capturados.')
       else if (apiErr.status === 401) setSubmitError('Tu sesión expiró. Vuelve a iniciar sesión.')
-      else if (apiErr.status === 403) setSubmitError('No tienes permiso para realizar el registro.')
+      else if (apiErr.status === 403) setSubmitError(isEdit ? 'No tienes permiso para editar la ficha.' : 'No tienes permiso para realizar el registro.')
+      else if (apiErr.status === 404) setSubmitError(apiErr.message ?? 'No se encontró el candidato.')
       else if (apiErr.status === 409) setSubmitError(apiErr.message ?? 'No se pudo completar el registro por un conflicto con tus datos.')
       else setSubmitError('No se pudo conectar con el servidor. Intenta de nuevo más tarde.')
     }
@@ -1307,7 +1756,9 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
   // ── Paso 1 content: Datos Generales + Domicilio Actual + Contacto ──
   const paso1Render = (
     <div data-ficha-step="0">
-      {/* Verificación de Identidad — LlaveMX u captura manual. */}
+      {/* Verificación de Identidad — LlaveMX u captura manual. En edición no
+          aplica: quien captura es Servicios Escolares, no el candidato. */}
+      {!isEdit && (
       <div className="border-2 border-[#009574] rounded-lg p-5 mb-6 bg-[#e6f5f1]/40">
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 w-9 h-9 rounded-full bg-[#009574] flex items-center justify-center">
@@ -1399,6 +1850,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           </div>
         </div>
       </div>
+      )}
 
       {/* Datos Generales */}
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Datos Generales</p>
@@ -1772,6 +2224,29 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     <div data-ficha-step="2">
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Selección de Carrera</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
+        {isEdit && editPendingChange && (
+          <div className="col-span-12 bg-amber-50 border border-amber-200 rounded-md px-4 py-3 text-[13px] text-amber-800">
+            Un cambio de carrera anterior dejó {money(editPendingChange.toPay)} por pagar (referencia{' '}
+            {editPendingChange.referenceNumber}
+            {editPendingChange.dueAt ? `, hasta el ${formatDate(new Date(editPendingChange.dueAt))}` : ''}). Si vuelves a
+            cambiar la carrera, esa diferencia se recalcula.
+          </div>
+        )}
+        {isEdit && !editProgramChangeAllowed ? (
+          <>
+            {/* Inscrito, ficha vencida o pago en curso: el backend no deja cambiar la carrera y dice por qué. */}
+            <div className="col-span-12 md:col-span-4">
+              <LockedField label="Modalidad" value={selectedProgramaModalidad || (paso3.modalidad === 'Todas' ? '' : paso3.modalidad)} />
+            </div>
+            <div className="col-span-12 md:col-span-8">
+              <LockedField label="Carrera" value={paso3.programa} />
+              <FieldHelp>
+                {editProgramChangeBlockedReason ?? 'La carrera no se puede cambiar en el estado actual del candidato.'}
+              </FieldHelp>
+            </div>
+          </>
+        ) : (
+        <>
         <div className="col-span-12 md:col-span-4">
           <SelectField
             label="Modalidad (filtro)"
@@ -1802,6 +2277,14 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             </ErrorLine>
           </div>
         </div>
+        </>
+        )}
+
+        {programChanged && (
+          <div className="col-span-12">
+            <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
+          </div>
+        )}
 
         <div className="col-span-12 md:col-span-6">
           <ErrorLine error={e3.canal}>
@@ -1920,13 +2403,17 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
       )}
       {submitting && (
         <div className="mb-6 bg-[#e6f5f1] border border-[#009574]/30 rounded-md px-4 py-3 text-[13px] text-[#007a5e]">
-          Registrando al candidato… generando folio.
+          {isEdit ? 'Guardando los cambios de la ficha…' : 'Registrando al candidato… generando folio.'}
         </div>
       )}
 
       <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
         <p className="text-[13px] text-[#6B7280] mb-6">
-          Revisa con cuidado la información capturada. Una vez que confirmes, no podrás modificarla desde aquí.
+          {isEdit
+            ? programChanged
+              ? 'Revisa los cambios antes de guardarlos. El folio y el estado del candidato no cambian; el cobro se ajusta a la carrera nueva como se muestra abajo.'
+              : 'Revisa los cambios antes de guardarlos. El folio, el estado del candidato y sus pagos no se modifican.'
+            : 'Revisa con cuidado la información capturada. Una vez que confirmes, no podrás modificarla desde aquí.'}
         </p>
 
         <SummarySection title="Datos Generales">
@@ -2030,18 +2517,18 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           <ReadField label="Clave de Centro de Trabajo (CCT)" value={paso3.cct} />
         </SummarySection>
 
+        {isEdit ? (
+          <div className="pt-2">
+            {programChanged && (
+              <div className="mb-4">
+                <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
+              </div>
+            )}
+            <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio</p>
+            <p className="text-[15px] font-bold text-[#333333]">{editFolio}</p>
+          </div>
+        ) : (
         <div className="pt-2">
-          {folio ? (
-            <>
-              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio Generado</p>
-              <p className="text-[15px] font-bold text-[#333333] mb-4">{folio}</p>
-            </>
-          ) : (
-            <>
-              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio Generado</p>
-              <p className="text-[15px] font-bold text-[#333333] mb-4">—</p>
-            </>
-          )}
           <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Monto de la Ficha</p>
           {fichaAmount ? (
             <p className="text-[24px] font-bold text-[#009574]">
@@ -2056,11 +2543,13 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             </p>
           )}
         </div>
+        )}
       </div>
 
       {/* Payment is online-only: the ventanilla option and the
           "send instructions by email" action were both removed, so this is
           information, not a choice. */}
+      {!isEdit && (
       <div className='flex flex-col gap-4'>
         <div className="bg-[#e6f5f1] border border-[#009574]/30 rounded-md px-4 py-3.5">
         <p className="text-[13px] font-semibold text-[#333333] mb-1">Pago de la ficha: en línea</p>
@@ -2077,6 +2566,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
         </p>
       </div>
       </div>
+      )}
     </div>
   )
 
@@ -2084,7 +2574,7 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
     { id: 'datos-generales', label: 'Datos Generales', render: paso1Render, isValid: paso1Valid },
     { id: 'informacion-complementaria', label: 'Información Complementaria', render: paso2Render, isValid: paso2Valid },
     { id: 'seleccion-carrera', label: 'Selección de Carrera', render: paso3Render, isValid: paso3Valid },
-    { id: 'confirmacion', label: 'Confirmación', render: paso4Render, isValid: paso4Valid, gated: true },
+    { id: 'confirmacion', label: isEdit ? 'Revisión' : 'Confirmación', render: paso4Render, isValid: paso4Valid, gated: true },
   ]
 
   const content = (
@@ -2095,14 +2585,25 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
           No se pudieron cargar los catálogos (carreras, estados, canales). Verifica que el servidor esté disponible e intenta de nuevo.
         </div>
       )}
+      {isEdit && editStatus === 'error' && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-md px-4 py-3 text-[13px] text-red-700 flex items-start gap-2">
+          <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+          {editError}
+        </div>
+      )}
+      {isEdit && editStatus === 'loading' && (
+        <p className="text-[13px] text-[#6B7280]">Cargando la ficha del candidato…</p>
+      )}
+      {editStatus === 'ready' && (
       <Wizard
         steps={steps}
         onComplete={handleComplete}
-        finishLabel="Finalizar Registro"
+        finishLabel={isEdit ? 'Guardar cambios' : 'Finalizar Registro'}
         onInvalidStepAttempt={handleInvalidStep}
         step={wizardStep}
         onStepChange={setWizardStep}
       />
+      )}
     </div>
   )
 
@@ -2115,14 +2616,21 @@ export default function CandidatoRegistro({ origin }: CandidatoRegistroProps) {
             { label: 'Inicio', to: '/admision' },
             { label: 'Admisión', to: '/admision' },
             { label: 'Candidatos', to: '/admision/candidatos' },
-            { label: 'Registrar Candidato' },
+            { label: isEdit ? 'Editar Ficha' : 'Registrar Candidato' },
           ]}
         />
 
-        <FormHeader
-          title="Registrar Candidato"
-          subtitle="Completa los cuatro pasos para registrar al aspirante en el proceso de admisión."
-        />
+        {isEdit ? (
+          <FormHeader
+            title="Editar Ficha de Admisión"
+            subtitle={editFolio ? `Corrige los datos capturados del candidato con folio ${editFolio}.` : 'Corrige los datos capturados del candidato.'}
+          />
+        ) : (
+          <FormHeader
+            title="Registrar Candidato"
+            subtitle="Completa los cuatro pasos para registrar al aspirante en el proceso de admisión."
+          />
+        )}
 
         {content}
       </FormPage>

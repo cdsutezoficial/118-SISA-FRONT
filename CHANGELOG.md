@@ -4,6 +4,47 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-10-28] Servicios Escolares edita la ficha del candidato
+
+Rama: `feat/editar-ficha-candidato`. Plan: `118-SISA-CLAUDE/docs/design/pendientes/editar-ficha-candidato/`.
+
+### Qué cambió
+
+- `CandidatosList.tsx`: acción **Editar** (lápiz) en la tabla y en la tarjeta móvil, visible
+  solo con `CANDIDATES_UPDATE`.
+- `router.tsx`: ruta `candidatos/editar?id=` para `SERVICIOS_ESCOLARES` con `RequirePermission`
+  `CANDIDATES_UPDATE`.
+- `CandidatoRegistro.tsx` con `mode="edit"`: precarga la ficha desde
+  `GET /candidates/{id}/edit`, sin el bloque de LlaveMX (todo editable), paso 4 "Revisión"
+  sin monto ni avisos de pago, y "Guardar cambios" con `PUT /candidates/{id}`.
+- **Cambio de carrera:** si `programChangeAllowed`, la modalidad y la carrera se pueden
+  cambiar. Al elegir otra se pide `GET /candidates/{id}/program-change-preview` y se muestra el
+  resumen (monto anterior, lo pagado, costo nuevo, "debe pagar más" o saldo a favor); sin
+  vista previa o sin cupo no deja guardar. Si hay una diferencia pendiente de un cambio
+  anterior, se avisa.
+- Portal (`PortalFichaPago.tsx`): con la ficha pagada y una diferencia pendiente, muestra
+  "Cambiaste de carrera: falta pagar la diferencia" con el botón de pago en línea.
+  Si el cambio está bloqueado, el editor muestra el motivo que manda el back
+  (`programChangeBlockedReason`).
+- **Pago con el panel abierto:** al dar clic en pagar, el botón desaparece y la ficha se
+  pliega a una barra (folio, monto, fecha límite y "Ver ficha") para que el panel de EVO
+  quede a la vista; "Cancelar" la regresa completa. Aplica al portal (ficha y diferencia) y
+  a `FichaConfirmacion.tsx`.
+- **Detalle del candidato (`CandidatoDetalle.tsx`):** "Información General" muestra la ficha
+  completa por secciones. "Pagos" usa `GET /candidates/{id}/account`: saldo a favor, cobros
+  de la ficha (vigente, diferencia pendiente e historial) con sus abonos, cambios de carrera
+  y movimientos del saldo. El botón "Cambiar Carrera" (un modal que no guardaba) se cambió
+  por "Editar ficha / Cambiar carrera", que abre el editor real.
+- **Extranjeros:** el registro ahora envía el estado de nacimiento y el de la preparatoria en
+  el extranjero, que antes se pedían y no se mandaban.
+
+### Depende de
+
+El PR del back de la misma rama (`GET /candidates/{id}/edit`, `PUT /candidates/{id}` y el
+permiso `CANDIDATES_UPDATE`).
+
+---
+
 ## [2026-10-28] Desglose del pago en el detalle del candidato y descuento que se ve, se edita y se guarda
 
 ### Qué cambió

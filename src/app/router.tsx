@@ -213,6 +213,12 @@ const router = createBrowserRouter([
             path: 'candidatos/registrar',
             element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><CandidatoRegistro origin="staff" /></RequireRole>,
           },
+          // Edición de la ficha (Fase 7 · T2): solo Servicios Escolares, con el
+          // permiso fino que también exige el back en `GET .../edit` y `PUT`.
+          {
+            path: 'candidatos/editar',
+            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['CANDIDATES_UPDATE']} redirectTo="/admision/candidatos"><CandidatoRegistro origin="staff" mode="edit" /></RequirePermission></RequireRole>,
+          },
           {
             path: 'candidatos/ficha',
             element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION']}><FichaConfirmacion origin="staff" /></RequireRole>,
