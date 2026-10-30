@@ -1,4 +1,5 @@
-import { FileText, Loader2, X } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { Loader2, Lock, X } from 'lucide-react'
 
 /**
  * Panel de pago de EVO, con la misma maqueta en las dos pantallas que lo ofrecen.
@@ -29,6 +30,11 @@ import { FileText, Loader2, X } from 'lucide-react'
  * con `showEmbeddedPage('#<id>')`; no se puede calcular aquí porque el hook
  * también lo usa para encontrar el nodo y tirar el iframe de la capa de
  * comunicación.
+ *
+ * SOLO Y A LA VISTA (2026-10-29)
+ * Con el panel abierto, las pantallas ocultan el botón de pago (ya se pulsó) y
+ * pliegan la ficha; el panel se desplaza solo hasta quedar a la vista. "Cancelar"
+ * lo cierra y regresa la ficha completa con su botón.
  */
 export function EvoPaymentPanel({
   containerId,
@@ -42,11 +48,16 @@ export function EvoPaymentPanel({
   /** Cierra el panel. El pago queda pendiente y el lugar se libera. */
   onClose: () => void
 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   return (
-    <div className="w-full border-t border-[#E5E7EB] pt-5 text-left">
+    <div ref={ref} className="w-full scroll-mt-4 text-left">
       <div className="mb-3 flex items-center justify-between">
-        <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#333333]">
-          <FileText size={13} className="text-amber-700" />
+        <p className="flex items-center gap-1.5 text-[13px] font-semibold text-[#333333]">
+          <Lock size={13} className="text-[#009574]" />
           Panel de pago seguro
         </p>
         <button
@@ -55,7 +66,7 @@ export function EvoPaymentPanel({
           className="inline-flex items-center gap-1 text-[12px] text-[#6B7280] hover:text-[#333333]"
         >
           <X size={12} />
-          Cerrar
+          Cancelar
         </button>
       </div>
 

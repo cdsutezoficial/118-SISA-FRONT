@@ -255,6 +255,8 @@ export default function PortalFichaPago() {
             referencia={diferencia.referenceNumber}
             nombre={acceso?.nombre ?? null}
             carrera={diferencia.programName ?? acceso?.programName ?? null}
+            plegada={evoCheckout !== null}
+            concepto="Diferencia por cambio de carrera"
           >
             {diferencia.expired ? (
               <div className="text-center">
@@ -266,6 +268,9 @@ export default function PortalFichaPago() {
                   Comunícate con Servicios Escolares para resolverlo. Tu ficha sigue pagada.
                 </p>
               </div>
+            ) : evoCheckout ? (
+              // Panel abierto: el botón ya se pulsó y la ficha está plegada arriba.
+              <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
             ) : (
               <div className="flex flex-col items-center gap-3">
                 {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
@@ -289,9 +294,6 @@ export default function PortalFichaPago() {
                     )}
                   </span>
                 </Button>
-                {evoCheckout && (
-                  <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
-                )}
               </div>
             )}
           </FichaPagoPendiente>
@@ -336,6 +338,7 @@ export default function PortalFichaPago() {
               referencia={referencia}
               nombre={acceso?.nombre ?? null}
               carrera={acceso?.programName ?? null}
+              plegada={evoCheckout !== null}
             >
               {!acceso ? (
                 // Degraded 3DS return: we can confirm, but there is no amount to charge
@@ -372,6 +375,9 @@ export default function PortalFichaPago() {
                     Buscar mi ficha
                   </Button>
                 </div>
+              ) : evoCheckout ? (
+                // Panel abierto: el botón ya se pulsó y la ficha está plegada arriba.
+                <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
               ) : (
                 <div className="flex flex-col items-center gap-3">
                   {/* Aviso persistente, arriba del botón: quien ya intentó y le
@@ -435,10 +441,6 @@ export default function PortalFichaPago() {
                       El PDF es una copia sin validez oficial; la ficha oficial es la que expide la Universidad.
                     </p>
                   </div>
-
-                  {evoCheckout && (
-                    <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
-                  )}
               </div>
               )}
             </FichaPagoPendiente>
