@@ -575,6 +575,134 @@ export interface CandidateDetailBackend {
   outreachChannelName: string | null
   admissionPayment: CandidateDetailPaymentBackend
   inductionPayment: CandidateDetailPaymentBackend | null
+  /** Secciones capturadas en la ficha, ya con nombres de catálogo. */
+  datosGenerales: {
+    birthDate: string | null
+    gender: 'M' | 'F' | 'NB' | null
+    nationality: string | null
+    birthStateName: string | null
+    birthMunicipalityName: string | null
+    maritalStatus: string | null
+    nativeLanguage: string | null
+    hasChildren: boolean
+  } | null
+  domicilio: {
+    street: string | null
+    exteriorNumber: string | null
+    interiorNumber: string | null
+    neighborhood: string | null
+    locality: string | null
+    postalCode: string | null
+    stateName: string | null
+    municipalityName: string | null
+  } | null
+  informacionComplementaria: {
+    hasPreexistingCondition: boolean
+    conditionDescription: string | null
+    hasDisability: boolean
+    disabilityDescription: string | null
+    parentsSpeakIndigenousLanguage: boolean
+    parentsIndigenousLanguage: string | null
+    speaksIndigenousLanguage: boolean
+    indigenousLanguage: string | null
+    selfIdentifiesIndigenous: boolean
+    selfIdentifiesNonBinary: boolean
+    belongsToLgbttiqCommunity: boolean
+    isAfrodescendant: boolean
+    selfIdentifiesAfrodescendant: boolean
+  } | null
+  ingresos: {
+    monthlyFamilyIncome: number | null
+    isEmployed: boolean
+    employmentType: string | null
+    workPhone: string | null
+    monthlyIncome: number | null
+    companyName: string | null
+    jobTitle: string | null
+    workStartTime: string | null
+    workEndTime: string | null
+  } | null
+  seleccionCarrera: {
+    modalityName: string | null
+    outreachChannelName: string | null
+    isFirstChoice: boolean
+    periodName: string | null
+  } | null
+  antecedentesEscolares: {
+    schoolName: string | null
+    schoolTypeName: string | null
+    studiedInMexico: boolean
+    schoolStateName: string | null
+    schoolMunicipalityName: string | null
+    foreignCountry: string | null
+    schoolCity: string | null
+    gpa: number | null
+    cct: string | null
+  } | null
+}
+
+// ─── Pagos del candidato (`GET /candidates/{id}/account`) ────────────────────
+
+/** Para qué sirve el cobro hoy. */
+export type CandidateChargeRole = 'CURRENT_FICHA' | 'PENDING_DIFFERENCE' | 'HISTORY' | 'OTHER'
+
+export type FinancePaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'EXEMPT' | 'OVERDUE' | 'CANCELLED'
+
+export interface CandidateChargeEntry {
+  amount: number
+  /** `CASH` | `ONLINE` | `CARD` | `CREDIT` (saldo a favor). */
+  method: string | null
+  channel: string | null
+  receiptNumber: string | null
+  reference: string | null
+  paidAt: string | null
+}
+
+export interface CandidateCharge {
+  paymentId: string
+  role: CandidateChargeRole
+  conceptCode: string
+  referenceNumber: string | null
+  programName: string | null
+  status: FinancePaymentStatus
+  originalAmount: number | null
+  discountAmount: number | null
+  discountReason: string | null
+  amountDue: number | null
+  amountPaid: number
+  balance: number | null
+  dueAt: string | null
+  createdAt: string | null
+  entries: CandidateChargeEntry[]
+}
+
+export interface CandidateCredit {
+  amount: number
+  status: 'AVAILABLE' | 'APPLIED' | 'REFUNDED'
+  originReference: string | null
+  appliedToReference: string | null
+  createdAt: string | null
+}
+
+export interface CandidateProgramChangeItem {
+  fromProgramName: string | null
+  toProgramName: string | null
+  wasPaid: boolean
+  previousAmount: number | null
+  paidAmount: number
+  newAmount: number
+  toPay: number
+  creditLeft: number
+  changedAt: string
+}
+
+export interface CandidateAccountBackend {
+  candidateId: string
+  /** Saldo a favor que puede usar hoy. */
+  availableCredit: number
+  charges: CandidateCharge[]
+  credits: CandidateCredit[]
+  programChanges: CandidateProgramChangeItem[]
 }
 
 // ─── Edición de la ficha por Servicios Escolares (Fase 7 · T2) ───────────────
