@@ -2529,17 +2529,6 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
           </div>
         ) : (
         <div className="pt-2">
-          {folio ? (
-            <>
-              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio Generado</p>
-              <p className="text-[15px] font-bold text-[#333333] mb-4">{folio}</p>
-            </>
-          ) : (
-            <>
-              <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio Generado</p>
-              <p className="text-[15px] font-bold text-[#333333] mb-4">—</p>
-            </>
-          )}
           <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Monto de la Ficha</p>
           {fichaAmount ? (
             <p className="text-[24px] font-bold text-[#009574]">
