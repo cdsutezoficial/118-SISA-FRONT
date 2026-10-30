@@ -143,6 +143,8 @@ export default function PortalFichaPago() {
               alreadyPaid: true,
               amount: Number(data.amount),
               referenceNumber: data.referenceNumber,
+              // Si lo que se pagó era la diferencia de un cambio de carrera, ya no queda nada.
+              programChange: null,
             }
           : prev
       )
@@ -198,6 +200,9 @@ export default function PortalFichaPago() {
 
   const folio = acceso?.folio ?? confirmData?.folio ?? ''
   const pagado = acceso?.alreadyPaid || confirmData !== null || alreadyPaid
+  // La ficha está pagada pero un cambio de carrera dejó una diferencia: eso es lo
+  // que se cobra ahora, con el mismo botón (el backend sabe qué cargo cobrar).
+  const diferencia = acceso?.programChange && confirmData === null && !alreadyPaid ? acceso.programChange : null
   const fechaConfirmacion = confirmData?.paidAt ?? acceso?.paidAt
   const folioComprobante = confirmData?.receiptNumber ?? acceso?.receiptNumber
   const referencia = acceso?.referenceNumber ?? confirmData?.referenceNumber ?? ''
@@ -240,7 +245,57 @@ export default function PortalFichaPago() {
       </header>
 
       <div className="max-w-[820px] mx-auto my-8">
-        {pagado ? (
+        {diferencia ? (
+          <FichaPagoPendiente
+            titulo="Cambiaste de carrera: falta pagar la diferencia"
+            subtitulo={`Tu ficha ya está pagada. La nueva carrera cuesta $${Number(diferencia.newAmount).toFixed(2)} y ya pagaste $${Number(diferencia.carried).toFixed(2)}, así que solo falta la diferencia.`}
+            folio={folio}
+            monto={Number(diferencia.toPay)}
+            fechaLimitePago={diferencia.dueOn ? formatDate(new Date(`${diferencia.dueOn}T00:00:00`)) : null}
+            referencia={diferencia.referenceNumber}
+            nombre={acceso?.nombre ?? null}
+            carrera={diferencia.programName ?? acceso?.programName ?? null}
+          >
+            {diferencia.expired ? (
+              <div className="text-center">
+                <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-3">
+                  <Clock size={20} className="text-amber-600" />
+                </div>
+                <p className="text-[13px] font-semibold text-[#333333] mb-1">El plazo para pagar la diferencia venció</p>
+                <p className="text-[12px] leading-relaxed text-[#6B7280]">
+                  Comunícate con Servicios Escolares para resolverlo. Tu ficha sigue pagada.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
+                <Button
+                  onClick={startCheckout}
+                  loading={processing}
+                  disabled={pagoEnCurso || pagoNoDisponible !== null}
+                  variant={pagoNoDisponible ? 'secondary' : 'primary'}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    {pagoNoDisponible ? (
+                      <>
+                        <Info size={14} />
+                        Pago en línea no disponible
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard size={14} />
+                        Pagar diferencia — ${Number(diferencia.toPay).toFixed(2)}
+                      </>
+                    )}
+                  </span>
+                </Button>
+                {evoCheckout && (
+                  <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
+                )}
+              </div>
+            )}
+          </FichaPagoPendiente>
+        ) : pagado ? (
           // Idéntico bloque que la confirmación post-registro. Un Aspirante que
           // vuelve por su comprobante y uno que acaba de registrarse deben ver
           // exactamente la misma pantalla: antes cada vista tenía la suya y ya

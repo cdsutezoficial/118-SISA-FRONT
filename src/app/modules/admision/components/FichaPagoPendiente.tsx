@@ -65,6 +65,8 @@ export function FichaPagoPendiente({
   carrera,
   periodo,
   descuento,
+  titulo,
+  subtitulo,
   children,
 }: {
   folio: string
@@ -80,6 +82,9 @@ export function FichaPagoPendiente({
   periodo?: string | null
   /** Descuento aplicado a la ficha (costo, monto y motivo), si lo hay. */
   descuento?: DescuentoFicha | null
+  /** Encabezado propio (p. ej. la diferencia por cambio de carrera); por defecto, el de la ficha. */
+  titulo?: string
+  subtitulo?: string
   /** Ranura de acción: botón de pago, o el aviso de retorno 3DS degradado. */
   children?: ReactNode
 }) {
@@ -91,11 +96,12 @@ export function FichaPagoPendiente({
           <Clock size={24} className="text-amber-700" />
         </div>
         <div className="min-w-0">
-          <h2 className="text-xl font-bold text-[#333333]">Tu ficha está lista, falta el pago</h2>
+          <h2 className="text-xl font-bold text-[#333333]">{titulo ?? 'Tu ficha está lista, falta el pago'}</h2>
           <p className="mt-1 text-[13px] leading-relaxed text-[#6B7280]">
-            {periodo
-              ? `Ficha de Admisión — ${periodo}. Completa tu pago en línea para continuar con el proceso de admisión.`
-              : 'Completa tu pago en línea para continuar con el proceso de admisión.'}
+            {subtitulo ??
+              (periodo
+                ? `Ficha de Admisión — ${periodo}. Completa tu pago en línea para continuar con el proceso de admisión.`
+                : 'Completa tu pago en línea para continuar con el proceso de admisión.')}
           </p>
         </div>
       </div>
