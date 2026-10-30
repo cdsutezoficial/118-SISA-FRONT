@@ -1,6 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { ShieldCheck, GraduationCap, Lock, AlertCircle } from 'lucide-react'
+import {
+  ShieldCheck, GraduationCap, Lock, AlertCircle, ArrowDown, ArrowLeftRight, ArrowRight,
+  CircleCheck, Clock, LoaderCircle, PiggyBank, Receipt, TriangleAlert, Wallet,
+} from 'lucide-react'
 import { Wizard, type WizardStep } from '@app/core/components/Wizard'
 import { LlaveMxButton } from '@app/core/components/LlaveMxButton'
 import {
@@ -35,6 +38,7 @@ import type {
   ModalidadPrograma,
   FichaAdmisionCompleta,
   CandidateEditFormResponse,
+  ProgramChangePreview,
 } from '../data/types'
 
 /**
@@ -519,6 +523,238 @@ function SummarySection({ title, children }: { title: string; children: ReactNod
   )
 }
 
+const money = (n: number | null | undefined) =>
+  n == null ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+type Tone = 'amber' | 'green' | 'blue' | 'red'
+
+const TONES: Record<Tone, { box: string; icon: string; label: string; amount: string }> = {
+  amber: { box: 'bg-amber-50 border-amber-200', icon: 'bg-amber-100 text-amber-700', label: 'text-amber-800', amount: 'text-amber-900' },
+  green: { box: 'bg-[#e6f5f1] border-[#009574]/30', icon: 'bg-[#009574]/15 text-[#007a5e]', label: 'text-[#007a5e]', amount: 'text-[#00543f]' },
+  blue: { box: 'bg-sky-50 border-sky-200', icon: 'bg-sky-100 text-sky-700', label: 'text-sky-800', amount: 'text-sky-900' },
+  red: { box: 'bg-red-50 border-red-200', icon: 'bg-red-100 text-red-700', label: 'text-red-800', amount: 'text-red-900' },
+}
+
+/** Una línea del desglose: signo, concepto y monto. */
+function BreakdownRow({ label, value, sign, hint }: { label: string; value: number | null; sign?: '+' | '−'; hint?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-2 border-b border-dashed border-[#E5E7EB] last:border-b-0">
+      <div className="min-w-0">
+        <span className="text-[#4B5563]">{label}</span>
+        {hint && <span className="block text-[11px] text-[#9CA3AF]">{hint}</span>}
+      </div>
+      <span className={`tabular-nums whitespace-nowrap ${sign === '−' ? 'text-[#009574]' : 'text-[#333333]'}`}>
+        {sign === '−' ? '− ' : ''}{money(value)}
+      </span>
+    </div>
+  )
+}
+
+/** Tarjeta de una carrera (actual o nueva) con su monto. */
+function ProgramCard({ caption, name, amount, amountCaption, highlighted = false }: {
+  caption: string
+  name: string | null
+  amount: number | null
+  amountCaption: string
+  highlighted?: boolean
+}) {
+  return (
+    <div className={`flex-1 min-w-0 rounded-lg border px-4 py-3 ${highlighted
+      ? 'border-[#009574] bg-white shadow-sm ring-1 ring-[#009574]/20'
+      : 'border-[#E5E7EB] bg-[#F9FAFB]'}`}
+    >
+      <p className={`text-[10px] font-bold uppercase tracking-wider ${highlighted ? 'text-[#009574]' : 'text-[#9CA3AF]'}`}>{caption}</p>
+      <p className={`mt-1 text-[13px] font-semibold leading-snug ${highlighted ? 'text-[#333333]' : 'text-[#6B7280]'}`}>{name ?? '—'}</p>
+      <div className="mt-3 flex items-baseline justify-between gap-2">
+        <span className="text-[11px] text-[#9CA3AF]">{amountCaption}</span>
+        <span className={`tabular-nums text-[16px] font-bold ${highlighted ? 'text-[#333333]' : 'text-[#9CA3AF] line-through decoration-1'}`}>
+          {money(amount)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Qué pasa con el cobro si Servicios Escolares cambia la carrera, antes de
+ * guardar. Los números los calcula el backend (vista previa): sin pagar, el
+ * mismo cobro pasa a la carrera nueva con su descuento; pagada, lo pagado se
+ * abona a la carrera nueva y queda la diferencia o un saldo a favor.
+ */
+function ProgramChangeSummary({ status, preview, error }: {
+  status: 'idle' | 'loading' | 'ready' | 'error'
+  preview: ProgramChangePreview | null
+  error: string
+}) {
+  if (status === 'loading') {
+    return (
+      <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-6 flex items-center justify-center gap-2 text-[13px] text-[#6B7280]">
+        <LoaderCircle size={16} className="animate-spin" />
+        Calculando el cambio de carrera…
+      </div>
+    )
+  }
+  if (status === 'error') {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-[13px] text-red-700 flex items-start gap-2">
+        <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+        {error}
+      </div>
+    )
+  }
+  if (!preview) return null
+
+  const paid = preview.mode === 'PAID'
+  const deadline = preview.newPaymentDeadline
+    ? formatDate(new Date(`${preview.newPaymentDeadline}T00:00:00`))
+    : null
+
+  // El resultado que más importa, en grande: cuánto paga, cuánto le queda o si no debe nada.
+  let tone: Tone
+  let ResultIcon = CircleCheck
+  let resultLabel: string
+  let resultAmount: number | null
+  let resultNote: string
+  if (paid && !preview.quotaAvailable) {
+    tone = 'red'
+    ResultIcon = TriangleAlert
+    resultLabel = 'No se puede cambiar'
+    resultAmount = null
+    resultNote = 'La carrera nueva ya no tiene lugar disponible.'
+  } else if (paid && preview.toPay > 0) {
+    tone = 'amber'
+    ResultIcon = Wallet
+    resultLabel = 'Debe pagar la diferencia'
+    resultAmount = preview.toPay
+    resultNote = `Sigue con su ficha pagada y paga la diferencia en el portal de la ficha${deadline ? `, a más tardar el ${deadline}` : ''}.`
+  } else if (paid && preview.creditLeft > 0) {
+    tone = 'blue'
+    ResultIcon = PiggyBank
+    resultLabel = 'Le queda saldo a favor'
+    resultAmount = preview.creditLeft
+    resultNote = 'La carrera nueva cuesta menos que lo que ya pagó. No tiene que pagar nada.'
+  } else if (paid) {
+    tone = 'green'
+    resultLabel = 'Queda pagada'
+    resultAmount = 0
+    resultNote = 'Lo que ya pagó cubre exactamente la carrera nueva.'
+  } else {
+    tone = preview.paymentWindowClosed ? 'amber' : 'green'
+    ResultIcon = preview.paymentWindowClosed ? TriangleAlert : Receipt
+    resultLabel = 'Nuevo monto de la ficha'
+    resultAmount = preview.toPay
+    resultNote = preview.paymentWindowClosed
+      ? 'El plazo de pago de esa carrera ya pasó: la ficha vencerá sin poder pagarse.'
+      : 'Lo paga con la misma ficha, en el portal, como antes.'
+  }
+  const t = TONES[tone]
+
+  // Sin pagar: cuánto cambia lo que debe respecto de antes.
+  const delta = !paid && preview.previousAmount != null ? preview.toPay - preview.previousAmount : null
+
+  return (
+    <div className="rounded-xl border border-[#E5E7EB] bg-white overflow-hidden text-[13px]">
+      {/* Encabezado */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-[#F9FAFB] border-b border-[#E5E7EB]">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#009574]/10 text-[#009574]">
+            <ArrowLeftRight size={14} />
+          </span>
+          <p className="font-semibold text-[#333333]">Cambio de carrera</p>
+        </div>
+        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${paid
+          ? 'bg-[#009574]/10 text-[#007a5e]'
+          : 'bg-[#F3F4F6] text-[#4B5563]'}`}
+        >
+          {paid ? 'Ficha pagada' : 'Ficha sin pagar'}
+        </span>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Antes → después */}
+        <div className="flex flex-col md:flex-row md:items-stretch gap-2 md:gap-3">
+          <ProgramCard
+            caption="Carrera actual"
+            name={preview.fromProgramName}
+            amount={preview.previousAmount}
+            amountCaption={paid ? 'Se pagó con' : 'Debía'}
+          />
+          <div className="flex items-center justify-center">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#009574] text-white shadow-sm">
+              <ArrowDown size={16} className="md:hidden" />
+              <ArrowRight size={16} className="hidden md:block" />
+            </span>
+          </div>
+          <ProgramCard
+            caption="Carrera nueva"
+            name={preview.toProgramName}
+            amount={paid ? preview.newAmount : preview.toPay}
+            amountCaption={paid ? 'Cuesta (completa)' : 'Deberá'}
+            highlighted
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {/* Desglose */}
+          <div className="md:col-span-3 rounded-lg border border-[#E5E7EB] px-4 py-2">
+            <p className="pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">Cómo se calcula</p>
+            {paid ? (
+              <>
+                <BreakdownRow label="Costo de la carrera nueva" value={preview.newAmount} hint="Sin descuento: el que tenía ya se usó al pagar." />
+                <BreakdownRow label="Lo que ya pagó" value={preview.alreadyPaid} sign="−" />
+                {preview.otherCredit > 0 && <BreakdownRow label="Saldo a favor que ya tenía" value={preview.otherCredit} sign="−" />}
+              </>
+            ) : (
+              <>
+                <BreakdownRow label="Costo de la carrera nueva" value={preview.newOriginalAmount} />
+                {preview.newDiscountAmount > 0 && (
+                  <BreakdownRow label="Descuento que se respeta" value={preview.newDiscountAmount} sign="−" />
+                )}
+              </>
+            )}
+            <div className="flex items-baseline justify-between gap-4 pt-2 pb-1 mt-1 border-t border-[#D1D5DB]">
+              <span className="font-semibold text-[#333333]">{paid && preview.toPay <= 0 ? 'Saldo a favor' : 'A pagar'}</span>
+              <span className="tabular-nums font-bold text-[#333333]">
+                {money(paid && preview.toPay <= 0 ? preview.creditLeft : preview.toPay)}
+              </span>
+            </div>
+            {delta != null && delta !== 0 && (
+              <p className="pb-1 text-[11px] text-[#6B7280]">
+                {delta > 0 ? `${money(delta)} más que antes` : `${money(-delta)} menos que antes`}
+              </p>
+            )}
+          </div>
+
+          {/* Resultado */}
+          <div className={`md:col-span-2 rounded-lg border px-4 py-4 flex flex-col ${t.box}`}>
+            <div className="flex items-center gap-2">
+              <span className={`flex h-8 w-8 items-center justify-center rounded-full ${t.icon}`}>
+                <ResultIcon size={16} />
+              </span>
+              <p className={`font-semibold ${t.label}`}>{resultLabel}</p>
+            </div>
+            {resultAmount != null && (
+              <p className={`mt-3 tabular-nums text-[28px] font-bold leading-none ${t.amount}`}>{money(resultAmount)}</p>
+            )}
+            <p className={`mt-3 text-[12px] leading-relaxed ${t.label}`}>{resultNote}</p>
+            {paid && preview.toPay > 0 && deadline && (
+              <p className={`mt-2 flex items-center gap-1.5 text-[12px] font-semibold ${t.label}`}>
+                <Clock size={13} /> Vence el {deadline}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {paid && (
+          <p className="text-[11px] text-[#9CA3AF]">
+            El pago anterior queda como historial con su carrera y su tarifa. El candidato conserva su estado.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CandidatoRegistro({ origin, mode = 'create' }: CandidatoRegistroProps) {
@@ -709,6 +945,10 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
   const [editStatus, setEditStatus] = useState<'loading' | 'ready' | 'error'>(isEdit ? 'loading' : 'ready')
   const [editError, setEditError] = useState('')
   const [editFolio, setEditFolio] = useState('')
+  const [editOriginalConfigId, setEditOriginalConfigId] = useState('')
+  const [editProgramChangeAllowed, setEditProgramChangeAllowed] = useState(false)
+  const [editProgramChangeBlockedReason, setEditProgramChangeBlockedReason] = useState<string | null>(null)
+  const [editPendingChange, setEditPendingChange] = useState<CandidateEditFormResponse['pendingProgramChange']>(null)
 
   useEffect(() => {
     if (!isEdit) return
@@ -833,6 +1073,10 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
         // siguen vendiendo fichas): se siembra el snapshot para que se pinte.
         setLastKnownConfig({ id: sc.admissionConfigId, label: str(data.programName), code: data.modality })
         setEditFolio(data.folio)
+        setEditOriginalConfigId(sc.admissionConfigId)
+        setEditProgramChangeAllowed(data.programChangeAllowed)
+        setEditProgramChangeBlockedReason(data.programChangeBlockedReason ?? null)
+        setEditPendingChange(data.pendingProgramChange)
         setEditStatus('ready')
       } catch (err) {
         if (cancelled) return
@@ -843,6 +1087,42 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, editId, catalogsStatus])
+
+  // ── Modo edición: vista previa del cambio de carrera ──
+  // Si Servicios Escolares elige otra carrera, el backend calcula qué pasa con el
+  // cobro (precio nuevo, diferencia o saldo a favor, cupo) antes de guardar.
+  const programChanged = isEdit && editOriginalConfigId !== '' && paso3.admissionConfigId !== ''
+    && paso3.admissionConfigId !== editOriginalConfigId
+  const [changePreview, setChangePreview] = useState<ProgramChangePreview | null>(null)
+  const [changePreviewStatus, setChangePreviewStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [changePreviewError, setChangePreviewError] = useState('')
+
+  useEffect(() => {
+    if (!programChanged) {
+      setChangePreview(null)
+      setChangePreviewStatus('idle')
+      return
+    }
+    let cancelled = false
+    setChangePreviewStatus('loading')
+    apiGet<ProgramChangePreview>(`/candidates/${editId}/program-change-preview`, { admissionConfigId: paso3.admissionConfigId })
+      .then(preview => {
+        if (cancelled) return
+        setChangePreview(preview)
+        setChangePreviewStatus('ready')
+      })
+      .catch(err => {
+        if (cancelled) return
+        setChangePreview(null)
+        setChangePreviewError(getApiErrorMessage(err, 'No se pudo calcular el cambio de carrera.'))
+        setChangePreviewStatus('error')
+      })
+    return () => { cancelled = true }
+  }, [programChanged, paso3.admissionConfigId, editId])
+
+  // No se guarda un cambio de carrera sin su vista previa, ni a una carrera sin lugar.
+  const programChangeBlocked = programChanged
+    && (changePreviewStatus !== 'ready' || (changePreview?.mode === 'PAID' && !changePreview.quotaAvailable))
 
 
   async function handleVerifyWithLlaveMx() {
@@ -1165,7 +1445,7 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
   // ── Paso 4 validation (Confirmación) ──
   // The payment method is no longer a choice: the ficha is online-only, so
   // there is nothing left to validate beyond having a quotable amount.
-  const paso4Valid = isEdit ? !submitting : !submitting && fichaAmount !== null
+  const paso4Valid = isEdit ? !submitting && !programChangeBlocked : !submitting && fichaAmount !== null
 
   const nombreCompleto = `${paso1.nombres} ${paso1.apellidoPaterno} ${paso1.apellidoMaterno}`.trim()
 
@@ -1944,16 +2224,25 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
     <div data-ficha-step="2">
       <p className="text-[11px] font-semibold text-[#009574] uppercase tracking-widest mb-4">Selección de Carrera</p>
       <div className="grid grid-cols-12 gap-6 mb-8">
-        {isEdit ? (
+        {isEdit && editPendingChange && (
+          <div className="col-span-12 bg-amber-50 border border-amber-200 rounded-md px-4 py-3 text-[13px] text-amber-800">
+            Un cambio de carrera anterior dejó {money(editPendingChange.toPay)} por pagar (referencia{' '}
+            {editPendingChange.referenceNumber}
+            {editPendingChange.dueAt ? `, hasta el ${formatDate(new Date(editPendingChange.dueAt))}` : ''}). Si vuelves a
+            cambiar la carrera, esa diferencia se recalcula.
+          </div>
+        )}
+        {isEdit && !editProgramChangeAllowed ? (
           <>
-            {/* El cambio de carrera recotiza la ficha (Fase 6); mientras no
-                exista esa recotización, la carrera se muestra pero no se edita. */}
+            {/* Inscrito, ficha vencida o pago en curso: el backend no deja cambiar la carrera y dice por qué. */}
             <div className="col-span-12 md:col-span-4">
               <LockedField label="Modalidad" value={selectedProgramaModalidad || (paso3.modalidad === 'Todas' ? '' : paso3.modalidad)} />
             </div>
             <div className="col-span-12 md:col-span-8">
               <LockedField label="Carrera" value={paso3.programa} />
-              <FieldHelp>El cambio de carrera todavía no está disponible desde la edición de la ficha.</FieldHelp>
+              <FieldHelp>
+                {editProgramChangeBlockedReason ?? 'La carrera no se puede cambiar en el estado actual del candidato.'}
+              </FieldHelp>
             </div>
           </>
         ) : (
@@ -1989,6 +2278,12 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
           </div>
         </div>
         </>
+        )}
+
+        {programChanged && (
+          <div className="col-span-12">
+            <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
+          </div>
         )}
 
         <div className="col-span-12 md:col-span-6">
@@ -2115,7 +2410,9 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
       <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 mb-6">
         <p className="text-[13px] text-[#6B7280] mb-6">
           {isEdit
-            ? 'Revisa los cambios antes de guardarlos. El folio, el estado del candidato y sus pagos no se modifican.'
+            ? programChanged
+              ? 'Revisa los cambios antes de guardarlos. El folio y el estado del candidato no cambian; el cobro se ajusta a la carrera nueva como se muestra abajo.'
+              : 'Revisa los cambios antes de guardarlos. El folio, el estado del candidato y sus pagos no se modifican.'
             : 'Revisa con cuidado la información capturada. Una vez que confirmes, no podrás modificarla desde aquí.'}
         </p>
 
@@ -2222,6 +2519,11 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
 
         {isEdit ? (
           <div className="pt-2">
+            {programChanged && (
+              <div className="mb-4">
+                <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
+              </div>
+            )}
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio</p>
             <p className="text-[15px] font-bold text-[#333333]">{editFolio}</p>
           </div>

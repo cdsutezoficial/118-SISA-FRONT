@@ -176,6 +176,28 @@ export interface FichaPaymentAccessBackend extends VentanaFechas {
   discountAmount?: number | null
   /** Motivo del descuento, si lo hay. */
   discountReason?: string | null
+  /**
+   * La diferencia que dejó un cambio de carrera con la ficha ya pagada. La ficha
+   * sigue pagada (`alreadyPaid`); esto es lo que falta y se paga con el mismo
+   * botón. `null` cuando no hay nada pendiente.
+   */
+  programChange?: ProgramChangeDue | null
+}
+
+export interface ProgramChangeDue {
+  referenceNumber: string
+  /** La carrera nueva. */
+  programName: string | null
+  /** Lo que cuesta la carrera nueva. */
+  newAmount: number
+  /** Lo que ya había pagado, abonado a la carrera nueva. */
+  carried: number
+  /** Lo que falta pagar. */
+  toPay: number
+  /** yyyy-MM-dd, último día para pagarla. */
+  dueOn: string | null
+  /** El plazo ya pasó: no se ofrece el pago. */
+  expired: boolean
 }
 
 /** `GET /candidates/{id}` — ficha projection for route-refresh fallback. */
@@ -569,8 +591,19 @@ export interface CandidateEditFormResponse {
   programName: string | null
   /** `PRESENCIAL` | `MIXTA` (modalidad del programa de la config actual). */
   modality: string | null
-  /** El cambio de carrera llega con la recotización (rama 2); hoy siempre `false`. */
+  /** Si se puede cambiar la carrera (no inscrito, ficha no vencida, sin pago en curso). */
   programChangeAllowed: boolean
+  /** Por qué no se puede cambiar la carrera; null si se puede. */
+  programChangeBlockedReason: string | null
+  /** La diferencia que dejó un cambio de carrera anterior y falta pagar. */
+  pendingProgramChange: {
+    referenceNumber: string
+    newAmount: number
+    carried: number
+    toPay: number
+    /** ISO instant. */
+    dueAt: string | null
+  } | null
   datosGenerales: {
     curp: string
     nombres: string
@@ -649,4 +682,34 @@ export interface CandidateEditFormResponse {
     /** Solo prepa en el extranjero (texto libre). */
     estadoPreparatoria: string | null
   } | null
+}
+
+// `GET /candidates/{id}/program-change-preview?admissionConfigId=` — lo que
+// pasaría con el cobro si el candidato cambia a esa carrera. No guarda nada.
+export interface ProgramChangePreview {
+  candidateId: string
+  fromConfigId: string
+  fromProgramName: string | null
+  toConfigId: string
+  toProgramName: string | null
+  /** `UNPAID`: se mueve el mismo cargo con su descuento. `PAID`: cargo nuevo, se abona lo pagado. */
+  mode: 'UNPAID' | 'PAID'
+  /** Sin pagar: lo que debe hoy. Pagada: con cuánto se cobró la ficha. */
+  previousAmount: number | null
+  alreadyPaid: number
+  /** Saldo a favor que ya tenía y también se aplica. */
+  otherCredit: number
+  newOriginalAmount: number
+  newDiscountAmount: number
+  newAmount: number
+  /** Lo que debe pagar después del cambio. */
+  toPay: number
+  /** Saldo a favor que le queda. */
+  creditLeft: number
+  /** La carrera nueva tiene lugar (solo cuenta si ya pagó). */
+  quotaAvailable: boolean
+  /** yyyy-MM-dd. */
+  newPaymentDeadline: string | null
+  /** Sin pagar: el plazo en la carrera nueva ya pasó y la ficha vencerá. */
+  paymentWindowClosed: boolean
 }
