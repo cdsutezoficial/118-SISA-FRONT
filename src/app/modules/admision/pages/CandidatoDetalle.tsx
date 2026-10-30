@@ -10,6 +10,7 @@ import { Breadcrumb, PageContainer, BadgePill, ErrorBanner, type BadgeStyle } fr
 import { apiGet, getApiErrorMessage } from '@app/core/infra/apiClient'
 import { usePendingToast } from '@app/core/infra/hooks'
 import { useRole } from '@app/core/infra/RoleContext'
+import { DesgloseCobro } from '../components/DesgloseCobro'
 import {
   type CandidateDetailBackend,
   type CandidateDetailPaymentBackend,
@@ -125,14 +126,23 @@ function Amount({ label, value, tone = 'default' }: { label: string; value: stri
   )
 }
 
-function ChargeCard({ charge }: { charge: CandidateCharge }) {
+/**
+ * @param live la ficha cotizada en vivo (`/detail`). Un cobro sin pagar no
+ *             guarda montos hasta que se paga; para la ficha vigente se usa esta
+ *             cotización, la misma que ve el aspirante.
+ */
+function ChargeCard({ charge, live }: { charge: CandidateCharge; live?: CandidateDetailPaymentBackend | null }) {
   const role = ROLE_META[charge.role]
   const muted = charge.role === 'HISTORY' || charge.status === 'CANCELLED'
   const accent = charge.role === 'PENDING_DIFFERENCE'
     ? 'border-amber-300'
     : charge.role === 'CURRENT_FICHA' ? 'border-[#009574]/40' : 'border-[#E5E7EB]'
-  const hasDiscount = (charge.discountAmount ?? 0) > 0
-  const balance = charge.balance ?? 0
+  const useLive = live != null && charge.status !== 'PAID'
+  const costo = useLive ? live.originalAmount ?? live.amount : charge.originalAmount ?? charge.amountDue
+  const descuento = useLive ? live.discountAmount : charge.discountAmount
+  const motivo = useLive ? live.discountReason : charge.discountReason
+  const total = useLive ? live.amount : charge.amountDue
+  const balance = useLive ? Math.max((live.amount ?? 0) - charge.amountPaid, 0) : charge.balance ?? 0
 
   return (
     <div className={`rounded-xl border ${accent} bg-white overflow-hidden ${muted ? 'opacity-90' : ''}`}>
@@ -149,10 +159,16 @@ function ChargeCard({ charge }: { charge: CandidateCharge }) {
       </div>
 
       <div className="px-5 py-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Amount label="Costo" value={formatCurrency(charge.originalAmount ?? charge.amountDue)} />
-          <Amount label="Descuento" value={hasDiscount ? `− ${formatCurrency(charge.discountAmount)}` : '—'} tone={hasDiscount ? 'green' : 'default'} />
-          <Amount label="Pagado" value={formatCurrency(charge.amountPaid)} tone="green" />
+        <DesgloseCobro
+          concepto={useLive ? live.conceptName : null}
+          costo={costo}
+          descuento={descuento}
+          motivo={motivo}
+          total={total}
+          pagado={charge.status === 'PAID'}
+        />
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <Amount label="Abonado" value={formatCurrency(charge.amountPaid)} tone="green" />
           {/* Lo que falta para cubrir ESTE cobro; no es el saldo a favor. */}
           <Amount
             label="Falta pagar"
@@ -160,9 +176,6 @@ function ChargeCard({ charge }: { charge: CandidateCharge }) {
             tone={balance > 0 && charge.status !== 'CANCELLED' ? 'amber' : 'green'}
           />
         </div>
-        {hasDiscount && charge.discountReason && (
-          <p className="mt-2 text-[12px] text-[#6B7280]">Motivo del descuento: {charge.discountReason}</p>
-        )}
         {charge.dueAt && balance > 0 && charge.status !== 'CANCELLED' && (
           <p className="mt-2 flex items-center gap-1.5 text-[12px] font-semibold text-amber-700">
             <Clock size={13} /> Fecha límite: {formatDate(charge.dueAt)}
@@ -450,7 +463,13 @@ export default function CandidatoDetalle() {
                       <FormCard><p className="text-[13px] text-[#6B7280]">No hay cobros de ficha registrados.</p></FormCard>
                     ) : (
                       <div className="space-y-4">
-                        {fichaCharges.map(charge => <ChargeCard key={charge.paymentId} charge={charge} />)}
+                        {fichaCharges.map(charge => (
+                          <ChargeCard
+                            key={charge.paymentId}
+                            charge={charge}
+                            live={charge.role === 'CURRENT_FICHA' ? candidate.admissionPayment : null}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>

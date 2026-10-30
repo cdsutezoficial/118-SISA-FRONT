@@ -551,7 +551,16 @@ export interface CandidateListPage {
 /** One payment section of the staff candidate detail (`GET /candidates/{id}/detail`). */
 export interface CandidateDetailPaymentBackend {
   concept: 'ADMISSION_FICHA' | 'INDUCTION_COURSE'
-  amount: number
+  /** Concepto del catálogo con el que se cobra, si se conoce. */
+  conceptName: string | null
+  /** Costo del concepto antes del descuento. */
+  originalAmount: number | null
+  /** Monto descontado; nulo si no hay descuento. */
+  discountAmount: number | null
+  /** Motivo con el que se registró el descuento. */
+  discountReason: string | null
+  /** Total: en vivo mientras la ficha está abierta, lo cobrado ya pagada. Nulo si no se pudo cotizar. */
+  amount: number | null
   referenceNumber: string
   paymentStatus: 'PENDING' | 'PAID'
   receiptNumber: string | null
