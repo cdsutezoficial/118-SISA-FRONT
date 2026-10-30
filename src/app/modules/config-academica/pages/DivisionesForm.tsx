@@ -119,8 +119,8 @@ function DirectorField({ divisionId, value, onChange, disabled }: {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    apiGet<UsersPageResponse>('/users', { role: 'DIRECTOR_DIVISION', divisionId, status: 'ACTIVE', size: 100 })
-      .then(data => { if (!cancelled) { setCandidates(data.items); setStatus('idle') } })
+    apiGet<UsersPageResponse>('/users', { roleKey: 'DIRECTOR_DIVISION', divisionId, status: 'ACTIVE', size: 100 })
+      .then(data => { if (!cancelled) { setCandidates(data.items.filter(c => c.personId)); setStatus('idle') } })
       .catch(() => { if (!cancelled) setStatus('error') })
     return () => { cancelled = true }
   }, [divisionId])
@@ -260,7 +260,7 @@ export default function DivisionesForm() {
       name: normalizeText(values.name),
       code: values.code,
       description: normalizeText(values.description),
-      directorPersonId: directorPersonId.trim() || null,
+      directorPersonId: (directorPersonId ?? '').trim() || null,
     }
     try {
       if (isRegister) {
@@ -370,7 +370,7 @@ export default function DivisionesForm() {
             {!isRegister && (
               <div className="col-span-12">
                 <FieldLabel>Director de División</FieldLabel>
-                {id && <DirectorField divisionId={id} value={directorPersonId} onChange={setDirectorPersonId} disabled={disabled} />}
+                {id && <DirectorField divisionId={id} value={directorPersonId} onChange={personId => setDirectorPersonId(personId ?? '')} disabled={disabled} />}
                 <FieldHelp>
                   Solo se pueden elegir personas que ya tienen el rol de Director asignado para esta división
                   (pantalla Usuarios → Asignar Rol). Si aún no existe, asígnalo primero desde ahí.
