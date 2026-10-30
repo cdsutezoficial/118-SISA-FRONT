@@ -315,7 +315,11 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
   // El panel de EVO va aquí dentro y no en una tarjeta aparte: es la continuación
   // del botón que lo abre, y separado se leía como otra pantalla. Lo comparte con
   // `PortalFichaPago` para que las dos maquetas no vuelvan a divergir.
-  const paymentAction = (
+  // Con el panel abierto solo se muestra el panel: el botón ya se pulsó y la
+  // ficha se pliega arriba (ver `FichaPagoPendiente`).
+  const paymentAction = evoCheckout ? (
+    <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
+  ) : (
     <div className="flex flex-col items-center gap-3">
       {/* Aviso persistente, arriba del botón: quien ya intentó y le rechazaron el
           pago vuelve a caer aquí, y el motivo tiene que estar en su línea de
@@ -371,12 +375,6 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           El PDF es una copia sin validez oficial; la ficha oficial es la que expide la Universidad.
         </p>
       </div>
-      {/* Sin el `!pagado` que traía la tarjeta aparte: este bloque solo se monta
-          dentro de la rama de estado pendiente, así que la condición ya no
-          comprueba nada. */}
-      {evoCheckout && (
-        <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
-      )}
     </div>
   )
 
@@ -422,6 +420,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           curp={ficha.curp}
           carrera={ficha.programa}
           periodo={null}
+          plegada={evoCheckout !== null}
         >
           {paymentAction}
         </FichaPagoPendiente>
