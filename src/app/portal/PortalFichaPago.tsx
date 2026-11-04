@@ -70,6 +70,10 @@ export default function PortalFichaPago() {
   // (route state / sessionStorage) puede traer un precio viejo, y mostrarla
   // primero hacía que la pantalla parpadeara del precio anterior al actual.
   const [precioActualizado, setPrecioActualizado] = useState(false)
+  // Saldo a favor: se usa solo si la persona lo elige (F9).
+  const [usarSaldo, setUsarSaldo] = useState(false)
+  // Sube para volver a leer la ficha del backend (p. ej. tras pagarla con saldo).
+  const [recarga, setRecarga] = useState(0)
 
   // Case 2 above: a 3DS return reloads the page without route state, so recover
   // the access payload from sessionStorage. Runs once on mount.
@@ -113,7 +117,7 @@ export default function PortalFichaPago() {
     return () => {
       cancelado = true
     }
-  }, [candidateId])
+  }, [candidateId, recarga])
 
   const {
     startCheckout,
@@ -131,6 +135,9 @@ export default function PortalFichaPago() {
     returnPath: RETURN_PATH,
     notify: setToast,
     preserveQuery: { id: candidateId },
+    // Pagada con saldo a favor (o exenta) sin pasar por el banco: se vuelve a
+    // leer para mostrar el comprobante.
+    onPaidWithoutGateway: () => setRecarga(n => n + 1),
     onConfirmed: (data: PaymentConfirmationBackend) => {
       // Reflect the confirmed payment in the header fields too.
       setAcceso(prev =>
@@ -207,6 +214,12 @@ export default function PortalFichaPago() {
   const folioComprobante = confirmData?.receiptNumber ?? acceso?.receiptNumber
   const referencia = acceso?.referenceNumber ?? confirmData?.referenceNumber ?? ''
   const monto = confirmData ? Number(confirmData.amount) : (acceso?.amount ?? 0)
+  // Saldo a favor: el que ya se aplicó a esta ficha y el que la persona puede usar.
+  const saldoAplicado = pagado ? 0 : Number(acceso?.creditApplied ?? 0)
+  const saldoDisponible = pagado ? 0 : Number(acceso?.availableCredit ?? 0)
+  const faltante = Math.max(monto - saldoAplicado, 0)
+  const saldoAUsar = usarSaldo ? Math.min(saldoDisponible, faltante) : 0
+  const enLinea = faltante - saldoAUsar
   // Desglose del descuento (costo, monto y motivo) que el backend calculó en vivo.
   const descuento: DescuentoFicha | null =
     acceso && Number(acceso.discountAmount ?? 0) > 0 && acceso.originalAmount != null
@@ -393,8 +406,31 @@ export default function PortalFichaPago() {
                       resultado. Se deshabilita y se relabela con el mismo hecho que
                       el aviso; el motivo sigue siendo el del backend, no uno
                       escrito aquí. */}
+                  {saldoAplicado > 0 && (
+                    <p className="text-center text-[12px] leading-relaxed text-[#374151]">
+                      Ya se aplicaron ${saldoAplicado.toFixed(2)} de tu saldo a favor. Falta pagar $
+                      {faltante.toFixed(2)}.
+                    </p>
+                  )}
+                  {saldoDisponible > 0 && !pagoNoDisponible && (
+                    <label className="flex items-start gap-2 max-w-[460px] rounded-md border border-[#D1FAE5] bg-[#ECFDF5] px-3 py-2 text-[12px] leading-relaxed text-[#065F46] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 accent-[#009574]"
+                        checked={usarSaldo}
+                        disabled={pagoEnCurso}
+                        onChange={e => setUsarSaldo(e.target.checked)}
+                      />
+                      <span>
+                        Tienes ${saldoDisponible.toFixed(2)} de saldo a favor. Úsalo para pagar esta ficha
+                        {saldoDisponible >= faltante
+                          ? ': la cubre completa y no tienes que pagar en línea.'
+                          : ` y paga en línea solo $${(faltante - saldoDisponible).toFixed(2)}.`}
+                      </span>
+                    </label>
+                  )}
                   <Button
-                    onClick={startCheckout}
+                    onClick={() => startCheckout({ useCredit: usarSaldo })}
                     loading={processing}
                     disabled={pagoEnCurso || pagoNoDisponible !== null}
                     variant={pagoNoDisponible ? 'secondary' : 'primary'}
@@ -405,10 +441,15 @@ export default function PortalFichaPago() {
                           <Info size={14} />
                           Pago en línea no disponible
                         </>
+                      ) : usarSaldo && enLinea <= 0 ? (
+                        <>
+                          <CreditCard size={14} />
+                          Pagar con mi saldo a favor — ${saldoAUsar.toFixed(2)}
+                        </>
                       ) : (
                         <>
                           <CreditCard size={14} />
-                          Pagar en línea — ${monto.toFixed(2)}
+                          Pagar en línea — ${enLinea.toFixed(2)}
                         </>
                       )}
                     </span>

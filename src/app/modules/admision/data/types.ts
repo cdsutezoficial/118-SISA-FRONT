@@ -100,11 +100,16 @@ export interface PaymentConfirmationBackend {
  */
 export interface CheckoutInitiationBackend {
   candidateId: string
-  orderId: string
-  sessionId: string
-  merchant: string
-  successIndicator: string
+  /** `null` when nothing is left to collect online (`exempt` / `paidWithCredit`). */
+  orderId: string | null
+  sessionId: string | null
+  merchant: string | null
+  successIndicator: string | null
   checkoutJsUrl: string
+  /** A 100 % discount settled the ficha at $0: no session, the ficha is paid. */
+  exempt?: boolean
+  /** The person's saldo a favor paid the whole ficha: no session, the ficha is paid. */
+  paidWithCredit?: boolean
 }
 
 /**
@@ -182,6 +187,16 @@ export interface FichaPaymentAccessBackend extends VentanaFechas {
    * botón. `null` cuando no hay nada pendiente.
    */
   programChange?: ProgramChangeDue | null
+  /**
+   * Saldo a favor de la persona (de cualquier ficha suya) que puede elegir usar
+   * para pagar esta ficha. 0 cuando ya está pagada.
+   */
+  availableCredit?: number | null
+  /**
+   * Saldo a favor ya aplicado a esta ficha sin pagar: lo que falta es
+   * `amount − creditApplied`.
+   */
+  creditApplied?: number | null
 }
 
 export interface ProgramChangeDue {

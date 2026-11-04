@@ -227,6 +227,13 @@ export interface UseFichaPaymentOptions {
   onAlreadyPaid?: () => void
 
   /**
+   * Called when the ficha was paid without opening EVO — the person's saldo a
+   * favor covered it, or a 100 % discount did — so the view re-reads it and
+   * shows the receipt.
+   */
+  onPaidWithoutGateway?: () => void
+
+  /**
    * Query params to preserve when cleaning the outcome params off the URL
    * after a return. The post-registration screen keeps `?id=<uuid>` so a
    * reload still works.
@@ -246,9 +253,18 @@ export interface PagoNoDisponible {
   message: string
 }
 
+export interface StartCheckoutOptions {
+  /** The person chose to pay with their saldo a favor. */
+  useCredit?: boolean
+}
+
 export interface UseFichaPaymentResult {
-  /** Opens the EVO panel. Call from the "Pagar en línea" button. */
-  startCheckout: () => Promise<void>
+  /**
+   * Opens the EVO panel. Call from the "Pagar en línea" button. With
+   * `useCredit` the person's saldo a favor is used first, and EVO is asked only
+   * for the rest (or not at all when the saldo covers the ficha).
+   */
+  startCheckout: (opciones?: StartCheckoutOptions) => Promise<void>
 
   /** Treats the open panel as a user-cancelled payment. */
   cancelCheckout: () => void
@@ -298,6 +314,7 @@ export function useFichaPayment({
   notify = message => console.info(message),
   onConfirmed,
   onAlreadyPaid,
+  onPaidWithoutGateway,
   preserveQuery,
 }: UseFichaPaymentOptions): UseFichaPaymentResult {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -331,6 +348,8 @@ export function useFichaPayment({
   const notifyRef = useRef(notify)
   onConfirmedRef.current = onConfirmed
   onAlreadyPaidRef.current = onAlreadyPaid
+  const onPaidWithoutGatewayRef = useRef(onPaidWithoutGateway)
+  onPaidWithoutGatewayRef.current = onPaidWithoutGateway
   notifyRef.current = notify
 
   const storageKey = `sisa.checkout.${candidateId}`
@@ -589,7 +608,10 @@ export function useFichaPayment({
   useEffect(() => teardownEvoDom, [])
 
   // Pay online → start a real EVO Hosted Checkout.
-  const startCheckout = useCallback(async () => {
+  const startCheckout = useCallback(async (opciones?: StartCheckoutOptions) => {
+    // Called straight from `onClick` the argument is the click event, so only an
+    // explicit `true` counts as choosing the saldo.
+    const useCredit = opciones?.useCredit === true
     if (!esCandidatoReal) {
       notifyRef.current('El pago en línea requiere una ficha registrada.')
       return
@@ -600,15 +622,26 @@ export function useFichaPayment({
       // que va con la ruta base (/SGA/portal/...) y no con la del router.
       const res = await apiPost<CheckoutInitiationBackend>(`/candidates/${candidateId}/payments/checkout`, {
         returnPath: returnPath ? toBrowserPath(returnPath) : undefined,
+        useCredit: useCredit || undefined,
       })
+      if (res.paidWithCredit || res.exempt || !res.sessionId || !res.orderId) {
+        // Nothing left to collect online: the ficha is already paid.
+        setPagoNoDisponible(null)
+        notifyRef.current(
+          res.paidWithCredit ? 'Tu ficha quedó pagada con tu saldo a favor.' : 'Tu ficha quedó pagada.',
+        )
+        onPaidWithoutGatewayRef.current?.()
+        return
+      }
+      const { orderId, sessionId } = res
       try {
-        sessionStorage.setItem(storageKey, res.orderId)
+        sessionStorage.setItem(storageKey, orderId)
       } catch {
         // sessionStorage unavailable — the return call will just miss the cross-check.
       }
       // The payer stays inside SISA: the panel mounts the SDK and renders the
       // hosted payment form inline (mounted by the `evoCheckout` effect).
-      setEvoCheckout({ checkoutJsUrl: res.checkoutJsUrl, sessionId: res.sessionId })
+      setEvoCheckout({ checkoutJsUrl: res.checkoutJsUrl, sessionId })
       // A checkout that starts is proof the ficha is payable, which is the only
       // thing that retires a previous refusal.
       setPagoNoDisponible(null)
