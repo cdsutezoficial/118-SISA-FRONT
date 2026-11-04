@@ -849,7 +849,10 @@ export interface ProgramChangePreview {
   /** Sin pagar: lo que debe hoy. Pagada: con cuánto se cobró la ficha. */
   previousAmount: number | null
   alreadyPaid: number
-  /** Saldo a favor que ya tenía y también se aplica. */
+  /**
+   * Saldo a favor que ya tenía. NO se descuenta en el cambio: se le avisa a quien
+   * edita, y la persona elige usarlo al pagar la diferencia en el portal.
+   */
   otherCredit: number
   newOriginalAmount: number
   newDiscountAmount: number

@@ -689,7 +689,7 @@ function ProgramChangeSummary({ status, preview, error }: {
             caption="Carrera nueva"
             name={preview.toProgramName}
             amount={paid ? preview.newAmount : preview.toPay}
-            amountCaption={paid ? 'Cuesta (completa)' : 'Deberá'}
+            amountCaption={paid ? (preview.newDiscountAmount > 0 ? 'Cuesta (con su descuento)' : 'Cuesta') : 'Deberá'}
             highlighted
           />
         </div>
@@ -700,9 +700,16 @@ function ProgramChangeSummary({ status, preview, error }: {
             <p className="pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">Cómo se calcula</p>
             {paid ? (
               <>
-                <BreakdownRow label="Costo de la carrera nueva" value={preview.newAmount} hint="Sin descuento: el que tenía ya se usó al pagar." />
+                <BreakdownRow label="Costo de la carrera nueva" value={preview.newOriginalAmount} />
+                {preview.newDiscountAmount > 0 && (
+                  <BreakdownRow
+                    label="Su descuento"
+                    value={preview.newDiscountAmount}
+                    sign="−"
+                    hint="El descuento que tenía pasa a la carrera nueva."
+                  />
+                )}
                 <BreakdownRow label="Lo que ya pagó" value={preview.alreadyPaid} sign="−" />
-                {preview.otherCredit > 0 && <BreakdownRow label="Saldo a favor que ya tenía" value={preview.otherCredit} sign="−" />}
               </>
             ) : (
               <>
@@ -744,6 +751,19 @@ function ProgramChangeSummary({ status, preview, error }: {
             )}
           </div>
         </div>
+
+        {preview.otherCredit > 0 && (
+          // El saldo previo es de la persona: no se descuenta aquí. Quien edita lo
+          // ve para poder decírselo, y ella decide si lo usa al pagar.
+          <div className="flex items-start gap-2 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2.5 text-[12px] leading-relaxed text-[#1E40AF]">
+            <PiggyBank size={15} className="flex-shrink-0 mt-0.5" />
+            <p>
+              <span className="font-semibold">El candidato tiene {money(preview.otherCredit)} de saldo a favor.</span>{' '}
+              No se descuenta en este cambio: si quiere, lo puede usar al pagar
+              {paid && preview.toPay > 0 ? ' la diferencia' : ''} en el portal de la ficha.
+            </p>
+          </div>
+        )}
 
         {paid && (
           <p className="text-[11px] text-[#9CA3AF]">

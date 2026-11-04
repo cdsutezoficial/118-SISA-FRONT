@@ -54,6 +54,41 @@ interface PortalFichaPagoLocationState {
 /** Route the gateway must return to for THIS flow (must be backend-allowlisted). */
 const RETURN_PATH = '/portal/ficha/pago'
 
+/** La casilla con la que la persona elige usar su saldo a favor (F9). */
+function UsarSaldoCheckbox({
+  saldo,
+  faltante,
+  checked,
+  disabled,
+  onChange,
+  que,
+}: {
+  saldo: number
+  faltante: number
+  checked: boolean
+  disabled: boolean
+  onChange: (checked: boolean) => void
+  que: string
+}) {
+  return (
+    <label className="flex items-start gap-2 max-w-[460px] rounded-md border border-[#D1FAE5] bg-[#ECFDF5] px-3 py-2 text-[12px] leading-relaxed text-[#065F46] cursor-pointer">
+      <input
+        type="checkbox"
+        className="mt-0.5 accent-[#009574]"
+        checked={checked}
+        disabled={disabled}
+        onChange={e => onChange(e.target.checked)}
+      />
+      <span>
+        Tienes ${saldo.toFixed(2)} de saldo a favor. Úsalo para pagar {que}
+        {saldo >= faltante
+          ? ': lo cubre completo y no tienes que pagar en línea.'
+          : ` y paga en línea solo $${(faltante - saldo).toFixed(2)}.`}
+      </span>
+    </label>
+  )
+}
+
 export default function PortalFichaPago() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -216,7 +251,9 @@ export default function PortalFichaPago() {
   const monto = confirmData ? Number(confirmData.amount) : (acceso?.amount ?? 0)
   // Saldo a favor: el que ya se aplicó a esta ficha y el que la persona puede usar.
   const saldoAplicado = pagado ? 0 : Number(acceso?.creditApplied ?? 0)
-  const saldoDisponible = pagado ? 0 : Number(acceso?.availableCredit ?? 0)
+  // El saldo es de la persona: se muestra siempre, y se puede usar en la ficha o en la diferencia.
+  const saldoPersona = Number(acceso?.availableCredit ?? 0)
+  const saldoDisponible = pagado ? 0 : saldoPersona
   const faltante = Math.max(monto - saldoAplicado, 0)
   const saldoAUsar = usarSaldo ? Math.min(saldoDisponible, faltante) : 0
   const enLinea = faltante - saldoAUsar
@@ -287,8 +324,18 @@ export default function PortalFichaPago() {
             ) : (
               <div className="flex flex-col items-center gap-3">
                 {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
+                {saldoPersona > 0 && !pagoNoDisponible && (
+                  <UsarSaldoCheckbox
+                    saldo={saldoPersona}
+                    faltante={Number(diferencia.toPay)}
+                    checked={usarSaldo}
+                    disabled={pagoEnCurso}
+                    onChange={setUsarSaldo}
+                    que="la diferencia"
+                  />
+                )}
                 <Button
-                  onClick={startCheckout}
+                  onClick={() => startCheckout({ useCredit: usarSaldo })}
                   loading={processing}
                   disabled={pagoEnCurso || pagoNoDisponible !== null}
                   variant={pagoNoDisponible ? 'secondary' : 'primary'}
@@ -302,7 +349,9 @@ export default function PortalFichaPago() {
                     ) : (
                       <>
                         <CreditCard size={14} />
-                        Pagar diferencia — ${Number(diferencia.toPay).toFixed(2)}
+                        {usarSaldo && saldoPersona >= Number(diferencia.toPay)
+                          ? `Pagar diferencia con mi saldo — $${Number(diferencia.toPay).toFixed(2)}`
+                          : `Pagar diferencia — $${Math.max(Number(diferencia.toPay) - (usarSaldo ? saldoPersona : 0), 0).toFixed(2)}`}
                       </>
                     )}
                   </span>
@@ -316,6 +365,13 @@ export default function PortalFichaPago() {
           // exactamente la misma pantalla: antes cada vista tenía la suya y ya
           // divergían. También desaparece la tarjeta "Monto a pagar", que una vez
           // pagado ya no era la etiqueta correcta.
+          <>
+          {saldoPersona > 0 && (
+            <div className="mb-4 rounded-lg border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-3 text-[13px] leading-relaxed text-[#065F46]">
+              Tienes <span className="font-semibold">${saldoPersona.toFixed(2)}</span> de saldo a favor. Es tuyo y
+              no caduca: puedes usarlo en tus siguientes pagos con la Universidad.
+            </div>
+          )}
           <FichaPagoConfirmado
             folio={folio}
             monto={monto}
@@ -330,6 +386,7 @@ export default function PortalFichaPago() {
             busyPdf={busyPdf}
             descuento={descuento}
           />
+          </>
         ) : (
           <>
             {/* Estado pendiente. Reemplaza a las dos tarjetas que había aquí
@@ -413,21 +470,14 @@ export default function PortalFichaPago() {
                     </p>
                   )}
                   {saldoDisponible > 0 && !pagoNoDisponible && (
-                    <label className="flex items-start gap-2 max-w-[460px] rounded-md border border-[#D1FAE5] bg-[#ECFDF5] px-3 py-2 text-[12px] leading-relaxed text-[#065F46] cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 accent-[#009574]"
-                        checked={usarSaldo}
-                        disabled={pagoEnCurso}
-                        onChange={e => setUsarSaldo(e.target.checked)}
-                      />
-                      <span>
-                        Tienes ${saldoDisponible.toFixed(2)} de saldo a favor. Úsalo para pagar esta ficha
-                        {saldoDisponible >= faltante
-                          ? ': la cubre completa y no tienes que pagar en línea.'
-                          : ` y paga en línea solo $${(faltante - saldoDisponible).toFixed(2)}.`}
-                      </span>
-                    </label>
+                    <UsarSaldoCheckbox
+                      saldo={saldoDisponible}
+                      faltante={faltante}
+                      checked={usarSaldo}
+                      disabled={pagoEnCurso}
+                      onChange={setUsarSaldo}
+                      que="esta ficha"
+                    />
                   )}
                   <Button
                     onClick={() => startCheckout({ useCredit: usarSaldo })}
