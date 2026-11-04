@@ -87,9 +87,19 @@ export interface PaymentConfirmationBackend {
   folio: string
   candidateStatus: CandidateStatus
   referenceNumber: string
+  /** Lo pagado en esta operación (E6), no el total del cargo. */
   amount: number
   paidAt: string
   receiptNumber: string
+  /** Lo que cuesta el cargo completo. */
+  total?: number
+  /** Lo que el cargo ya tenía antes de esta operación (cambio de carrera o saldo a favor). */
+  previouslyPaid?: number
+  /** Recibo y fecha del cargo anterior de donde vino ese dinero, en un cambio de carrera. */
+  previousReceipt?: string | null
+  previousPaidAt?: string | null
+  /** Se pagó la diferencia de un cambio de carrera. */
+  programChange?: boolean
 }
 
 /**

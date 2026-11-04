@@ -7,7 +7,7 @@ import { Breadcrumb } from '@app/core/components/list'
 import { formatDate } from '@app/core/infra/utils'
 import { apiDownload, apiGet, saveBlobDownload } from '@app/core/infra/apiClient'
 import { useFichaPayment } from '../hooks/useFichaPayment'
-import { FichaPagoConfirmado } from '../components/FichaPagoConfirmado'
+import { FichaPagoConfirmado, desgloseDe } from '../components/FichaPagoConfirmado'
 import { FichaPagoPendiente } from '../components/FichaPagoPendiente'
 import { EvoPaymentPanel } from '../components/EvoPaymentPanel'
 import { PagoNoDisponibleNotice } from '../components/PagoNoDisponibleNotice'
@@ -396,7 +396,8 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
         // ficha sigue disponible en el PDF.
         <FichaPagoConfirmado
           folio={ficha.folio}
-          monto={ficha.monto}
+          // Con desglose (E6) el monto grande es lo pagado ahora; el total va en el desglose.
+          monto={desgloseDe(confirmData) ? Number(confirmData?.amount) : ficha.monto}
           referencia={ficha.referencia}
           // Misma precedencia que `PortalFichaPago`: el confirm en vivo manda,
           // y la lente cubre el caso de recargar una ficha ya pagada.
@@ -407,6 +408,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
           onDescargarPdf={handleDescargarPdf}
           busyPdf={busyPdf}
           descuento={ficha.descuento}
+          desglose={desgloseDe(confirmData)}
         />
       ) : (
         <FichaPagoPendiente

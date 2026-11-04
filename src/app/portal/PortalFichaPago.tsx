@@ -11,7 +11,7 @@ import {
   useFichaPayment,
   fichaAccessStorageKey,
 } from '@app/modules/admision/hooks/useFichaPayment'
-import { FichaPagoConfirmado } from '@app/modules/admision/components/FichaPagoConfirmado'
+import { FichaPagoConfirmado, desgloseDe } from '@app/modules/admision/components/FichaPagoConfirmado'
 import { FichaPagoPendiente } from '@app/modules/admision/components/FichaPagoPendiente'
 import type { DescuentoFicha } from '@app/modules/admision/components/DescuentoAplicado'
 import { EvoPaymentPanel } from '@app/modules/admision/components/EvoPaymentPanel'
@@ -185,7 +185,8 @@ export default function PortalFichaPago() {
               receiptNumber: data.receiptNumber,
               paidAt: data.paidAt,
               alreadyPaid: true,
-              amount: Number(data.amount),
+              // El monto de la ficha es el total del cargo; `amount` es solo lo pagado ahora (E6).
+              amount: Number(data.total ?? data.amount),
               referenceNumber: data.referenceNumber,
               // Si lo que se pagó era la diferencia de un cambio de carrera, ya no queda nada.
               programChange: null,
@@ -387,6 +388,7 @@ export default function PortalFichaPago() {
             onDescargarPdf={handleDescargarPdf}
             busyPdf={busyPdf}
             descuento={descuento}
+            desglose={desgloseDe(confirmData)}
           />
           </>
         ) : (
