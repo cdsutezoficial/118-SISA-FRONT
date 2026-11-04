@@ -324,7 +324,7 @@ export default function FichaConfirmacion({ origin }: FichaConfirmacionProps) {
       {/* Aviso persistente, arriba del botón: quien ya intentó y le rechazaron el
           pago vuelve a caer aquí, y el motivo tiene que estar en su línea de
           lectura antes de volver a pulsar. */}
-      {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
+      {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} code={pagoNoDisponible.code} />}
       {/* Mismo criterio que `PortalFichaPago`: el aviso y el botón no pueden
           contradecirse. Con `pagoNoDisponible` el backend ya dijo que esta ficha no
           entra al cobro, y un botón habilitado al lado ofrecería insistir una

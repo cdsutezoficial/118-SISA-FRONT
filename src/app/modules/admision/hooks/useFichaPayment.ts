@@ -232,6 +232,11 @@ export interface UseFichaPaymentOptions {
    * shows the receipt.
    */
   onPaidWithoutGateway?: () => void
+  /**
+   * E4: the payment arrived without a place and became saldo a favor. Use it to
+   * re-read the ficha so the saldo shows.
+   */
+  onPaidWithoutQuota?: () => void
 
   /**
    * Query params to preserve when cleaning the outcome params off the URL
@@ -247,7 +252,10 @@ export interface UseFichaPaymentOptions {
  * single place that decides what a full career says.
  */
 export interface PagoNoDisponible {
-  /** `ADMISSION_QUOTA_REACHED` / `ADMISSION_PAYMENT_WINDOW_CLOSED`, when sent. */
+  /**
+   * `ADMISSION_QUOTA_REACHED` / `ADMISSION_PAYMENT_WINDOW_CLOSED`, or
+   * `ADMISSION_PAID_WITHOUT_QUOTA` when the payment became saldo a favor.
+   */
   code?: string
   /** The backend's message, shown verbatim by the persistent notice. */
   message: string
@@ -315,6 +323,7 @@ export function useFichaPayment({
   onConfirmed,
   onAlreadyPaid,
   onPaidWithoutGateway,
+  onPaidWithoutQuota,
   preserveQuery,
 }: UseFichaPaymentOptions): UseFichaPaymentResult {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -350,6 +359,8 @@ export function useFichaPayment({
   onAlreadyPaidRef.current = onAlreadyPaid
   const onPaidWithoutGatewayRef = useRef(onPaidWithoutGateway)
   onPaidWithoutGatewayRef.current = onPaidWithoutGateway
+  const onPaidWithoutQuotaRef = useRef(onPaidWithoutQuota)
+  onPaidWithoutQuotaRef.current = onPaidWithoutQuota
   notifyRef.current = notify
 
   const storageKey = `sisa.checkout.${candidateId}`
@@ -395,7 +406,17 @@ export function useFichaPayment({
       } catch (err) {
         const apiErr = err as Partial<ApiError>
         clearStoredOrderId()
-        if (apiErr.status === 409) {
+        if (apiErr.code === ADMISSION_ERROR_CODES.paidWithoutQuota) {
+          // E4: the money arrived after the place was gone. It is the person's saldo
+          // a favor now and the ficha is still unpaid, so this must not fall into the
+          // "ya pagada" branch below. Shown as a notice that stays, not only a toast.
+          const message =
+            apiErr.message ??
+            'Tu pago llegó cuando ya no quedaban lugares en la carrera. El monto quedó como saldo a favor a tu nombre.'
+          setPagoNoDisponible({ code: apiErr.code, message })
+          notifyRef.current(message)
+          onPaidWithoutQuotaRef.current?.()
+        } else if (apiErr.status === 409) {
           // Already paid (idempotent re-confirm, or Finanzas confirmed meanwhile).
           setAlreadyPaid(true)
           onAlreadyPaidRef.current?.()

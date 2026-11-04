@@ -28,12 +28,19 @@ import { Info } from 'lucide-react'
  * registro nunca se limitó. Si el backend se equivoca en el texto, el arreglo es
  * en el backend, no aquí.
  */
-export function PagoNoDisponibleNotice({ message }: { message: string }) {
+const TITULOS: Record<string, string> = {
+  // E4: el banco cobró sin lugar y el dinero quedó como saldo a favor.
+  ADMISSION_PAID_WITHOUT_QUOTA: 'Tu pago quedó como saldo a favor',
+}
+
+export function PagoNoDisponibleNotice({ message, code }: { message: string; code?: string }) {
   return (
     <div className="flex w-full items-start gap-3 rounded-lg border border-[#E5E7EB] bg-[#F8F9FA] px-4 py-3 text-left">
       <Info size={15} className="mt-0.5 flex-shrink-0 text-[#6B7280]" />
       <div className="min-w-0">
-        <p className="text-[12px] font-bold uppercase tracking-widest text-[#333333]">Pago en línea no disponible</p>
+        <p className="text-[12px] font-bold uppercase tracking-widest text-[#333333]">
+          {(code && TITULOS[code]) ?? 'Pago en línea no disponible'}
+        </p>
         <p className="mt-1 text-[13px] leading-relaxed text-[#6B7280]">{message}</p>
       </div>
     </div>

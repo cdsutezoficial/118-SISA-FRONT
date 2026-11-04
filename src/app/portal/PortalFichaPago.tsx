@@ -173,6 +173,8 @@ export default function PortalFichaPago() {
     // Pagada con saldo a favor (o exenta) sin pasar por el banco: se vuelve a
     // leer para mostrar el comprobante.
     onPaidWithoutGateway: () => setRecarga(n => n + 1),
+    // Cobro sin cupo (E4): se vuelve a leer para que aparezca el saldo a favor.
+    onPaidWithoutQuota: () => setRecarga(n => n + 1),
     onConfirmed: (data: PaymentConfirmationBackend) => {
       // Reflect the confirmed payment in the header fields too.
       setAcceso(prev =>
@@ -323,7 +325,7 @@ export default function PortalFichaPago() {
               <EvoPaymentPanel containerId={containerId} loading={evoLoading} onClose={cancelCheckout} />
             ) : (
               <div className="flex flex-col items-center gap-3">
-                {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
+                {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} code={pagoNoDisponible.code} />}
                 {saldoPersona > 0 && !pagoNoDisponible && (
                   <UsarSaldoCheckbox
                     saldo={saldoPersona}
@@ -453,7 +455,7 @@ export default function PortalFichaPago() {
                   {/* Aviso persistente, arriba del botón: quien ya intentó y le
                       rechazaron el pago vuelve a caer aquí, y el motivo tiene que
                       estar en su línea de lectura antes de volver a pulsar. */}
-                  {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} />}
+                  {pagoNoDisponible && <PagoNoDisponibleNotice message={pagoNoDisponible.message} code={pagoNoDisponible.code} />}
                   {/* El aviso y el botón no pueden contradecirse. Con
                       `pagoNoDisponible` puesto, el backend ya dijo que esta ficha
                       no entra al cobro y que insistir devuelve el mismo 409: un
