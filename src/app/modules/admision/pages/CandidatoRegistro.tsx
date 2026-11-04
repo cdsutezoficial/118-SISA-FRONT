@@ -535,16 +535,24 @@ const TONES: Record<Tone, { box: string; icon: string; label: string; amount: st
   red: { box: 'bg-red-50 border-red-200', icon: 'bg-red-100 text-red-700', label: 'text-red-800', amount: 'text-red-900' },
 }
 
-/** Una línea del desglose: signo, concepto y monto. */
-function BreakdownRow({ label, value, sign, hint }: { label: string; value: number | null; sign?: '+' | '−'; hint?: string }) {
+/** Un término del cálculo del cambio de carrera. El último (el resultado) lleva el color del caso. */
+function EquationTile({ label, value, hint, tone }: { label: string; value: number | null; hint?: string; tone?: Tone }) {
+  const t = tone ? TONES[tone] : null
   return (
-    <div className="flex items-baseline justify-between gap-4 py-2 border-b border-dashed border-[#E5E7EB] last:border-b-0">
-      <div className="min-w-0">
-        <span className="text-[#4B5563]">{label}</span>
-        {hint && <span className="block text-[11px] text-[#9CA3AF]">{hint}</span>}
-      </div>
-      <span className={`tabular-nums whitespace-nowrap ${sign === '−' ? 'text-[#009574]' : 'text-[#333333]'}`}>
-        {sign === '−' ? '− ' : ''}{money(value)}
+    <div className={`flex-1 min-w-0 rounded-lg border px-4 py-3 ${t ? t.box : 'border-[#E5E7EB] bg-white'}`}>
+      <p className={`text-[11px] ${t ? `font-semibold ${t.label}` : 'text-[#6B7280]'}`}>{label}</p>
+      <p className={`mt-1 tabular-nums text-[20px] font-bold leading-tight ${t ? t.amount : 'text-[#333333]'}`}>{money(value)}</p>
+      {hint && <p className={`mt-1 text-[11px] leading-snug ${t ? t.label : 'text-[#9CA3AF]'}`}>{hint}</p>}
+    </div>
+  )
+}
+
+/** El signo entre dos términos del cálculo. */
+function Operator({ symbol }: { symbol: string }) {
+  return (
+    <div className="flex items-center justify-center">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F3F4F6] text-[15px] font-bold text-[#6B7280]">
+        {symbol}
       </span>
     </div>
   )
@@ -613,36 +621,30 @@ function ProgramChangeSummary({ status, preview, error }: {
   let tone: Tone
   let ResultIcon = CircleCheck
   let resultLabel: string
-  let resultAmount: number | null
   let resultNote: string
   if (paid && !preview.quotaAvailable) {
     tone = 'red'
     ResultIcon = TriangleAlert
     resultLabel = 'No se puede cambiar'
-    resultAmount = null
     resultNote = 'La carrera nueva ya no tiene lugar disponible.'
   } else if (paid && preview.toPay > 0) {
     tone = 'amber'
     ResultIcon = Wallet
     resultLabel = 'Debe pagar la diferencia'
-    resultAmount = preview.toPay
     resultNote = `Sigue con su ficha pagada y paga la diferencia en el portal de la ficha${deadline ? `, a más tardar el ${deadline}` : ''}.`
   } else if (paid && preview.creditLeft > 0) {
     tone = 'blue'
     ResultIcon = PiggyBank
     resultLabel = 'Le queda saldo a favor'
-    resultAmount = preview.creditLeft
     resultNote = 'La carrera nueva cuesta menos que lo que ya pagó. No tiene que pagar nada.'
   } else if (paid) {
     tone = 'green'
     resultLabel = 'Queda pagada'
-    resultAmount = 0
     resultNote = 'Lo que ya pagó cubre exactamente la carrera nueva.'
   } else {
     tone = preview.paymentWindowClosed ? 'amber' : 'green'
     ResultIcon = preview.paymentWindowClosed ? TriangleAlert : Receipt
     resultLabel = 'Nuevo monto de la ficha'
-    resultAmount = preview.toPay
     resultNote = preview.paymentWindowClosed
       ? 'El plazo de pago de esa carrera ya pasó: la ficha vencerá sin poder pagarse.'
       : 'Lo paga con la misma ficha, en el portal, como antes.'
@@ -677,7 +679,9 @@ function ProgramChangeSummary({ status, preview, error }: {
             caption="Carrera actual"
             name={preview.fromProgramName}
             amount={preview.previousAmount}
-            amountCaption={paid ? 'Se pagó con' : 'Debía'}
+            // Si la ficha que se deja es una diferencia aún sin pagar completa, su
+            // precio no es lo que pagó: se dice "Costaba" para no confundir.
+            amountCaption={paid ? (preview.alreadyPaid < (preview.previousAmount ?? 0) ? 'Costaba' : 'Se pagó con') : 'Debía'}
           />
           <div className="flex items-center justify-center">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#009574] text-white shadow-sm">
@@ -694,76 +698,86 @@ function ProgramChangeSummary({ status, preview, error }: {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {/* Desglose */}
-          <div className="md:col-span-3 rounded-lg border border-[#E5E7EB] px-4 py-2">
-            <p className="pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">Cómo se calcula</p>
+        {/* Cómo se calcula: una operación que se lee de izquierda a derecha */}
+        <div>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">Cómo se calcula</p>
+          <div className="flex flex-col md:flex-row md:items-stretch gap-2">
             {paid ? (
               <>
-                <BreakdownRow label="Costo de la carrera nueva" value={preview.newOriginalAmount} />
-                {preview.newDiscountAmount > 0 && (
-                  <BreakdownRow
-                    label="Su descuento"
-                    value={preview.newDiscountAmount}
-                    sign="−"
-                    hint="El descuento que tenía pasa a la carrera nueva."
-                  />
-                )}
-                <BreakdownRow label="Lo que ya pagó" value={preview.alreadyPaid} sign="−" />
+                <EquationTile
+                  label="Costo de la carrera nueva"
+                  value={preview.newAmount}
+                  hint={preview.newDiscountAmount > 0
+                    ? `Tarifa ${money(preview.newOriginalAmount)} − su descuento ${money(preview.newDiscountAmount)}`
+                    : undefined}
+                />
+                <Operator symbol="−" />
+                <EquationTile label="Lo que ya pagó" value={preview.alreadyPaid} hint="Se abona a la carrera nueva" />
               </>
             ) : (
               <>
-                <BreakdownRow label="Costo de la carrera nueva" value={preview.newOriginalAmount} />
+                <EquationTile label="Costo de la carrera nueva" value={preview.newOriginalAmount} />
                 {preview.newDiscountAmount > 0 && (
-                  <BreakdownRow label="Descuento que se respeta" value={preview.newDiscountAmount} sign="−" />
+                  <>
+                    <Operator symbol="−" />
+                    <EquationTile label="Su descuento" value={preview.newDiscountAmount} hint="Pasa a la carrera nueva" />
+                  </>
                 )}
               </>
             )}
-            <div className="flex items-baseline justify-between gap-4 pt-2 pb-1 mt-1 border-t border-[#D1D5DB]">
-              <span className="font-semibold text-[#333333]">{paid && preview.toPay <= 0 ? 'Saldo a favor' : 'A pagar'}</span>
-              <span className="tabular-nums font-bold text-[#333333]">
-                {money(paid && preview.toPay <= 0 ? preview.creditLeft : preview.toPay)}
-              </span>
-            </div>
-            {delta != null && delta !== 0 && (
-              <p className="pb-1 text-[11px] text-[#6B7280]">
-                {delta > 0 ? `${money(delta)} más que antes` : `${money(-delta)} menos que antes`}
-              </p>
-            )}
-          </div>
-
-          {/* Resultado */}
-          <div className={`md:col-span-2 rounded-lg border px-4 py-4 flex flex-col ${t.box}`}>
-            <div className="flex items-center gap-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-full ${t.icon}`}>
-                <ResultIcon size={16} />
-              </span>
-              <p className={`font-semibold ${t.label}`}>{resultLabel}</p>
-            </div>
-            {resultAmount != null && (
-              <p className={`mt-3 tabular-nums text-[28px] font-bold leading-none ${t.amount}`}>{money(resultAmount)}</p>
-            )}
-            <p className={`mt-3 text-[12px] leading-relaxed ${t.label}`}>{resultNote}</p>
-            {paid && preview.toPay > 0 && deadline && (
-              <p className={`mt-2 flex items-center gap-1.5 text-[12px] font-semibold ${t.label}`}>
-                <Clock size={13} /> Vence el {deadline}
-              </p>
-            )}
+            <Operator symbol="=" />
+            <EquationTile
+              label={paid && preview.toPay <= 0 ? (preview.creditLeft > 0 ? 'Saldo a favor' : 'A pagar') : paid ? 'A pagar' : 'Deberá'}
+              value={paid && preview.toPay <= 0 && preview.creditLeft > 0 ? preview.creditLeft : preview.toPay}
+              hint={delta != null && delta !== 0
+                ? (delta > 0 ? `${money(delta)} más que antes` : `${money(-delta)} menos que antes`)
+                : undefined}
+              tone={tone}
+            />
           </div>
         </div>
 
-        {preview.otherCredit > 0 && (
-          // El saldo previo es de la persona: no se descuenta aquí. Quien edita lo
-          // ve para poder decírselo, y ella decide si lo usa al pagar.
-          <div className="flex items-start gap-2 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2.5 text-[12px] leading-relaxed text-[#1E40AF]">
-            <PiggyBank size={15} className="flex-shrink-0 mt-0.5" />
-            <p>
-              <span className="font-semibold">El candidato tiene {money(preview.otherCredit)} de saldo a favor.</span>{' '}
-              No se descuenta en este cambio: si quiere, lo puede usar al pagar
-              {paid && preview.toPay > 0 ? ' la diferencia' : ''} en el portal de la ficha.
-            </p>
+        {/* Qué sigue y, aparte, el saldo a favor del candidato */}
+        <div className={`grid grid-cols-1 gap-3 ${preview.otherCredit > 0 ? 'md:grid-cols-2' : ''}`}>
+          <div className={`rounded-lg border px-4 py-3 ${t.box}`}>
+            <div className="flex items-center gap-2">
+              <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${t.icon}`}>
+                <ResultIcon size={16} />
+              </span>
+              <div className="min-w-0">
+                <p className={`text-[10px] font-bold uppercase tracking-wider opacity-70 ${t.label}`}>Qué sigue</p>
+                <p className={`font-semibold ${t.label}`}>{resultLabel}</p>
+              </div>
+            </div>
+            <p className={`mt-2 text-[12px] leading-relaxed ${t.label}`}>{resultNote}</p>
+            {paid && preview.toPay > 0 && deadline && (
+              <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-semibold ${t.label}`}>
+                <Clock size={12} /> Vence el {deadline}
+              </span>
+            )}
           </div>
-        )}
+
+          {preview.otherCredit > 0 && (
+            // El saldo previo es de la persona: no se descuenta aquí. Quien edita lo
+            // ve para poder decírselo, y el candidato decide si lo usa al pagar.
+            <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                  <PiggyBank size={16} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-sky-800/70">Saldo a favor del candidato</p>
+                  <p className="font-semibold text-sky-800">Disponible, sin aplicar</p>
+                </div>
+                <span className="tabular-nums text-[20px] font-bold text-sky-900">{money(preview.otherCredit)}</span>
+              </div>
+              <p className="mt-2 text-[12px] leading-relaxed text-sky-800">
+                No se descuenta en este cambio. Avísale al candidato: si quiere, lo usa al pagar
+                {paid && preview.toPay > 0 ? ' la diferencia' : ''} en el portal de la ficha.
+              </p>
+            </div>
+          )}
+        </div>
 
         {paid && (
           <p className="text-[11px] text-[#9CA3AF]">
