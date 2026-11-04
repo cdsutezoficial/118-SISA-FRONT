@@ -535,46 +535,18 @@ const TONES: Record<Tone, { box: string; icon: string; label: string; amount: st
   red: { box: 'bg-red-50 border-red-200', icon: 'bg-red-100 text-red-700', label: 'text-red-800', amount: 'text-red-900' },
 }
 
-interface StepProps {
-  title: string
-  amount?: number | null
-  /** Cómo entra el monto en la cuenta: se resta o es el resultado. */
-  sign?: '−' | '='
-  note?: string
-  badge?: string
-  icon?: typeof CircleCheck
-  tone?: Tone
-}
-
-/** Un paso del resumen del cambio de carrera: número, línea que lo une al siguiente, concepto y monto. */
-function Step({ number, last, title, amount, sign, note, badge, icon: Icon, tone }: StepProps & { number: number; last: boolean }) {
-  const t = tone ? TONES[tone] : null
+/** Una línea del desglose: signo, concepto y monto. */
+function BreakdownRow({ label, value, sign, hint }: { label: string; value: number | null; sign?: '+' | '−'; hint?: string }) {
   return (
-    <li className="relative flex gap-3">
-      {!last && <span className="absolute left-[13px] top-7 bottom-0 w-px bg-[#E5E7EB]" aria-hidden />}
-      <span className={`relative z-10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${t ? t.icon : 'bg-[#009574]/10 text-[#007a5e]'}`}>
-        {number}
-      </span>
-      <div className={`mb-3 flex-1 min-w-0 rounded-lg border px-4 py-3 ${t ? t.box : 'border-[#E5E7EB] bg-white'}`}>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className={`inline-flex items-center gap-1.5 font-semibold ${t ? t.label : 'text-[#333333]'}`}>
-            {Icon && <Icon size={14} className="flex-shrink-0" />}
-            {title}
-          </p>
-          {amount != null && (
-            <span className={`tabular-nums whitespace-nowrap font-bold ${sign === '=' ? 'text-[20px]' : 'text-[16px]'} ${t ? t.amount : sign === '−' ? 'text-[#009574]' : 'text-[#333333]'}`}>
-              {sign === '−' ? '− ' : ''}{money(amount)}
-            </span>
-          )}
-        </div>
-        {note && <p className={`mt-1 text-[12px] leading-relaxed ${t ? t.label : 'text-[#6B7280]'}`}>{note}</p>}
-        {badge && (
-          <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-semibold ${t ? t.label : 'text-[#6B7280]'}`}>
-            <Clock size={12} /> {badge}
-          </span>
-        )}
+    <div className="flex items-baseline justify-between gap-4 py-2 border-b border-dashed border-[#E5E7EB] last:border-b-0">
+      <div className="min-w-0">
+        <span className="text-[#4B5563]">{label}</span>
+        {hint && <span className="block text-[11px] text-[#9CA3AF]">{hint}</span>}
       </div>
-    </li>
+      <span className={`tabular-nums whitespace-nowrap ${sign === '−' ? 'text-[#009574]' : 'text-[#333333]'}`}>
+        {sign === '−' ? '− ' : ''}{money(value)}
+      </span>
+    </div>
   )
 }
 
@@ -641,91 +613,44 @@ function ProgramChangeSummary({ status, preview, error }: {
   let tone: Tone
   let ResultIcon = CircleCheck
   let resultLabel: string
+  let resultAmount: number | null
   let resultNote: string
   if (paid && !preview.quotaAvailable) {
     tone = 'red'
     ResultIcon = TriangleAlert
     resultLabel = 'No se puede cambiar'
+    resultAmount = null
     resultNote = 'La carrera nueva ya no tiene lugar disponible.'
   } else if (paid && preview.toPay > 0) {
     tone = 'amber'
     ResultIcon = Wallet
     resultLabel = 'Debe pagar la diferencia'
+    resultAmount = preview.toPay
     resultNote = `Sigue con su ficha pagada y paga la diferencia en el portal de la ficha${deadline ? `, a más tardar el ${deadline}` : ''}.`
   } else if (paid && preview.creditLeft > 0) {
     tone = 'blue'
     ResultIcon = PiggyBank
     resultLabel = 'Le queda saldo a favor'
+    resultAmount = preview.creditLeft
     resultNote = 'La carrera nueva cuesta menos que lo que ya pagó. No tiene que pagar nada.'
   } else if (paid) {
     tone = 'green'
     resultLabel = 'Queda pagada'
+    resultAmount = 0
     resultNote = 'Lo que ya pagó cubre exactamente la carrera nueva.'
   } else {
     tone = preview.paymentWindowClosed ? 'amber' : 'green'
     ResultIcon = preview.paymentWindowClosed ? TriangleAlert : Receipt
     resultLabel = 'Nuevo monto de la ficha'
+    resultAmount = preview.toPay
     resultNote = preview.paymentWindowClosed
       ? 'El plazo de pago de esa carrera ya pasó: la ficha vencerá sin poder pagarse.'
       : 'Lo paga con la misma ficha, en el portal, como antes.'
   }
+  const t = TONES[tone]
 
   // Sin pagar: cuánto cambia lo que debe respecto de antes.
   const delta = !paid && preview.previousAmount != null ? preview.toPay - preview.previousAmount : null
-
-  // Las partes del cálculo, en orden. El resultado lleva el color del caso.
-  const steps: StepProps[] = []
-  if (paid) {
-    steps.push({
-      title: 'Costo de la carrera nueva',
-      amount: preview.newAmount,
-      note: preview.newDiscountAmount > 0
-        ? `Tarifa ${money(preview.newOriginalAmount)} menos su descuento de ${money(preview.newDiscountAmount)}: el descuento que tenía pasa a la carrera nueva.`
-        : 'Tarifa vigente de la carrera nueva.',
-    })
-    steps.push({
-      title: 'Se le abona lo que ya pagó',
-      amount: preview.alreadyPaid,
-      sign: '−',
-      note: 'Lo que pagó por la ficha anterior se aplica a la carrera nueva.',
-    })
-  } else {
-    steps.push({ title: 'Costo de la carrera nueva', amount: preview.newOriginalAmount, note: 'Tarifa vigente de la carrera nueva.' })
-    if (preview.newDiscountAmount > 0) {
-      steps.push({
-        title: 'Se respeta su descuento',
-        amount: preview.newDiscountAmount,
-        sign: '−',
-        note: 'El descuento que tenía pasa a la carrera nueva.',
-      })
-    }
-  }
-  const leavesCredit = paid && preview.toPay <= 0 && preview.creditLeft > 0
-  steps.push({
-    title: leavesCredit ? 'Le queda de saldo a favor' : paid ? 'Queda por pagar' : 'Deberá pagar',
-    amount: leavesCredit ? preview.creditLeft : preview.toPay,
-    sign: '=',
-    note: delta != null && delta !== 0
-      ? (delta > 0 ? `${money(delta)} más que antes.` : `${money(-delta)} menos que antes.`)
-      : undefined,
-    tone,
-  })
-  steps.push({
-    title: `Qué sigue: ${resultLabel.charAt(0).toLowerCase()}${resultLabel.slice(1)}`,
-    note: resultNote,
-    badge: paid && preview.toPay > 0 && deadline ? `Vence el ${deadline}` : undefined,
-    icon: ResultIcon,
-    tone,
-  })
-  if (preview.otherCredit > 0) {
-    steps.push({
-      title: 'Tiene saldo a favor (sin aplicar)',
-      amount: preview.otherCredit,
-      note: `No se descuenta en este cambio. Avísale al candidato: si quiere, lo usa al pagar${paid && preview.toPay > 0 ? ' la diferencia' : ''} en el portal de la ficha.`,
-      icon: PiggyBank,
-      tone: 'blue',
-    })
-  }
 
   return (
     <div className="rounded-xl border border-[#E5E7EB] bg-white overflow-hidden text-[13px]">
@@ -771,15 +696,76 @@ function ProgramChangeSummary({ status, preview, error }: {
           />
         </div>
 
-        {/* Paso a paso, en vertical: cada parte del cálculo y lo que sigue */}
-        <div>
-          <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">Paso a paso</p>
-          <ol>
-            {steps.map((step, index) => (
-              <Step key={step.title} number={index + 1} last={index === steps.length - 1} {...step} />
-            ))}
-          </ol>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {/* Desglose */}
+          <div className="md:col-span-3 rounded-lg border border-[#E5E7EB] px-4 py-2">
+            <p className="pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">Cómo se calcula</p>
+            {paid ? (
+              <>
+                <BreakdownRow label="Costo de la carrera nueva" value={preview.newOriginalAmount} />
+                {preview.newDiscountAmount > 0 && (
+                  <BreakdownRow
+                    label="Su descuento"
+                    value={preview.newDiscountAmount}
+                    sign="−"
+                    hint="El descuento que tenía pasa a la carrera nueva."
+                  />
+                )}
+                <BreakdownRow label="Lo que ya pagó" value={preview.alreadyPaid} sign="−" />
+              </>
+            ) : (
+              <>
+                <BreakdownRow label="Costo de la carrera nueva" value={preview.newOriginalAmount} />
+                {preview.newDiscountAmount > 0 && (
+                  <BreakdownRow label="Descuento que se respeta" value={preview.newDiscountAmount} sign="−" />
+                )}
+              </>
+            )}
+            <div className="flex items-baseline justify-between gap-4 pt-2 pb-1 mt-1 border-t border-[#D1D5DB]">
+              <span className="font-semibold text-[#333333]">{paid && preview.toPay <= 0 ? 'Saldo a favor' : 'A pagar'}</span>
+              <span className="tabular-nums font-bold text-[#333333]">
+                {money(paid && preview.toPay <= 0 ? preview.creditLeft : preview.toPay)}
+              </span>
+            </div>
+            {delta != null && delta !== 0 && (
+              <p className="pb-1 text-[11px] text-[#6B7280]">
+                {delta > 0 ? `${money(delta)} más que antes` : `${money(-delta)} menos que antes`}
+              </p>
+            )}
+          </div>
+
+          {/* Resultado */}
+          <div className={`md:col-span-2 rounded-lg border px-4 py-4 flex flex-col ${t.box}`}>
+            <div className="flex items-center gap-2">
+              <span className={`flex h-8 w-8 items-center justify-center rounded-full ${t.icon}`}>
+                <ResultIcon size={16} />
+              </span>
+              <p className={`font-semibold ${t.label}`}>{resultLabel}</p>
+            </div>
+            {resultAmount != null && (
+              <p className={`mt-3 tabular-nums text-[28px] font-bold leading-none ${t.amount}`}>{money(resultAmount)}</p>
+            )}
+            <p className={`mt-3 text-[12px] leading-relaxed ${t.label}`}>{resultNote}</p>
+            {paid && preview.toPay > 0 && deadline && (
+              <p className={`mt-2 flex items-center gap-1.5 text-[12px] font-semibold ${t.label}`}>
+                <Clock size={13} /> Vence el {deadline}
+              </p>
+            )}
+          </div>
         </div>
+
+        {preview.otherCredit > 0 && (
+          // El saldo previo es de la persona: no se descuenta aquí. Quien edita lo
+          // ve para poder decírselo, y ella decide si lo usa al pagar.
+          <div className="flex items-start gap-2 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2.5 text-[12px] leading-relaxed text-[#1E40AF]">
+            <PiggyBank size={15} className="flex-shrink-0 mt-0.5" />
+            <p>
+              <span className="font-semibold">El candidato tiene {money(preview.otherCredit)} de saldo a favor.</span>{' '}
+              No se descuenta en este cambio: si quiere, lo puede usar al pagar
+              {paid && preview.toPay > 0 ? ' la diferencia' : ''} en el portal de la ficha.
+            </p>
+          </div>
+        )}
 
         {paid && (
           <p className="text-[11px] text-[#9CA3AF]">
