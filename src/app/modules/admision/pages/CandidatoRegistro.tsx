@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import {
   ShieldCheck, GraduationCap, Lock, AlertCircle, ArrowDown, ArrowLeftRight, ArrowRight,
@@ -1130,6 +1130,11 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
   const programChanged = isEdit && editOriginalConfigId !== '' && paso3.admissionConfigId !== ''
     && paso3.admissionConfigId !== editOriginalConfigId
   const [changePreview, setChangePreview] = useState<ProgramChangePreview | null>(null)
+  // La tarjeta del cambio de carrera vive fuera del formulario; al elegir otra
+  // carrera se baja hasta ella para que quien edita vea cómo queda el cobro.
+  const programChangeRef = useRef<HTMLDivElement | null>(null)
+  const scrollToProgramChange = () =>
+    programChangeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const [changePreviewStatus, setChangePreviewStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [changePreviewError, setChangePreviewError] = useState('')
 
@@ -1146,12 +1151,15 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
         if (cancelled) return
         setChangePreview(preview)
         setChangePreviewStatus('ready')
+        // Se eligió otra carrera: se lleva a quien edita hasta la tarjeta, ya con los números.
+        requestAnimationFrame(scrollToProgramChange)
       })
       .catch(err => {
         if (cancelled) return
         setChangePreview(null)
         setChangePreviewError(getApiErrorMessage(err, 'No se pudo calcular el cambio de carrera.'))
         setChangePreviewStatus('error')
+        requestAnimationFrame(scrollToProgramChange)
       })
     return () => { cancelled = true }
   }, [programChanged, paso3.admissionConfigId, editId])
@@ -2317,8 +2325,22 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
         )}
 
         {programChanged && (
+          // El detalle va fuera del formulario, en su propia tarjeta debajo: aquí
+          // solo se avisa y se lleva a quien edita hasta él.
           <div className="col-span-12">
-            <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#009574]/30 bg-[#e6f5f1] px-4 py-3 text-[13px] text-[#00543f]">
+              <span className="inline-flex items-center gap-2">
+                <ArrowLeftRight size={15} className="flex-shrink-0" />
+                Cambiaste la carrera. Revisa abajo cómo queda el cobro antes de guardar.
+              </span>
+              <button
+                type="button"
+                onClick={scrollToProgramChange}
+                className="inline-flex items-center gap-1 rounded-md border border-[#009574]/40 bg-white px-3 py-1.5 text-[12px] font-semibold text-[#007a5e] hover:bg-[#009574]/5"
+              >
+                Ver cambio de carrera <ArrowDown size={13} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -2555,11 +2577,6 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
 
         {isEdit ? (
           <div className="pt-2">
-            {programChanged && (
-              <div className="mb-4">
-                <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
-              </div>
-            )}
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio</p>
             <p className="text-[15px] font-bold text-[#333333]">{editFolio}</p>
           </div>
@@ -2669,6 +2686,14 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
         )}
 
         {content}
+
+        {isEdit && programChanged && (
+          // Tarjeta aparte, debajo del formulario: el detalle del cobro no cabe
+          // dentro del paso sin saturarlo.
+          <div ref={programChangeRef} className="mt-6 scroll-mt-6">
+            <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
+          </div>
+        )}
       </FormPage>
     )
   }
