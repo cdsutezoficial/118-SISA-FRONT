@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Banknote, CheckCircle2, Printer } from 'lucide-react'
 import { ReadField, Toast } from '@app/core/components/ui'
-import { Button, FormPage, FormHeader, FormCard, TextField } from '@app/core/components/form'
+import { Button, FormPage, FormHeader, FormCard } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner, LoadingState } from '@app/core/components/list'
 import {
   apiDownload, apiGet, apiPost, getApiErrorMessage, saveBlobDownload, type ApiError,
@@ -45,8 +45,6 @@ export default function ConfirmarPagoFicha() {
   const [cobro, setCobro] = useState<CashPaymentPreviewBackend | null>(null)
   const [motivo, setMotivo] = useState('')
   const [cargando, setCargando] = useState(true)
-  const [recibido, setRecibido] = useState('')
-  const [errorRecibido, setErrorRecibido] = useState('')
   const [cobrando, setCobrando] = useState(false)
   const [recibo, setRecibo] = useState<PaymentConfirmationBackend | null>(null)
   const [imprimiendo, setImprimiendo] = useState(false)
@@ -82,23 +80,18 @@ export default function ConfirmarPagoFicha() {
   }, [id, consultar])
 
   const aCobrar = cobro ? Number(cobro.toCollect) : 0
-  const efectivo = Number(recibido)
-  const cambio = recibido.trim() && !Number.isNaN(efectivo) && efectivo >= aCobrar ? efectivo - aCobrar : null
 
   async function registrarCobro() {
     if (!cobro) return
-    if (recibido.trim() && (Number.isNaN(efectivo) || efectivo < aCobrar)) {
-      setErrorRecibido(`El efectivo recibido no alcanza: faltan ${mxn(aCobrar - (Number.isNaN(efectivo) ? 0 : efectivo))}.`)
-      return
-    }
     setCobrando(true)
     try {
       setRecibo(await apiPost<PaymentConfirmationBackend>(`/candidates/${id}/cash-payment`, {
         expectedAmount: aCobrar,
       }))
     } catch (err) {
-      setToast(getApiErrorMessage(err, 'No se pudo registrar el cobro. No entregues comprobante.'))
-      if ((err as Partial<ApiError>).code === CASH_AMOUNT_CHANGED) setRecibido('')
+      setToast((err as Partial<ApiError>).code === CASH_AMOUNT_CHANGED
+        ? getApiErrorMessage(err, 'El monto a cobrar cambió. Revisa el nuevo monto.')
+        : getApiErrorMessage(err, 'No se pudo registrar el cobro. No entregues comprobante.'))
       await consultar()
     } finally {
       setCobrando(false)
@@ -150,9 +143,6 @@ export default function ConfirmarPagoFicha() {
               efectivo. Recibo <span className="font-mono font-semibold text-[#333333]">{recibo.receiptNumber}</span>.
               El candidato recibe su comprobante por correo.
             </p>
-            {cambio != null && cambio > 0 && (
-              <p className="text-[13px] font-semibold text-[#92400E]">Entrega de cambio: {mxn(cambio)}</p>
-            )}
             <div className="mt-2 flex flex-wrap justify-center gap-3">
               <Button variant="secondary" onClick={() => void reimprimir()} loading={imprimiendo}>
                 <Printer size={14} /> Imprimir comprobante
@@ -187,26 +177,6 @@ export default function ConfirmarPagoFicha() {
               <dd className="text-[20px] font-bold text-[#009574]">{mxn(aCobrar)}</dd>
             </div>
           </dl>
-
-          <div className="mt-5 grid grid-cols-12 gap-4">
-            <TextField
-              label="Efectivo recibido (opcional, para calcular el cambio)"
-              type="number"
-              step="0.01"
-              min={0}
-              numeric
-              value={recibido}
-              onChange={v => { setRecibido(v); setErrorRecibido('') }}
-              error={errorRecibido}
-              placeholder={aCobrar.toFixed(2)}
-              className="col-span-12 sm:col-span-6"
-            />
-            {cambio != null && (
-              <div className="col-span-12 sm:col-span-6 flex items-end pb-2 text-[13px] text-[#333333]">
-                Cambio: <span className="ml-1 font-semibold">{mxn(cambio)}</span>
-              </div>
-            )}
-          </div>
 
           <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
             <Button variant="secondary" onClick={() => navigate('/caja')} disabled={cobrando}>Cancelar</Button>
