@@ -25,7 +25,12 @@ Rama: `fix/correcciones-pagos-ficha`. Plan: `118-SISA-CLAUDE/docs/design/pendien
 - Cambio de carrera: tarjeta propia en la edición de la ficha y aviso de saldo a favor.
 - Finanzas: **Alertas de Pago** (`/admision/alertas-pago`) y **Excedentes de Pago** (`/admision/excedentes`).
 - Caja: rol `CAJA`, menú **Cobro en Efectivo** (`/caja`) y `ConfirmarPagoFicha` reescrita para efectivo
-  (vista previa, cambio, recibo e impresión). Se quitó el mock y la referencia bancaria.
+  (vista previa, recibo e impresión). Cobra el monto exacto, sin campo de cambio. Se quitó el mock
+  y la referencia bancaria.
+- Caja con saldo a favor: tarjeta "Tiene $X de saldo a favor" con casilla **Usar saldo** (marcada
+  por defecto). Se descuenta del adeudo y en efectivo se cobra solo lo que falta; si lo cubre todo,
+  el botón es **Aplicar saldo a favor** y no se recibe dinero. El recibo dice cuánto fue saldo y
+  cuánto efectivo.
 - Administración: **Log de Auditoría** (`/auditoria`, solo Administrador).
 
 ---

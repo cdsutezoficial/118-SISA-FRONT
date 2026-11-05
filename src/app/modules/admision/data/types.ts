@@ -93,6 +93,8 @@ export interface CashPaymentPreviewBackend {
   alreadyPaid: number
   toCollect: number
   dueAt: string | null
+  /** Saldo a favor de la persona que caja puede usar antes del efectivo. */
+  availableCredit?: number
 }
 
 export interface PaymentConfirmationBackend {

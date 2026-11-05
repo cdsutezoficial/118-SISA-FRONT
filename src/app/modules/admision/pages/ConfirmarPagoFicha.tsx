@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { Banknote, CheckCircle2, Printer } from 'lucide-react'
+import { Banknote, CheckCircle2, Printer, Wallet } from 'lucide-react'
 import { ReadField, Toast } from '@app/core/components/ui'
+import { Checkbox } from '@app/core/ui/checkbox'
 import { Button, FormPage, FormHeader, FormCard } from '@app/core/components/form'
 import { Breadcrumb, ErrorBanner, LoadingState } from '@app/core/components/list'
 import {
@@ -22,8 +23,10 @@ import type { CandidateFichaBackend, CashPaymentPreviewBackend, PaymentConfirmat
  *    en medio (409 `ADMISSION_CASH_AMOUNT_CHANGED`), no registra nada y se vuelve a
  *    consultar.
  *
- * Cobra la ficha o la diferencia que dejó un cambio de carrera. El comprobante se
- * reimprime con la ficha en PDF.
+ * Cobra la ficha o la diferencia que dejó un cambio de carrera. Si la persona tiene
+ * saldo a favor, por defecto se usa primero y en efectivo solo se cobra lo que falta;
+ * si el saldo cubre todo, no se recibe dinero. El comprobante se reimprime con la
+ * ficha en PDF.
  */
 
 const CASH_AMOUNT_CHANGED = 'ADMISSION_CASH_AMOUNT_CHANGED'
@@ -49,6 +52,8 @@ export default function ConfirmarPagoFicha() {
   const [recibo, setRecibo] = useState<PaymentConfirmationBackend | null>(null)
   const [imprimiendo, setImprimiendo] = useState(false)
   const [toast, setToast] = useState('')
+  const [usarSaldo, setUsarSaldo] = useState(true)
+  const [saldoUsado, setSaldoUsado] = useState(0)
 
   const consultar = useCallback(async () => {
     setCargando(true)
@@ -79,15 +84,22 @@ export default function ConfirmarPagoFicha() {
     void consultar()
   }, [id, consultar])
 
-  const aCobrar = cobro ? Number(cobro.toCollect) : 0
+  const adeudo = cobro ? Number(cobro.toCollect) : 0
+  const saldoDisponible = cobro ? Number(cobro.availableCredit ?? 0) : 0
+  const saldoAplicado = usarSaldo ? Math.min(saldoDisponible, adeudo) : 0
+  const aCobrar = Math.round((adeudo - saldoAplicado) * 100) / 100
+  const soloSaldo = saldoAplicado > 0 && aCobrar === 0
 
   async function registrarCobro() {
     if (!cobro) return
     setCobrando(true)
     try {
-      setRecibo(await apiPost<PaymentConfirmationBackend>(`/candidates/${id}/cash-payment`, {
+      const res = await apiPost<PaymentConfirmationBackend>(`/candidates/${id}/cash-payment`, {
         expectedAmount: aCobrar,
-      }))
+        useCredit: saldoAplicado > 0,
+      })
+      setSaldoUsado(saldoAplicado)
+      setRecibo(res)
     } catch (err) {
       setToast((err as Partial<ApiError>).code === CASH_AMOUNT_CHANGED
         ? getApiErrorMessage(err, 'El monto a cobrar cambió. Revisa el nuevo monto.')
@@ -139,8 +151,18 @@ export default function ConfirmarPagoFicha() {
             <CheckCircle2 size={36} className="text-[#009574]" />
             <p className="text-[16px] font-bold text-[#333333]">Cobro registrado</p>
             <p className="text-[13px] text-[#6B7280]">
-              Se recibieron <span className="font-semibold text-[#333333]">{mxn(Number(recibo.amount))}</span> en
-              efectivo. Recibo <span className="font-mono font-semibold text-[#333333]">{recibo.receiptNumber}</span>.
+              {saldoUsado > 0 && aCobrar === 0 ? (
+                <>Se aplicaron <span className="font-semibold text-[#333333]">{mxn(saldoUsado)}</span> de saldo a
+                  favor; no se recibió efectivo. </>
+              ) : saldoUsado > 0 ? (
+                <>Se aplicaron <span className="font-semibold text-[#333333]">{mxn(saldoUsado)}</span> de saldo a
+                  favor y se recibieron <span className="font-semibold text-[#333333]">{mxn(Number(recibo.amount))}</span> en
+                  efectivo. </>
+              ) : (
+                <>Se recibieron <span className="font-semibold text-[#333333]">{mxn(Number(recibo.amount))}</span> en
+                  efectivo. </>
+              )}
+              Recibo <span className="font-mono font-semibold text-[#333333]">{recibo.receiptNumber}</span>.
               El candidato recibe su comprobante por correo.
             </p>
             <div className="mt-2 flex flex-wrap justify-center gap-3">
@@ -161,6 +183,43 @@ export default function ConfirmarPagoFicha() {
         </FormCard>
       ) : (
         <FormCard>
+          {saldoDisponible > 0 && (
+            <label
+              htmlFor="usar-saldo"
+              className={`mb-5 flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors ${
+                usarSaldo ? 'border-[#009574] bg-[#E6F4F1]' : 'border-[#E5E7EB] bg-[#F9FAFB]'
+              }`}
+            >
+              <div className={`flex size-9 shrink-0 items-center justify-center rounded-full ${
+                usarSaldo ? 'bg-[#009574] text-white' : 'bg-[#E5E7EB] text-[#6B7280]'
+              }`}>
+                <Wallet size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold text-[#333333]">
+                  Tiene {mxn(saldoDisponible)} de saldo a favor
+                </p>
+                <p className="text-[12px] text-[#6B7280]">
+                  {!usarSaldo
+                    ? 'No se usará: se cobra todo en efectivo.'
+                    : soloSaldo
+                      ? 'Cubre todo el adeudo: no se recibe efectivo.'
+                      : `Se usan ${mxn(saldoAplicado)} y el resto se cobra en efectivo.`}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-[12px] font-medium text-[#333333]">
+                <Checkbox
+                  id="usar-saldo"
+                  checked={usarSaldo}
+                  onCheckedChange={v => setUsarSaldo(v === true)}
+                  disabled={cobrando}
+                  className="size-5 border-[#9CA3AF] bg-white data-[state=checked]:border-[#009574] data-[state=checked]:bg-[#009574] data-[state=checked]:text-white"
+                />
+                Usar saldo
+              </div>
+            </label>
+          )}
+
           <dl className="space-y-2 text-[13px]">
             <div className="flex justify-between gap-4">
               <dt className="text-[#6B7280]">{cobro.programChange ? 'Total de la carrera nueva' : 'Total de la ficha'}</dt>
@@ -172,6 +231,12 @@ export default function ConfirmarPagoFicha() {
                 <dd className="font-semibold text-[#333333]">{mxn(Number(cobro.alreadyPaid))}</dd>
               </div>
             )}
+            {saldoAplicado > 0 && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-[#6B7280]">Saldo a favor aplicado</dt>
+                <dd className="font-semibold text-[#009574]">− {mxn(saldoAplicado)}</dd>
+              </div>
+            )}
             <div className="flex justify-between gap-4 border-t border-dashed border-[#E5E7EB] pt-2">
               <dt className="font-semibold text-[#333333]">A cobrar en efectivo</dt>
               <dd className="text-[20px] font-bold text-[#009574]">{mxn(aCobrar)}</dd>
@@ -181,7 +246,7 @@ export default function ConfirmarPagoFicha() {
           <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
             <Button variant="secondary" onClick={() => navigate('/caja')} disabled={cobrando}>Cancelar</Button>
             <Button onClick={() => void registrarCobro()} loading={cobrando}>
-              <Banknote size={14} /> Registrar cobro de {mxn(aCobrar)}
+              <Banknote size={14} /> {soloSaldo ? 'Aplicar saldo a favor' : `Registrar cobro de ${mxn(aCobrar)}`}
             </Button>
           </div>
         </FormCard>
