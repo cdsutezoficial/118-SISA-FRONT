@@ -4,6 +4,18 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-11-05] Tablero de Admisión con datos reales
+
+Rama: `feat/dashboard-admision`. Requiere el PR del back del mismo nombre.
+
+- `AdmisionDashboard.tsx`: deja los datos de ejemplo (`mockCandidates`) y consume
+  `GET /admission/dashboard`. Filtro de periodo ("Proceso más reciente" o uno en particular)
+  y el subtítulo muestra el periodo real.
+- Por carrera agrega las columnas "Pagadas" y "Vencidas"; la tarjeta de fichas registradas dice
+  cuántas vencieron sin pagar.
+
+---
+
 ## [2026-11-05] Correcciones de pago de ficha y cambio de carrera
 
 Rama: `fix/correcciones-pagos-ficha`. Plan: `118-SISA-CLAUDE/docs/design/pendientes/pagos/2026-10-30-correcciones-ficha-cambio-carrera.md`.
