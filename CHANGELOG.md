@@ -4,6 +4,20 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-11-05] Correcciones de pago de ficha y cambio de carrera
+
+Rama: `fix/correcciones-pagos-ficha`. Plan: `118-SISA-CLAUDE/docs/design/pendientes/pagos/2026-10-30-correcciones-ficha-cambio-carrera.md`.
+
+- Portal: pagar la ficha o la diferencia con saldo a favor a elección; aviso de pago sin cupo
+  (`ADMISSION_PAID_WITHOUT_QUOTA`); comprobante dividido (total, pagado antes, pagado ahora).
+- Cambio de carrera: tarjeta propia en la edición de la ficha y aviso de saldo a favor.
+- Finanzas: **Alertas de Pago** (`/admision/alertas-pago`) y **Excedentes de Pago** (`/admision/excedentes`).
+- Caja: rol `CAJA`, menú **Cobro en Efectivo** (`/caja`) y `ConfirmarPagoFicha` reescrita para efectivo
+  (vista previa, cambio, recibo e impresión). Se quitó el mock y la referencia bancaria.
+- Administración: **Log de Auditoría** (`/auditoria`, solo Administrador).
+
+---
+
 ## [2026-10-29] "Aplicar Descuentos" solo en el menú de Finanzas
 
 Rama: `fix/menu-descuentos-finanzas`.
