@@ -43,6 +43,11 @@ export const FINANZAS_ROLES: Role[] = [
   'FINANZAS',
 ]
 
+/** F1: cobro en efectivo en ventanilla. Finanzas también puede cobrar. */
+export const CAJA_ROLES: Role[] = [
+  'CAJA', 'FINANZAS',
+]
+
 export const STUDENT_TRACK_ROLES: Role[] = [
   'SERVICIOS_ESCOLARES',
 ]
@@ -54,7 +59,7 @@ export const STUDENT_TRACK_ROLES: Role[] = [
  * siguen redirigiendo si el rol no puede abrirla.
  */
 export const ALL_STAFF_ROLES: Role[] = [
-  'ADMINISTRADOR', 'GESTOR_ACADEMICO', 'SERVICIOS_ESCOLARES', 'FINANZAS', 'DIRECTOR_DIVISION',
+  'ADMINISTRADOR', 'GESTOR_ACADEMICO', 'SERVICIOS_ESCOLARES', 'FINANZAS', 'DIRECTOR_DIVISION', 'CAJA',
 ]
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -62,6 +67,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   GESTOR_ACADEMICO: 'Gestor Académico',
   SERVICIOS_ESCOLARES: 'Servicios Escolares',
   FINANZAS: 'Finanzas',
+  CAJA: 'Caja',
   DIRECTOR_DIVISION: 'Director de División',
   CANDIDATO: 'Candidato',
 }
@@ -84,6 +90,7 @@ export const ROLE_DEFAULT_PATHS: Record<Role, string> = {
   GESTOR_ACADEMICO: '/inscripciones',
   SERVICIOS_ESCOLARES: '/dashboard',
   FINANZAS: '/areas',
+  CAJA: '/caja',
   DIRECTOR_DIVISION: '/admision',
   CANDIDATO: '/portal/ficha',
 }

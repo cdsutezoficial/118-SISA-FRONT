@@ -10,6 +10,7 @@ export const ROLE_DESCRIPTIONS: Record<RoleType, string> = {
   ASISTENTE_ESTADIAS: 'Apoya el proceso de estadías.',
   COORDINACION_ESTADIAS_DIVISION: 'Coordina estadías a nivel división.',
   PERSONAL_FINANZAS: 'Administra las áreas de facturación, conceptos de pago y tarifas.',
+  CAJA: 'Cobra en efectivo fichas y diferencias en ventanilla. No da descuentos ni edita fichas.',
   DOCENTE: 'Consulta catálogos e información de sus grupos.',
   ESTUDIANTE: 'Consulta catálogos e información de su trayectoria.',
   EGRESADO: 'Consulta catálogos e información de su trayectoria.',

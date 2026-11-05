@@ -30,6 +30,7 @@ import GenerarMatriculas from '@app/modules/admision/pages/GenerarMatriculas'
 import PublicarResultados from '@app/modules/admision/pages/PublicarResultados'
 import AplicarDescuento from '@app/modules/admision/pages/AplicarDescuento'
 import AlertasPago from '@app/modules/admision/pages/AlertasPago'
+import CajaCobros from '@app/modules/admision/pages/CajaCobros'
 import HabilitarInduccion from '@app/modules/admision/pages/HabilitarInduccion'
 // Portal (público). Two DISTINCT public flows, deliberately not merged:
 // - ficha: pay an admission ticket that was registered but never paid (REAL backend)
@@ -226,7 +227,8 @@ const router = createBrowserRouter([
           },
           {
             path: 'candidatos/pago-ficha',
-            element: <RequireRole allowedRoles={['SERVICIOS_ESCOLARES', 'DIRECTOR_DIVISION', 'FINANZAS']}><ConfirmarPagoFicha /></RequireRole>,
+            // F1: cobro en efectivo. Lo hacen Caja y Finanzas con `PAYMENT_WINDOW_CONFIRM`.
+            element: <RequireRole allowedRoles={['CAJA', 'FINANZAS']}><RequirePermission permissionKeys={['PAYMENT_WINDOW_CONFIRM']} redirectTo="/dashboard"><ConfirmarPagoFicha /></RequirePermission></RequireRole>,
           },
           {
             path: 'candidatos/pago-induccion',
@@ -493,6 +495,8 @@ const router = createBrowserRouter([
       // y ver), y es el mismo criterio que ya usa la lista para decidir si
       // muestra el `Switch` de estatus. El alta tiene su propia ruta
       // (`areas/new`) con `_CREATE`.
+      // F1: Caja — buscar al candidato y cobrar en efectivo.
+      { path: 'caja',             element: <RequireRole allowedRoles={['CAJA', 'FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_WINDOW_CONFIRM']} redirectTo="/dashboard"><CajaCobros /></RequirePermission></RequireRole> },
       { path: 'areas',            element: <RequireRole allowedRoles={['FINANZAS']} redirectTo="/dashboard"><RequirePermission permissionKeys={['PAYMENT_AREAS_READ']} redirectTo="/dashboard"><AreasList /></RequirePermission></RequireRole> },
       { path: 'areas/new',        element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><RequirePermission permissionKeys={['PAYMENT_AREAS_CREATE']} redirectToRoleMain><AreasForm /></RequirePermission></RequireRole> },
       { path: 'areas/form',       element: <RequireRole allowedRoles={['FINANZAS']} redirectToRoleMain><RequirePermission permissionKeys={['PAYMENT_AREAS_UPDATE']} redirectToRoleMain><AreasForm /></RequirePermission></RequireRole> },

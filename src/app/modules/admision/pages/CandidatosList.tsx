@@ -103,6 +103,8 @@ export default function CandidatosList() {
   // Editar la ficha es solo de Servicios Escolares (Fase 7 · T2).
   const { hasPermission } = useRole()
   const canEditFicha = hasPermission('CANDIDATES_UPDATE')
+  // F1: cobrar en efectivo es de Caja y Finanzas (`PAYMENT_WINDOW_CONFIRM`).
+  const canCollectCash = hasPermission('PAYMENT_WINDOW_CONFIRM')
   const goToEdit = (row: CandidateListRow) => navigate(`/admision/candidatos/editar?id=${row.id}`)
   const [candidates, setCandidates] = useState<CandidateListRow[]>([])
   const [programs, setPrograms] = useState<ProgramSummary[]>([])
@@ -256,10 +258,10 @@ export default function CandidatosList() {
           editTooltip: 'Editar ficha',
           extra: row => (
             <>
-              {row.status === 'REGISTERED' && (
+              {canCollectCash && row.status === 'REGISTERED' && (
                 <ActionBtn
                   icon={<CreditCard size={15} />}
-                  tooltip="Confirmar Pago Ficha"
+                  tooltip="Cobrar en efectivo"
                   onClick={() => navigate(`/admision/candidatos/pago-ficha?id=${row.id}`)}
                 />
               )}
@@ -291,8 +293,8 @@ export default function CandidatosList() {
               {canEditFicha && (
                 <CardActionButton icon={<Pencil size={13} />} label="Editar" onClick={() => goToEdit(row)} />
               )}
-              {row.status === 'REGISTERED' && (
-                <CardActionButton icon={<CreditCard size={13} />} label="Pago Ficha" onClick={() => navigate(`/admision/candidatos/pago-ficha?id=${row.id}`)} />
+              {canCollectCash && row.status === 'REGISTERED' && (
+                <CardActionButton icon={<CreditCard size={13} />} label="Cobrar" onClick={() => navigate(`/admision/candidatos/pago-ficha?id=${row.id}`)} />
               )}
             </div>
           </>

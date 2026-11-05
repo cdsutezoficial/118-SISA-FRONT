@@ -45,6 +45,7 @@ type BackendRoleType =
   | 'ASISTENTE_ESTADIAS'
   | 'COORDINACION_ESTADIAS_DIVISION'
   | 'PERSONAL_FINANZAS'
+  | 'CAJA'
   | 'DOCENTE'
   | 'ESTUDIANTE'
   | 'EGRESADO'
@@ -98,6 +99,7 @@ const ROLE_LABELS: Record<BackendRoleType, string> = {
   ASISTENTE_ESTADIAS: 'Asistente de Estadías',
   COORDINACION_ESTADIAS_DIVISION: 'Coordinación de Estadías de División',
   PERSONAL_FINANZAS: 'Finanzas',
+  CAJA: 'Caja',
   DOCENTE: 'Docente',
   ESTUDIANTE: 'Estudiante',
   EGRESADO: 'Egresado',
@@ -112,6 +114,7 @@ const ROLE_BADGE_STYLE: Record<BackendRoleType, string> = {
   ASISTENTE_ESTADIAS: 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200',
   COORDINACION_ESTADIAS_DIVISION: 'bg-pink-50 text-pink-700 border border-pink-200',
   PERSONAL_FINANZAS: 'bg-amber-50 text-amber-700 border border-amber-200',
+  CAJA: 'bg-lime-50 text-lime-700 border border-lime-200',
   DOCENTE: 'bg-violet-50 text-violet-700 border border-violet-200',
   ESTUDIANTE: 'bg-cyan-50 text-cyan-700 border border-cyan-200',
   EGRESADO: 'bg-orange-50 text-orange-700 border border-orange-200',

@@ -82,6 +82,19 @@ export interface FichaPaymentBackend extends VentanaFechas {
 }
 
 /** `POST /candidates/{id}/payments/confirm` — paid-ficha confirmation. */
+/** F1: `GET /candidates/{id}/cash-payment` — cuánto cobrar en caja. */
+export interface CashPaymentPreviewBackend {
+  candidateId: string
+  folio: string
+  referenceNumber: string
+  /** Es la diferencia de un cambio de carrera, no la ficha. */
+  programChange: boolean
+  total: number
+  alreadyPaid: number
+  toCollect: number
+  dueAt: string | null
+}
+
 export interface PaymentConfirmationBackend {
   candidateId: string
   folio: string
