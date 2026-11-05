@@ -29,6 +29,7 @@ import SeleccionCandidatos from '@app/modules/admision/pages/SeleccionCandidatos
 import GenerarMatriculas from '@app/modules/admision/pages/GenerarMatriculas'
 import PublicarResultados from '@app/modules/admision/pages/PublicarResultados'
 import AplicarDescuento from '@app/modules/admision/pages/AplicarDescuento'
+import AlertasPago from '@app/modules/admision/pages/AlertasPago'
 import HabilitarInduccion from '@app/modules/admision/pages/HabilitarInduccion'
 // Portal (público). Two DISTINCT public flows, deliberately not merged:
 // - ficha: pay an admission ticket that was registered but never paid (REAL backend)
@@ -258,6 +259,12 @@ const router = createBrowserRouter([
           {
             path: 'descuentos',
             element: <RequireRole allowedRoles={['FINANZAS', 'SERVICIOS_ESCOLARES']}><RequirePermission permissionKeys={['BENEFITS_READ']} redirectTo="/dashboard"><AplicarDescuento /></RequirePermission></RequireRole>,
+          },
+          // E4: pagos que Finanzas revisa a mano. Leer y marcar revisada tienen
+          // permiso propio (`FINANCE_ALERTS_READ` / `_RESOLVE`).
+          {
+            path: 'alertas-pago',
+            element: <RequireRole allowedRoles={['FINANZAS']}><RequirePermission permissionKeys={['FINANCE_ALERTS_READ']} redirectTo="/dashboard"><AlertasPago /></RequirePermission></RequireRole>,
           },
           {
             path: 'habilitacion',

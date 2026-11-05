@@ -6,7 +6,7 @@ import {
   CalendarRange, Users, CreditCard, IdCard, UserPlus,
   ClipboardCheck, ChevronLeft, ChevronRight, ChevronDown,
   LogOut, UserCog, X, Settings, Tags, Users2, Ticket,
-  Megaphone, BadgePercent, Unlock, RotateCcw, FileText, Archive, ShieldCheck,
+  Megaphone, BadgePercent, AlertTriangle, Unlock, RotateCcw, FileText, Archive, ShieldCheck,
 } from 'lucide-react'
 import { useRole } from '../infra/RoleContext'
 import type { Role } from '../infra/RoleContext'
@@ -84,6 +84,7 @@ export const SYSTEM_NAV: NavEntry[] = [
       { icon: <CreditCard size={16} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
       // Servicios Escolares también aplica descuentos; la opción vive solo en Finanzas.
       { icon: <BadgePercent size={16} />,  label: 'Aplicar Descuentos',      base: 'descuentos', path: '/admision/descuentos', roles: [...FINANZAS_ROLES, 'SERVICIOS_ESCOLARES'], permissionKeys: ['BENEFITS_READ'] },
+      { icon: <AlertTriangle size={16} />, label: 'Alertas de Pago',         base: 'alertas-pago', path: '/admision/alertas-pago', roles: FINANZAS_ROLES, permissionKeys: ['FINANCE_ALERTS_READ'] },
     ],
   },
   {
