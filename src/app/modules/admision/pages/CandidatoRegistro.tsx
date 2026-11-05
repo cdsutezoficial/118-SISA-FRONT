@@ -171,7 +171,6 @@ interface FichaAmountQuote {
 }
 interface CandidateRegistrationResponse {
   id: string
-  personId: string
   admissionConfigId: string
   folio: string
   status: string
@@ -793,7 +792,7 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
    * efecto de abajo lo aplica en cuanto puede resolverlo.
    */
   const [llaveMxPrefill, setLlaveMxPrefill] = useState<LlaveMxPrefill | null>(null)
-  const [folio, setFolio] = useState('')
+  const [, setFolio] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   /** true tras pulsar "Siguiente" hacia el paso bloqueado con campos faltantes: marca en rojo. */
