@@ -6,7 +6,7 @@ import {
   CalendarRange, Users, CreditCard, IdCard, UserPlus,
   ClipboardCheck, ChevronLeft, ChevronRight, ChevronDown,
   LogOut, UserCog, X, Settings, Tags, Users2, Ticket,
-  Megaphone, BadgePercent, AlertTriangle, Banknote, Unlock, RotateCcw, FileText, Archive, ShieldCheck,
+  Megaphone, BadgePercent, AlertTriangle, Banknote, Unlock, RotateCcw, FileText, Archive, ShieldCheck, History, PiggyBank,
 } from 'lucide-react'
 import { useRole } from '../infra/RoleContext'
 import type { Role } from '../infra/RoleContext'
@@ -56,6 +56,7 @@ export const SYSTEM_NAV: NavEntry[] = [
     children: [
       { icon: <IdCard size={18} />, label: 'Usuarios', base: 'usuarios', path: '/usuarios', roles: ADMINISTRATION_ROLES, permissionKeys: ['USERS_READ'] },
       { icon: <ShieldCheck size={18} />, label: 'Roles y Permisos', base: 'roles', path: '/roles', roles: ADMINISTRATION_ROLES, permissionKeys: ['ROLES_READ'] },
+      { icon: <History size={18} />, label: 'Log de Auditoría', base: 'auditoria', path: '/auditoria', roles: ['ADMINISTRADOR'], permissionKeys: ['AUDIT_LOG_READ'] },
     ],
   },
   {
@@ -86,6 +87,7 @@ export const SYSTEM_NAV: NavEntry[] = [
       // Servicios Escolares también aplica descuentos; la opción vive solo en Finanzas.
       { icon: <BadgePercent size={16} />,  label: 'Aplicar Descuentos',      base: 'descuentos', path: '/admision/descuentos', roles: [...FINANZAS_ROLES, 'SERVICIOS_ESCOLARES'], permissionKeys: ['BENEFITS_READ'] },
       { icon: <AlertTriangle size={16} />, label: 'Alertas de Pago',         base: 'alertas-pago', path: '/admision/alertas-pago', roles: FINANZAS_ROLES, permissionKeys: ['FINANCE_ALERTS_READ'] },
+      { icon: <PiggyBank size={16} />,     label: 'Excedentes de Pago',      base: 'excedentes', path: '/admision/excedentes', roles: FINANZAS_ROLES, permissionKeys: ['PAYMENTS_READ'] },
     ],
   },
   {
