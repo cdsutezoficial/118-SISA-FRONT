@@ -4,6 +4,18 @@ Todos los cambios relevantes del prototipo frontend se documentan aquí en orden
 
 ---
 
+## [2026-11-05] Tablero de Admisión con datos reales
+
+Rama: `feat/dashboard-admision`. Requiere el PR del back del mismo nombre.
+
+- `AdmisionDashboard.tsx`: deja los datos de ejemplo (`mockCandidates`) y consume
+  `GET /admission/dashboard`. Filtro de periodo ("Proceso más reciente" o uno en particular)
+  y el subtítulo muestra el periodo real.
+- Por carrera agrega las columnas "Pagadas" y "Vencidas"; la tarjeta de fichas registradas dice
+  cuántas vencieron sin pagar.
+
+---
+
 ## [2026-10-29] "Aplicar Descuentos" solo en el menú de Finanzas
 
 Rama: `fix/menu-descuentos-finanzas`.
