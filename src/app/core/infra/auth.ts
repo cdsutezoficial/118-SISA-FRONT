@@ -38,6 +38,7 @@ export const BACKEND_ROLE_CATALOG: readonly BackendRoleCatalogEntry[] = [
   { key: 'GESTOR_ACADEMICO', label: 'Gestor Académico', role: 'GESTOR_ACADEMICO' },
   { key: 'DIRECTOR_DIVISION', label: 'Director de División', role: 'DIRECTOR_DIVISION' },
   { key: 'PERSONAL_FINANZAS', label: 'Finanzas', role: 'FINANZAS' },
+  { key: 'CAJA', label: 'Caja', role: 'CAJA' },
   { key: 'JEFATURA_ESTADIAS', label: 'Jefatura de Estadías', role: null },
   { key: 'ASISTENTE_ESTADIAS', label: 'Asistente de Estadías', role: null },
   { key: 'COORDINACION_ESTADIAS_DIVISION', label: 'Coordinación de Estadías de División', role: null },

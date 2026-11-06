@@ -87,6 +87,12 @@ export const ADMISSION_ERROR_CODES = {
    * never navigated away (no folio was assigned), so her four steps are intact.
    */
   registrationConflict: 'ADMISSION_REGISTRATION_CONFLICT',
+  /**
+   * E4: the bank captured the payment after the checkout hold ran out, and the
+   * career was full by then. The money became the person's saldo a favor; the
+   * ficha is NOT paid. Never read it as "ya pagada".
+   */
+  paidWithoutQuota: 'ADMISSION_PAID_WITHOUT_QUOTA',
 } as const
 
 async function parseApiError(res: Response): Promise<ApiError> {

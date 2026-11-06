@@ -6,7 +6,7 @@ import {
   CalendarRange, Users, CreditCard, IdCard, UserPlus,
   ClipboardCheck, ChevronLeft, ChevronRight, ChevronDown,
   LogOut, UserCog, X, Settings, Tags, Users2, Ticket,
-  Megaphone, BadgePercent, Unlock, RotateCcw, FileText, Archive, ShieldCheck,
+  Megaphone, BadgePercent, AlertTriangle, Banknote, Unlock, RotateCcw, FileText, Archive, ShieldCheck, History,
 } from 'lucide-react'
 import { useRole } from '../infra/RoleContext'
 import type { Role } from '../infra/RoleContext'
@@ -15,6 +15,7 @@ import {
   ADMINISTRATION_ROLES,
   ADMISSION_ROLES,
   CONFIG_GENERAL_ROLES,
+  CAJA_ROLES,
   FINANZAS_ROLES,
   STUDENT_TRACK_ROLES,
   ROLE_LABELS,
@@ -55,6 +56,7 @@ export const SYSTEM_NAV: NavEntry[] = [
     children: [
       { icon: <IdCard size={18} />, label: 'Usuarios', base: 'usuarios', path: '/usuarios', roles: ADMINISTRATION_ROLES, permissionKeys: ['USERS_READ'] },
       { icon: <ShieldCheck size={18} />, label: 'Roles y Permisos', base: 'roles', path: '/roles', roles: ADMINISTRATION_ROLES, permissionKeys: ['ROLES_READ'] },
+      { icon: <History size={18} />, label: 'Log de Auditoría', base: 'auditoria', path: '/auditoria', roles: ['ADMINISTRADOR'], permissionKeys: ['AUDIT_LOG_READ'] },
     ],
   },
   {
@@ -84,6 +86,13 @@ export const SYSTEM_NAV: NavEntry[] = [
       { icon: <CreditCard size={16} />,    label: 'Conceptos de Pago',       base: 'conceptos',  path: '/conceptos',  roles: FINANZAS_ROLES, permissionKeys: ['PAYMENT_CONCEPTS_READ'] },
       // Servicios Escolares también aplica descuentos; la opción vive solo en Finanzas.
       { icon: <BadgePercent size={16} />,  label: 'Aplicar Descuentos',      base: 'descuentos', path: '/admision/descuentos', roles: [...FINANZAS_ROLES, 'SERVICIOS_ESCOLARES'], permissionKeys: ['BENEFITS_READ'] },
+      { icon: <AlertTriangle size={16} />, label: 'Alertas de Pago',         base: 'alertas-pago', path: '/admision/alertas-pago', roles: FINANZAS_ROLES, permissionKeys: ['FINANCE_ALERTS_READ'] },
+    ],
+  },
+  {
+    id: 'caja', icon: <Banknote size={18} />, label: 'Caja',
+    children: [
+      { icon: <Banknote size={16} />, label: 'Cobro en Efectivo', base: 'caja', path: '/caja', roles: CAJA_ROLES, permissionKeys: ['PAYMENT_WINDOW_CONFIRM'] },
     ],
   },
   {

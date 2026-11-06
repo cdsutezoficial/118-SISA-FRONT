@@ -66,6 +66,7 @@ export type Role =
   | 'GESTOR_ACADEMICO'
   | 'SERVICIOS_ESCOLARES'
   | 'FINANZAS'
+  | 'CAJA'
   | 'DIRECTOR_DIVISION'
   | 'CANDIDATO'
 

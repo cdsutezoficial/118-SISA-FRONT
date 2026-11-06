@@ -4,6 +4,35 @@ import { ReadField } from '@app/core/components/ui'
 import { formatDate } from '@app/core/infra/utils'
 import { FolioMontoClave } from './FolioMontoClave'
 import { DescuentoAplicado, type DescuentoFicha } from './DescuentoAplicado'
+import type { PaymentConfirmationBackend } from '../data/types'
+
+/**
+ * E6: el pago completó un cargo que ya tenía dinero (lo que trajo un cambio de
+ * carrera, o saldo a favor). El comprobante se divide en total, pagado antes y
+ * pagado ahora, en vez de presentar el total como si se hubiera pagado de golpe.
+ */
+export interface DesglosePago {
+  total: number
+  anterior: number
+  reciboAnterior?: string | null
+  fechaAnterior?: string | null
+  cambioCarrera: boolean
+}
+
+/** El desglose de una confirmación, o `null` si el pago cubrió el cargo entero. */
+export function desgloseDe(confirmacion: PaymentConfirmationBackend | null): DesglosePago | null {
+  const anterior = Number(confirmacion?.previouslyPaid ?? 0)
+  if (!confirmacion || !(anterior > 0)) return null
+  return {
+    total: Number(confirmacion.total ?? confirmacion.amount),
+    anterior,
+    reciboAnterior: confirmacion.previousReceipt ?? null,
+    fechaAnterior: confirmacion.previousPaidAt ?? null,
+    cambioCarrera: Boolean(confirmacion.programChange),
+  }
+}
+
+const mxn = (n: number) => `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 /**
  * Bloque de "pago de ficha confirmado" — la pantalla más importante del flujo,
@@ -41,6 +70,7 @@ export function FichaPagoConfirmado({
   busyPdf = false,
   puedeDescargar = true,
   descuento,
+  desglose,
 }: {
   folio: string
   monto: number
@@ -68,7 +98,10 @@ export function FichaPagoConfirmado({
   puedeDescargar?: boolean
   /** Descuento con el que se pagó (costo, monto y motivo), si lo hubo. */
   descuento?: DescuentoFicha | null
+  /** Pago que completó un cargo con dinero previo (E6). */
+  desglose?: DesglosePago | null
 }) {
+  const cambioCarrera = desglose?.cambioCarrera ?? false
   return (
     <section className="mb-6 overflow-hidden rounded-xl border border-[#009574]/30 bg-white shadow-sm">
       {/* 1 — ¿ya se pagó? */}
@@ -76,14 +109,47 @@ export function FichaPagoConfirmado({
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/15">
           <CheckCircle2 size={34} className="text-white" />
         </div>
-        <h2 className="text-2xl font-bold text-white">¡Pago de ficha confirmado!</h2>
-        <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-white/85">{subtitulo}</p>
+        <h2 className="text-2xl font-bold text-white">
+          {cambioCarrera ? '¡Pago de la diferencia confirmado!' : '¡Pago de ficha confirmado!'}
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-white/85">
+          {cambioCarrera
+            ? 'Pagaste la diferencia por tu cambio de carrera. Tu ficha queda pagada en la carrera nueva.'
+            : subtitulo}
+        </p>
       </div>
 
       {/* 2 + 3 — folio y monto: los dos datos que se conservan. Bloque compartido
           con el estado pendiente, para que el folio se vea igual antes y después
           de pagar: no cambia, y reconocerlo rápido es el punto. */}
-      <FolioMontoClave folio={folio} monto={monto} etiquetaMonto="Monto pagado" />
+      <FolioMontoClave folio={folio} monto={monto} etiquetaMonto={desglose ? 'Pagado en este momento' : 'Monto pagado'} />
+
+      {desglose && (
+        <div className="border-t border-[#E5E7EB] px-6 py-4">
+          <dl className="space-y-1.5 text-[13px]">
+            <div className="flex justify-between gap-4">
+              <dt className="text-[#6B7280]">{cambioCarrera ? 'Total de la carrera' : 'Total de la ficha'}</dt>
+              <dd className="font-semibold text-[#333333]">{mxn(desglose.total)}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-[#6B7280]">
+                Pagado anteriormente
+                {desglose.reciboAnterior && (
+                  <span className="block text-[11px] text-[#9CA3AF]">
+                    <span className="font-mono">{desglose.reciboAnterior}</span>
+                    {desglose.fechaAnterior ? ` · ${formatDate(new Date(desglose.fechaAnterior))}` : ''}
+                  </span>
+                )}
+              </dt>
+              <dd className="font-semibold text-[#333333]">{mxn(desglose.anterior)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 border-t border-dashed border-[#E5E7EB] pt-1.5">
+              <dt className="font-semibold text-[#333333]">Pagado en este momento</dt>
+              <dd className="font-bold text-[#009574]">{mxn(monto)}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
 
       <DescuentoAplicado descuento={descuento} />
 

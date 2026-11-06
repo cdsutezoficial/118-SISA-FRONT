@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import {
   ShieldCheck, GraduationCap, Lock, AlertCircle, ArrowDown, ArrowLeftRight, ArrowRight,
@@ -676,7 +676,9 @@ function ProgramChangeSummary({ status, preview, error }: {
             caption="Carrera actual"
             name={preview.fromProgramName}
             amount={preview.previousAmount}
-            amountCaption={paid ? 'Se pagó con' : 'Debía'}
+            // Si la ficha que se deja es una diferencia aún sin pagar completa, su
+            // precio no es lo que pagó: se dice "Costaba" para no confundir.
+            amountCaption={paid ? (preview.alreadyPaid < (preview.previousAmount ?? 0) ? 'Costaba' : 'Se pagó con') : 'Debía'}
           />
           <div className="flex items-center justify-center">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#009574] text-white shadow-sm">
@@ -688,7 +690,7 @@ function ProgramChangeSummary({ status, preview, error }: {
             caption="Carrera nueva"
             name={preview.toProgramName}
             amount={paid ? preview.newAmount : preview.toPay}
-            amountCaption={paid ? 'Cuesta (completa)' : 'Deberá'}
+            amountCaption={paid ? (preview.newDiscountAmount > 0 ? 'Cuesta (con su descuento)' : 'Cuesta') : 'Deberá'}
             highlighted
           />
         </div>
@@ -699,9 +701,16 @@ function ProgramChangeSummary({ status, preview, error }: {
             <p className="pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">Cómo se calcula</p>
             {paid ? (
               <>
-                <BreakdownRow label="Costo de la carrera nueva" value={preview.newAmount} hint="Sin descuento: el que tenía ya se usó al pagar." />
+                <BreakdownRow label="Costo de la carrera nueva" value={preview.newOriginalAmount} />
+                {preview.newDiscountAmount > 0 && (
+                  <BreakdownRow
+                    label="Su descuento"
+                    value={preview.newDiscountAmount}
+                    sign="−"
+                    hint="El descuento que tenía pasa a la carrera nueva."
+                  />
+                )}
                 <BreakdownRow label="Lo que ya pagó" value={preview.alreadyPaid} sign="−" />
-                {preview.otherCredit > 0 && <BreakdownRow label="Saldo a favor que ya tenía" value={preview.otherCredit} sign="−" />}
               </>
             ) : (
               <>
@@ -743,6 +752,19 @@ function ProgramChangeSummary({ status, preview, error }: {
             )}
           </div>
         </div>
+
+        {preview.otherCredit > 0 && (
+          // El saldo previo es de la persona: no se descuenta aquí. Quien edita lo
+          // ve para poder decírselo, y ella decide si lo usa al pagar.
+          <div className="flex items-start gap-2 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2.5 text-[12px] leading-relaxed text-[#1E40AF]">
+            <PiggyBank size={15} className="flex-shrink-0 mt-0.5" />
+            <p>
+              <span className="font-semibold">El candidato tiene {money(preview.otherCredit)} de saldo a favor.</span>{' '}
+              No se descuenta en este cambio: si quiere, lo puede usar al pagar
+              {paid && preview.toPay > 0 ? ' la diferencia' : ''} en el portal de la ficha.
+            </p>
+          </div>
+        )}
 
         {paid && (
           <p className="text-[11px] text-[#9CA3AF]">
@@ -1093,6 +1115,11 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
   const programChanged = isEdit && editOriginalConfigId !== '' && paso3.admissionConfigId !== ''
     && paso3.admissionConfigId !== editOriginalConfigId
   const [changePreview, setChangePreview] = useState<ProgramChangePreview | null>(null)
+  // La tarjeta del cambio de carrera vive fuera del formulario; al elegir otra
+  // carrera se baja hasta ella para que quien edita vea cómo queda el cobro.
+  const programChangeRef = useRef<HTMLDivElement | null>(null)
+  const scrollToProgramChange = () =>
+    programChangeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const [changePreviewStatus, setChangePreviewStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [changePreviewError, setChangePreviewError] = useState('')
 
@@ -1109,12 +1136,15 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
         if (cancelled) return
         setChangePreview(preview)
         setChangePreviewStatus('ready')
+        // Se eligió otra carrera: se lleva a quien edita hasta la tarjeta, ya con los números.
+        requestAnimationFrame(scrollToProgramChange)
       })
       .catch(err => {
         if (cancelled) return
         setChangePreview(null)
         setChangePreviewError(getApiErrorMessage(err, 'No se pudo calcular el cambio de carrera.'))
         setChangePreviewStatus('error')
+        requestAnimationFrame(scrollToProgramChange)
       })
     return () => { cancelled = true }
   }, [programChanged, paso3.admissionConfigId, editId])
@@ -2279,11 +2309,6 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
         </>
         )}
 
-        {programChanged && (
-          <div className="col-span-12">
-            <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
-          </div>
-        )}
 
         <div className="col-span-12 md:col-span-6">
           <ErrorLine error={e3.canal}>
@@ -2518,11 +2543,6 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
 
         {isEdit ? (
           <div className="pt-2">
-            {programChanged && (
-              <div className="mb-4">
-                <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
-              </div>
-            )}
             <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">Folio</p>
             <p className="text-[15px] font-bold text-[#333333]">{editFolio}</p>
           </div>
@@ -2632,6 +2652,14 @@ export default function CandidatoRegistro({ origin, mode = 'create' }: Candidato
         )}
 
         {content}
+
+        {isEdit && programChanged && (
+          // Tarjeta aparte, debajo del formulario: el detalle del cobro no cabe
+          // dentro del paso sin saturarlo.
+          <div ref={programChangeRef} className="mt-6 scroll-mt-6">
+            <ProgramChangeSummary status={changePreviewStatus} preview={changePreview} error={changePreviewError} />
+          </div>
+        )}
       </FormPage>
     )
   }

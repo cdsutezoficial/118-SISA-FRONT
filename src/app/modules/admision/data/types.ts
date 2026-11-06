@@ -82,14 +82,44 @@ export interface FichaPaymentBackend extends VentanaFechas {
 }
 
 /** `POST /candidates/{id}/payments/confirm` — paid-ficha confirmation. */
+/** F1: `GET /candidates/{id}/cash-payment` — cuánto cobrar en caja. */
+export interface CashPaymentPreviewBackend {
+  candidateId: string
+  folio: string
+  referenceNumber: string
+  /** Es la diferencia de un cambio de carrera, no la ficha. */
+  programChange: boolean
+  total: number
+  alreadyPaid: number
+  toCollect: number
+  dueAt: string | null
+  /** Saldo a favor de la persona que caja puede usar antes del efectivo. */
+  availableCredit?: number
+  /**
+   * Hay una sesión de pago en línea abierta que no ha cobrado nada. No impide cobrar:
+   * si después cobra, ese dinero queda como saldo a favor de la persona.
+   */
+  onlineSessionOpen?: boolean
+}
+
 export interface PaymentConfirmationBackend {
   candidateId: string
   folio: string
   candidateStatus: CandidateStatus
   referenceNumber: string
+  /** Lo pagado en esta operación (E6), no el total del cargo. */
   amount: number
   paidAt: string
   receiptNumber: string
+  /** Lo que cuesta el cargo completo. */
+  total?: number
+  /** Lo que el cargo ya tenía antes de esta operación (cambio de carrera o saldo a favor). */
+  previouslyPaid?: number
+  /** Recibo y fecha del cargo anterior de donde vino ese dinero, en un cambio de carrera. */
+  previousReceipt?: string | null
+  previousPaidAt?: string | null
+  /** Se pagó la diferencia de un cambio de carrera. */
+  programChange?: boolean
 }
 
 /**
@@ -100,11 +130,16 @@ export interface PaymentConfirmationBackend {
  */
 export interface CheckoutInitiationBackend {
   candidateId: string
-  orderId: string
-  sessionId: string
-  merchant: string
-  successIndicator: string
+  /** `null` when nothing is left to collect online (`exempt` / `paidWithCredit`). */
+  orderId: string | null
+  sessionId: string | null
+  merchant: string | null
+  successIndicator: string | null
   checkoutJsUrl: string
+  /** A 100 % discount settled the ficha at $0: no session, the ficha is paid. */
+  exempt?: boolean
+  /** The person's saldo a favor paid the whole ficha: no session, the ficha is paid. */
+  paidWithCredit?: boolean
 }
 
 /**
@@ -182,6 +217,16 @@ export interface FichaPaymentAccessBackend extends VentanaFechas {
    * botón. `null` cuando no hay nada pendiente.
    */
   programChange?: ProgramChangeDue | null
+  /**
+   * Saldo a favor de la persona (de cualquier ficha suya) que puede elegir usar
+   * para pagar esta ficha. 0 cuando ya está pagada.
+   */
+  availableCredit?: number | null
+  /**
+   * Saldo a favor ya aplicado a esta ficha sin pagar: lo que falta es
+   * `amount − creditApplied`.
+   */
+  creditApplied?: number | null
 }
 
 export interface ProgramChangeDue {
@@ -834,7 +879,10 @@ export interface ProgramChangePreview {
   /** Sin pagar: lo que debe hoy. Pagada: con cuánto se cobró la ficha. */
   previousAmount: number | null
   alreadyPaid: number
-  /** Saldo a favor que ya tenía y también se aplica. */
+  /**
+   * Saldo a favor que ya tenía. NO se descuenta en el cambio: se le avisa a quien
+   * edita, y la persona elige usarlo al pagar la diferencia en el portal.
+   */
   otherCredit: number
   newOriginalAmount: number
   newDiscountAmount: number

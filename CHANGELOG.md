@@ -16,6 +16,25 @@ Rama: `feat/dashboard-admision`. Requiere el PR del back del mismo nombre.
 
 ---
 
+## [2026-11-05] Correcciones de pago de ficha y cambio de carrera
+
+Rama: `fix/correcciones-pagos-ficha`. Plan: `118-SISA-CLAUDE/docs/design/pendientes/pagos/2026-10-30-correcciones-ficha-cambio-carrera.md`.
+
+- Portal: pagar la ficha o la diferencia con saldo a favor a elección; aviso de pago sin cupo
+  (`ADMISSION_PAID_WITHOUT_QUOTA`); comprobante dividido (total, pagado antes, pagado ahora).
+- Cambio de carrera: tarjeta propia en la edición de la ficha y aviso de saldo a favor.
+- Finanzas: **Alertas de Pago** (`/admision/alertas-pago`) y **Excedentes de Pago** (`/admision/excedentes`).
+- Caja: rol `CAJA`, menú **Cobro en Efectivo** (`/caja`) y `ConfirmarPagoFicha` reescrita para efectivo
+  (vista previa, recibo e impresión). Cobra el monto exacto, sin campo de cambio. Se quitó el mock
+  y la referencia bancaria.
+- Caja con saldo a favor: tarjeta "Tiene $X de saldo a favor" con casilla **Usar saldo** (marcada
+  por defecto). Se descuenta del adeudo y en efectivo se cobra solo lo que falta; si lo cubre todo,
+  el botón es **Aplicar saldo a favor** y no se recibe dinero. El recibo dice cuánto fue saldo y
+  cuánto efectivo.
+- Administración: **Log de Auditoría** (`/auditoria`, solo Administrador).
+
+---
+
 ## [2026-10-29] "Aplicar Descuentos" solo en el menú de Finanzas
 
 Rama: `fix/menu-descuentos-finanzas`.
