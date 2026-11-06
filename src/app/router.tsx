@@ -30,7 +30,6 @@ import GenerarMatriculas from '@app/modules/admision/pages/GenerarMatriculas'
 import PublicarResultados from '@app/modules/admision/pages/PublicarResultados'
 import AplicarDescuento from '@app/modules/admision/pages/AplicarDescuento'
 import AlertasPago from '@app/modules/admision/pages/AlertasPago'
-import ExcedentesPago from '@app/modules/admision/pages/ExcedentesPago'
 import BitacoraAuditoria from '@app/modules/identity/pages/BitacoraAuditoria'
 import CajaCobros from '@app/modules/admision/pages/CajaCobros'
 import HabilitarInduccion from '@app/modules/admision/pages/HabilitarInduccion'
@@ -269,11 +268,6 @@ const router = createBrowserRouter([
           {
             path: 'alertas-pago',
             element: <RequireRole allowedRoles={['FINANZAS']}><RequirePermission permissionKeys={['FINANCE_ALERTS_READ']} redirectTo="/dashboard"><AlertasPago /></RequirePermission></RequireRole>,
-          },
-          // E1: cobros que no liquidaron nada, ya como saldo a favor. El back pide `PAYMENTS_READ`.
-          {
-            path: 'excedentes',
-            element: <RequireRole allowedRoles={['FINANZAS']}><RequirePermission permissionKeys={['PAYMENTS_READ']} redirectTo="/dashboard"><ExcedentesPago /></RequirePermission></RequireRole>,
           },
           {
             path: 'habilitacion',

@@ -15,14 +15,15 @@ import { useRole } from '@app/core/infra/RoleContext'
  *   una alerta nueva cada vez.
  * - PAID_WITHOUT_QUOTA: el banco cobró después de que venció el apartado y la
  *   carrera ya estaba llena. El dinero quedó como saldo a favor.
- * - OVERPAYMENT: un cobro que no liquidó ningún cargo (segundo cobro o cargo
- *   cancelado). También quedó como saldo a favor.
+ *
+ * Un cobro que no liquidó nada no abre alerta: queda como saldo a favor de la
+ * persona y se ve en la pestaña Pagos del candidato.
  *
  * Al abrirse una alerta se manda correo a Finanzas; esta pantalla es el
  * registro. "Marcar como revisada" guarda quién, cuándo y una nota.
  */
 
-type AlertType = 'AUTHORIZED_NOT_CAPTURED' | 'PAID_WITHOUT_QUOTA' | 'OVERPAYMENT'
+type AlertType = 'AUTHORIZED_NOT_CAPTURED' | 'PAID_WITHOUT_QUOTA'
 type AlertStatus = 'OPEN' | 'RESOLVED'
 
 interface FinanceAlert {
@@ -45,7 +46,6 @@ interface FinanceAlert {
 const TIPO: Record<AlertType, { label: string; className: string }> = {
   AUTHORIZED_NOT_CAPTURED: { label: 'Autorizado sin cobrar', className: 'bg-[#FEF3C7] text-[#92400E]' },
   PAID_WITHOUT_QUOTA: { label: 'Pago sin cupo', className: 'bg-[#FEE2E2] text-[#991B1B]' },
-  OVERPAYMENT: { label: 'Pago sin cargo', className: 'bg-[#E0F2FE] text-[#075985]' },
 }
 
 const PESTANAS = [
