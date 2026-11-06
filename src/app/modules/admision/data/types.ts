@@ -95,6 +95,11 @@ export interface CashPaymentPreviewBackend {
   dueAt: string | null
   /** Saldo a favor de la persona que caja puede usar antes del efectivo. */
   availableCredit?: number
+  /**
+   * Hay una sesión de pago en línea abierta que no ha cobrado nada. No impide cobrar:
+   * si después cobra, ese dinero queda como saldo a favor de la persona.
+   */
+  onlineSessionOpen?: boolean
 }
 
 export interface PaymentConfirmationBackend {

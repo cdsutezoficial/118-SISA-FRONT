@@ -52,7 +52,8 @@ export default function ConfirmarPagoFicha() {
   const [recibo, setRecibo] = useState<PaymentConfirmationBackend | null>(null)
   const [imprimiendo, setImprimiendo] = useState(false)
   const [toast, setToast] = useState('')
-  const [usarSaldo, setUsarSaldo] = useState(true)
+  // D12: la persona elige si usa su saldo; caja le pregunta.
+  const [usarSaldo, setUsarSaldo] = useState(false)
   const [saldoUsado, setSaldoUsado] = useState(0)
 
   const consultar = useCallback(async () => {
@@ -183,6 +184,15 @@ export default function ConfirmarPagoFicha() {
         </FormCard>
       ) : (
         <FormCard>
+          {cobro.onlineSessionOpen && (
+            <div className="mb-5 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] p-4 text-[12px] leading-relaxed text-[#92400E]">
+              <p className="font-semibold">Tiene un pago en línea abierto sin cobrar.</p>
+              <p>
+                Puedes cobrar en efectivo. Pídele que cierre el pago en línea: si aun así lo termina, ese cobro
+                quedará como saldo a favor a su nombre.
+              </p>
+            </div>
+          )}
           {saldoDisponible > 0 && (
             <label
               htmlFor="usar-saldo"
@@ -201,7 +211,7 @@ export default function ConfirmarPagoFicha() {
                 </p>
                 <p className="text-[12px] text-[#6B7280]">
                   {!usarSaldo
-                    ? 'No se usará: se cobra todo en efectivo.'
+                    ? 'Pregúntale si quiere usarlo. Si no, se cobra todo en efectivo.'
                     : soloSaldo
                       ? 'Cubre todo el adeudo: no se recibe efectivo.'
                       : `Se usan ${mxn(saldoAplicado)} y el resto se cobra en efectivo.`}
